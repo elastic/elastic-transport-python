@@ -2,51 +2,61 @@
 
 Transport classes and utilities shared among Python Elastic client libraries
 
-## Architecture
-
-This library was lifted from `elasticsearch-python`
+This library was lifted from [`elasticsearch-py`](https://github.com/elastic/elasticsearch-py)
 and then transformed to be used across all Elastic services
 rather than only Elasticsearch.
 
-`elastic-transport` is designed with the following
-separation of responsibilities between it and
-client libraries that utilize it:
+## User Guide
 
-`elastic-transport` handles the following features:
-- Connecting to a scheme, host, and port
-- TLS and certificate config
-- Connection pooling
-- Failover and retries
-- Sniffing (TODO)
+For almost all use-cases you should not need this library.
+The below use-cases are the common ones:
 
-Client libraries must handle the following:
-- Authentication
-- User-Agent
-- Specific serialization patterns (datetimes, params, url path)
-- Default ports, specific connection mechanisms (like Elastic Cloud ID)
-- Acting on specific HTTP headers (e.g the `Warning` header)
+### Creating your own Connection Class
 
-Client libraries should document patterns that make
-using `elastic-transport` simple, such as `connection_class="requests"`
-instead of `connection_class=elastic_transport.RequestsHttpConnection`.
-Only power users should need to ever `import elastic_transport` while
-using a client library.
+If you need to have custom behavior for a `Connection` you can subclass the
+base connection class you want and then pass the class in via `connection_class`:
+
+```python
+from elastic_transport import Urllib3HttpConnection
+from elastic_enterprise_search import EnterpriseSearch
+
+
+class CustomHttpConnection(Urllib3HttpConnection):
+    ... # Custom HTTP behavior
+
+
+# Create the Client with 'connection_class' defined
+client = EnterpriseSearch(
+    ...,
+    connection_class=CustomHttpConnection
+)
+```
+
+The above also works for `ConnectionPool` (via `connection_pool_class`) and `Transport` (via `transport_class`).
+
+## Connection Classes
+
+`elastic-transport-python` supports two HTTP client libraries:
+
+### `Urllib3HttpConnection`
+
+This is the default connection class. This connection class uses urllib3` to issue requests.
+Read more about [urllib3 on Read the Docs](https://urllib3.readthedocs.io).
+
+### `RequestsHttpConnection`
+
+This connection class requires the [Requests](https://github.com/psf/requests)
+library to be installed to use:
+ 
+```bash
+$ python -m pip install requests
+```
+
+This class is often useful when using libraries that integrate with Requests.
+Read more about [Requests on Read the Docs](https://requests.readthedocs.io).
 
 
 ## License
 
-```
-Copyright 2020 Elasticsearch B.V
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
+`elastic-transport-python` is available under the Apache-2.0 license.
+For more details see [LICENSE](https://github.com/elastic/elastic-transport-python/blob/main/LICENSE).
