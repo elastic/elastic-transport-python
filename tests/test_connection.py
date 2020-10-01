@@ -16,28 +16,29 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import re
-import ssl
 import gzip
 import io
-from mock import Mock, patch
-import urllib3
-from urllib3._collections import HTTPHeaderDict
-import requests
+import re
+import ssl
 import warnings
 
+import pytest
+import requests
+import urllib3
+from mock import Mock, patch
+from urllib3._collections import HTTPHeaderDict
+
 from elastic_transport import (
+    BadRequestError,
+    ConflictError,
     ConnectionError,
     ConnectionTimeout,
-    TransportError,
-    ConflictError,
-    BadRequestError,
     NotFoundError,
     RequestsHttpConnection,
+    TransportError,
     Urllib3HttpConnection,
 )
 from tests.conftest import norm_repr
-import pytest
 
 
 def gzip_decompress(data):

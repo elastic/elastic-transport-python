@@ -16,8 +16,10 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import pytest
 from platform import python_version
+
+import pytest
+
 from elastic_transport import __version__
 from elastic_transport.utils import create_user_agent, parse_cloud_id
 

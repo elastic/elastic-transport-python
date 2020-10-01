@@ -16,18 +16,18 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import pytest
+
 from elastic_transport import (
-    Transport,
-    RetriesExhausted,
     ConnectionError,
     DummyConnectionPool,
     RequestsHttpConnection,
+    RetriesExhausted,
+    Transport,
     Urllib3HttpConnection,
 )
 from elastic_transport.utils import DEFAULT
 from tests.conftest import DummyConnection
-
-import pytest
 
 
 def test_single_connection_uses_dummy_connection_pool():

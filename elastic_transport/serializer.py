@@ -23,6 +23,7 @@ except ImportError:
 import uuid
 from datetime import date
 from decimal import Decimal
+
 import six
 
 from .compat import string_types

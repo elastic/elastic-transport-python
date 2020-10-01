@@ -18,38 +18,38 @@
 """Transport classes and utilities shared among Python Elastic client libraries"""
 
 from ._version import __version__  # noqa
-from .transport import Transport, Response
-from .connection import Connection, Urllib3HttpConnection, RequestsHttpConnection
+from .connection import Connection, RequestsHttpConnection, Urllib3HttpConnection
 from .connection_pool import (
     ConnectionPool,
+    ConnectionSelector,
     DummyConnectionPool,
     EmptyConnectionPool,
-    ConnectionSelector,
     RandomSelector,
     RoundRobinSelector,
 )
 from .exceptions import (
-    TransportError,
-    SerializationError,
-    ConnectionError,
-    ConnectionTimeout,
     APIError,
     BadGatewayError,
     BadRequestError,
     ConflictError,
+    ConnectionError,
+    ConnectionTimeout,
     ForbiddenError,
-    NotFoundError,
-    InternalServerError,
     GatewayTimeoutError,
+    InternalServerError,
     MethodNotImplementedError,
+    NotFoundError,
     PayloadTooLargeError,
     PaymentRequiredError,
+    RetriesExhausted,
+    SerializationError,
     ServiceUnavailableError,
+    TransportError,
     UnauthorizedError,
     UnprocessableEntityError,
-    RetriesExhausted,
 )
-from .serializer import Serializer, JSONSerializer, TextSerializer, Deserializer
+from .serializer import Deserializer, JSONSerializer, Serializer, TextSerializer
+from .transport import Response, Transport
 
 __all__ = [
     "APIError",

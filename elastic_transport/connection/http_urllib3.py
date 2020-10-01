@@ -15,18 +15,19 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import time
 import ssl
+import time
+import warnings
+
+import six
 import urllib3
 from urllib3.exceptions import ReadTimeoutError
 from urllib3.util.retry import Retry
-import six
-import warnings
 
-from .base import Connection
 from ..compat import urlencode
 from ..exceptions import ConnectionError, ConnectionTimeout
 from ..utils import DEFAULT
+from .base import Connection
 
 CA_CERTS = None
 

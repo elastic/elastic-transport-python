@@ -18,7 +18,9 @@
 import binascii
 from collections import namedtuple
 from platform import python_version
-from six import ensure_str, ensure_binary
+
+from six import ensure_binary, ensure_str
+
 from ._version import __version__
 
 # Sentinel value used to highlight default values

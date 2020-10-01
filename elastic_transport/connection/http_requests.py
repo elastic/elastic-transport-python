@@ -17,6 +17,7 @@
 
 import time
 import warnings
+
 import urllib3
 
 try:
@@ -26,13 +27,10 @@ try:
 except ImportError:  # pragma: nocover
     REQUESTS_AVAILABLE = False
 
-from .base import Connection
 from ..compat import urlencode
-from ..exceptions import (
-    ConnectionError,
-    ConnectionTimeout,
-)
-from ..utils import normalize_headers, DEFAULT
+from ..exceptions import ConnectionError, ConnectionTimeout
+from ..utils import DEFAULT, normalize_headers
+from .base import Connection
 
 
 class RequestsHttpConnection(Connection):

@@ -17,20 +17,19 @@
 #  under the License.
 
 import uuid
-
 from datetime import date
 from decimal import Decimal
+
+import pytest
 import six
-from elastic_transport import SerializationError
+
 from elastic_transport import (
-    JSONSerializer,
     Deserializer,
+    JSONSerializer,
+    SerializationError,
     TextSerializer,
 )
 from elastic_transport.serializer import DEFAULT_SERIALIZERS
-
-import pytest
-
 
 deserializer = Deserializer(DEFAULT_SERIALIZERS)
 

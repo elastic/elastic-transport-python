@@ -15,18 +15,18 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from .connection import Urllib3HttpConnection, RequestsHttpConnection
+from .compat import string_types, urlparse
+from .connection import RequestsHttpConnection, Urllib3HttpConnection
 from .connection_pool import ConnectionPool, DummyConnectionPool, EmptyConnectionPool
-from .serializer import Deserializer, DEFAULT_SERIALIZERS
-from .response import Response, Request
 from .exceptions import (
     ConnectionError,
     ConnectionTimeout,
-    TransportError,
     RetriesExhausted,
+    TransportError,
 )
-from .compat import urlparse, string_types
-from .utils import normalize_headers, DEFAULT
+from .response import Request, Response
+from .serializer import DEFAULT_SERIALIZERS, Deserializer
+from .utils import DEFAULT, normalize_headers
 
 # Allows for using a connection_class by name rather than import.
 CONNECTION_CLASS_NAMES = {

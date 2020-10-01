@@ -16,6 +16,7 @@
 #  under the License.
 
 import pytest
+
 from elastic_transport import Response
 from elastic_transport.response import Request
 

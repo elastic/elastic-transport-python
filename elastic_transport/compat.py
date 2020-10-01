@@ -15,7 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from six.moves.urllib_parse import urlparse, urlencode
+from six.moves.urllib_parse import urlencode, urlparse
 
 try:
     string_types = (basestring,)  # noqa: F821

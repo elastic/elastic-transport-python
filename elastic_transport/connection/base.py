@@ -15,15 +15,13 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import logging
 import gzip
 import io
+import logging
+
 import six
 
-from ..exceptions import (
-    APIError,
-    HTTP_EXCEPTIONS,
-)
+from ..exceptions import HTTP_EXCEPTIONS, APIError
 from ..utils import normalize_headers
 
 try:
