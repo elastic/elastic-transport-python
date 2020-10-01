@@ -17,12 +17,14 @@
 
 
 import time
+
 import pytest
+
 from elastic_transport import (
-    DummyConnectionPool,
-    ConnectionPool,
-    RoundRobinSelector,
     Connection,
+    ConnectionPool,
+    DummyConnectionPool,
+    RoundRobinSelector,
 )
 
 

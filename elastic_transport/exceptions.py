@@ -17,7 +17,6 @@
 
 from six import add_metaclass, python_2_unicode_compatible
 
-
 HTTP_EXCEPTIONS = {}
 
 

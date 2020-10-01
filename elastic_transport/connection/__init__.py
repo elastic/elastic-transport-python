@@ -16,8 +16,8 @@
 #  under the License.
 
 from .base import Connection
-from .http_urllib3 import Urllib3HttpConnection
 from .http_requests import RequestsHttpConnection
+from .http_urllib3 import Urllib3HttpConnection
 
 __all__ = [
     "Connection",
