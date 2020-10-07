@@ -78,13 +78,6 @@ class ConnectionTimeout(TransportError):
     """Connection timed out during an operation"""
 
 
-class RetriesExhausted(TransportError):
-    """All retries have been attempted and the operation hasn't succeeded
-    Returns with all errors that occurred throughout the retry lifecycle
-    in order of most recent occurrence to oldest occurence
-    """
-
-
 class APIError(TransportError):
     """Error that is raised from the service via HTTP status codes"""
 

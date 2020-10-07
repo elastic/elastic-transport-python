@@ -33,6 +33,7 @@ from elastic_transport import (
     ConflictError,
     ConnectionError,
     ConnectionTimeout,
+    InternalServerError,
     NotFoundError,
     RequestsHttpConnection,
     TransportError,
@@ -596,6 +597,19 @@ class TestRequestsConnection(object):
         req, resp = logger.debug.call_args_list
         assert '> {"example": "body"}' == req[0][0] % req[0][1:]
         assert "< {}" == resp[0][0] % resp[0][1:]
+
+        con = self._get_mock_connection(
+            connection_params={"http_compress": True},
+            status_code=500,
+            response_body=b'{"hello":"world"}',
+        )
+        with pytest.raises(InternalServerError):
+            con.perform_request("GET", "/", body=b'{"example": "body2"}')
+
+        assert 4 == logger.debug.call_count
+        _, _, req, resp = logger.debug.call_args_list
+        assert '> {"example": "body2"}' == req[0][0] % req[0][1:]
+        assert '< {"hello":"world"}' == resp[0][0] % resp[0][1:]
 
     def test_defaults(self):
         con = self._get_mock_connection()

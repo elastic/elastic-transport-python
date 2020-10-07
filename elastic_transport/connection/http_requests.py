@@ -153,7 +153,7 @@ class RequestsHttpConnection(Connection):
             self.log_request_fail(
                 method=method,
                 url=url,
-                body=body,
+                body=orig_body,
                 duration=time.time() - start,
                 exception=e,
             )

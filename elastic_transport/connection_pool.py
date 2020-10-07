@@ -184,7 +184,7 @@ class ConnectionPool(object):
             self.connections.remove(connection)
         except ValueError:
             logger.info(
-                "Attempted to remove %r, but it does not exist in the connection pool.",
+                "Attempted to remove %r, but it does not exist in the connection pool",
                 connection,
             )
             # connection not alive or another thread marked it already, ignore
@@ -195,7 +195,7 @@ class ConnectionPool(object):
             timeout = self.dead_timeout * 2 ** min(dead_count - 1, self.timeout_cutoff)
             self.dead.put((now + timeout, connection))
             logger.warning(
-                "Connection %r has failed for %i times in a row, putting on %i second timeout.",
+                "Connection %r has failed for %i times in a row, putting on %i second timeout",
                 connection,
                 dead_count,
                 timeout,
@@ -253,7 +253,7 @@ class ConnectionPool(object):
 
         # either we were forced or the connection is elligible to be retried
         self.connections.append(connection)
-        logger.info("Resurrecting connection %r (force=%s).", connection, force)
+        logger.info("Resurrecting connection %r (force=%s)", connection, force)
         return connection
 
     def get_connection(self):
