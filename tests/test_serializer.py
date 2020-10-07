@@ -92,10 +92,12 @@ def test_deserializes_text_with_correct_ct():
 
 
 def test_raises_serialization_error_on_unknown_mimetype():
-    with pytest.raises(SerializationError):
+    with pytest.raises(SerializationError) as e:
         deserializer.loads("{}", "text/html")
+    assert str(e.value) == "Unknown mimetype, unable to deserialize: text/html"
 
 
 def test_raises_improperly_configured_when_default_mimetype_cannot_be_deserialized():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as e:
         Deserializer({})
+    assert str(e.value) == "Cannot find default serializer (application/json)"

@@ -15,15 +15,15 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import json
+
 import pytest
 
-from elastic_transport import Response
-from elastic_transport.response import Request
+from elastic_transport.response import DictResponse, ListResponse, Response
 
-req = Request(method="GET", path="/", headers={"header": "1"}, params={"param": 2})
-resp_dict = Response(request=req, status=200, headers={}, body={"key": "val"})
-resp_list = Response(request=req, status=404, headers={}, body=["a", 2, 3, {"k": "v"}])
-resp_bool = Response(request=req, status=200, headers={}, body=False)
+resp_dict = DictResponse(status=200, headers={}, body={"key": "val"})
+resp_list = ListResponse(status=404, headers={}, body=["a", 2, 3, {"k": "v"}])
+resp_bool = Response(status=200, headers={}, body=False)
 all_resps = pytest.mark.parametrize("resp", [resp_bool, resp_dict, resp_list])
 
 
@@ -47,7 +47,6 @@ def test_response_not_equals():
 def test_response_attributes():
     assert resp_bool.status == 200
     assert resp_bool.body is False
-    assert resp_bool.request == req
 
 
 def test_response_len():
@@ -100,3 +99,13 @@ def test_response_getattr():
 def test_response_repr_str(resp):
     assert str(resp) == str(resp.body)
     assert repr(resp) == repr(resp.body)
+
+
+def test_response_json():
+    assert json.dumps(resp_dict) == '{"key": "val"}'
+    assert json.dumps(resp_list) == '["a", 2, 3, {"k": "v"}]'
+
+
+def test_response_instance_checks():
+    assert isinstance(resp_list, list)
+    assert isinstance(resp_dict, dict)

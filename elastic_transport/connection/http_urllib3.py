@@ -21,7 +21,7 @@ import warnings
 
 import six
 import urllib3
-from urllib3.exceptions import ReadTimeoutError
+from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
 from urllib3.util.retry import Retry
 
 from ..compat import urlencode
@@ -246,7 +246,7 @@ class Urllib3HttpConnection(Connection):
                 duration=time.time() - start,
                 exception=e,
             )
-            if isinstance(e, ReadTimeoutError):
+            if isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )

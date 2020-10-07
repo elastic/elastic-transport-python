@@ -16,7 +16,11 @@
 #  under the License.
 
 import elastic_transport
+import elastic_transport.connection
 
 
 def test__all__sorted():
     assert elastic_transport.__all__ == sorted(elastic_transport.__all__)
+    assert elastic_transport.connection.__all__ == sorted(
+        elastic_transport.connection.__all__
+    )

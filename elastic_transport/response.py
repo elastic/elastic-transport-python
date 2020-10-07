@@ -16,45 +16,10 @@
 #  under the License.
 
 
-class Request(object):
-    """HTTP request"""
-
-    __slots__ = ("method", "path", "headers", "params")
-
-    def __init__(self, method, path, headers, params):
-        self.method = method
-        self.path = path
-        self.headers = headers
-        self.params = params
-
-    def __eq__(self, other):
-        if isinstance(other, Request):
-            return (
-                self.method == other.method
-                and self.path == other.path
-                and self.headers == other.headers
-                and self.params == other.params
-            )
-        return NotImplemented
-
-    def __ne__(self, other):
-        if isinstance(other, Request):
-            return (
-                self.method != other.method
-                or self.path != other.path
-                or self.headers != other.headers
-                or self.params != other.params
-            )
-        return NotImplemented
-
-
 class Response(object):
     """HTTP response"""
 
-    __slots__ = ("request", "headers", "status", "body")
-
-    def __init__(self, request, headers, status, body):
-        self.request = request
+    def __init__(self, headers, status, body):
         self.headers = headers
         self.status = status
         self.body = body
@@ -99,3 +64,15 @@ class Response(object):
         elif isinstance(other, Response):
             return other.body != self.body
         return NotImplemented
+
+
+class DictResponse(Response, dict):
+    def __init__(self, headers, status, body):
+        Response.__init__(self, headers, status, body)
+        dict.__init__(self, body)
+
+
+class ListResponse(Response, list):
+    def __init__(self, headers, status, body):
+        Response.__init__(self, headers, status, body)
+        list.__init__(self, body)

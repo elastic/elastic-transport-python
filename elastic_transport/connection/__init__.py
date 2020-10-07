@@ -21,6 +21,6 @@ from .http_urllib3 import Urllib3HttpConnection
 
 __all__ = [
     "Connection",
-    "Urllib3HttpConnection",
     "RequestsHttpConnection",
+    "Urllib3HttpConnection",
 ]

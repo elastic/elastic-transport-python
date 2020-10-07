@@ -18,13 +18,8 @@
 from .compat import string_types, urlparse
 from .connection import RequestsHttpConnection, Urllib3HttpConnection
 from .connection_pool import ConnectionPool, DummyConnectionPool, EmptyConnectionPool
-from .exceptions import (
-    ConnectionError,
-    ConnectionTimeout,
-    RetriesExhausted,
-    TransportError,
-)
-from .response import Request, Response
+from .exceptions import ConnectionError, ConnectionTimeout, TransportError
+from .response import DictResponse, ListResponse, Response
 from .serializer import DEFAULT_SERIALIZERS, Deserializer
 from .utils import DEFAULT, normalize_headers
 
@@ -237,9 +232,8 @@ class Transport(object):
                 pass
 
         headers = normalize_headers(headers)
-        request = Request(method=method, path=path, headers=headers, params=params)
 
-        # Errors are stored from (newest->oldest)
+        # Errors are stored from (oldest->newest)
         errors = []
 
         for attempt in range(self.max_retries + 1):
@@ -258,7 +252,6 @@ class Transport(object):
             except TransportError as e:
                 if method == "HEAD" and e.status == 404:
                     return Response(
-                        request=request,
                         status=404,
                         headers={},
                         body=False,
@@ -273,9 +266,6 @@ class Transport(object):
                     retry = True
 
                 if retry:
-                    # If there are already errors on the exception
-                    # we unpack them, otherwise we
-                    errors.insert(0, e)
                     try:
                         # only mark as dead if we are retrying
                         self.mark_dead(connection)
@@ -285,11 +275,12 @@ class Transport(object):
                         pass
                     # raise exception on last retry
                     if attempt == self.max_retries:
-                        raise RetriesExhausted(
-                            "All retries have been exhausted (%d)" % self.max_retries,
-                            errors=errors,
-                        )
+                        e.errors = tuple(errors)
+                        raise
+                    else:
+                        errors.append(e)
                 else:
+                    e.errors = tuple(errors)
                     raise
 
             else:
@@ -298,7 +289,6 @@ class Transport(object):
 
                 if method == "HEAD":
                     return Response(
-                        request=request,
                         status=status,
                         headers=headers_response,
                         body=200 <= status < 300,
@@ -311,8 +301,12 @@ class Transport(object):
 
                 # After the body is deserialized put the data
                 # into one of the typed responses
-                return Response(
-                    request=request,
+                response_cls = Response
+                if isinstance(data, list):
+                    response_cls = ListResponse
+                elif isinstance(data, dict):
+                    response_cls = DictResponse
+                return response_cls(
                     status=status,
                     headers=headers_response,
                     body=data,
@@ -343,7 +337,6 @@ def _normalize_hosts(hosts, default_hosts):
 
             parsed_url = urlparse(host)
             h = {"host": parsed_url.hostname}
-            print(h)
 
             if parsed_url.port is not None:
                 h["port"] = parsed_url.port

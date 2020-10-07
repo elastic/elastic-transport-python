@@ -22,7 +22,7 @@ import logging
 import six
 
 from ..exceptions import HTTP_EXCEPTIONS, APIError
-from ..utils import normalize_headers
+from ..utils import DEFAULT, normalize_headers
 
 try:
     import simplejson as json
@@ -124,7 +124,7 @@ class Connection(object):
         path,
         params=None,
         body=None,
-        request_timeout=None,
+        request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
     ):  # pragma: nocover

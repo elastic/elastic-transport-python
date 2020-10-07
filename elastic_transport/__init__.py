@@ -41,7 +41,6 @@ from .exceptions import (
     NotFoundError,
     PayloadTooLargeError,
     PaymentRequiredError,
-    RetriesExhausted,
     SerializationError,
     ServiceUnavailableError,
     TransportError,
@@ -49,7 +48,7 @@ from .exceptions import (
     UnprocessableEntityError,
 )
 from .serializer import Deserializer, JSONSerializer, Serializer, TextSerializer
-from .transport import Response, Transport
+from .transport import Transport
 
 __all__ = [
     "APIError",
@@ -74,8 +73,6 @@ __all__ = [
     "PaymentRequiredError",
     "RandomSelector",
     "RequestsHttpConnection",
-    "Response",
-    "RetriesExhausted",
     "RoundRobinSelector",
     "SerializationError",
     "Serializer",

@@ -23,9 +23,9 @@ class DummyConnection(Connection):
         self.exception = kwargs.pop("exception", None)
         self.status = kwargs.pop("status", 200)
         self.body = kwargs.pop("body", "{}")
-        self.headers = kwargs.pop("headers", {})
         self.calls = []
         super(DummyConnection, self).__init__(**kwargs)
+        self.headers = kwargs.pop("headers", {})
 
     def perform_request(self, *args, **kwargs):
         self.calls.append((args, kwargs))
