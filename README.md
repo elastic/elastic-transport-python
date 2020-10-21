@@ -1,5 +1,8 @@
 # elastic-transport-python
 
+[![PyPI](https://img.shields.io/pypi/v/elastic-transport)](https://pypi.org/elastic-transport)
+[![Python Versions](https://img.shields.io/pypi/pyversions/elastic-transport)](https://pypi.org/elastic-transport)
+
 Transport classes and utilities shared among Python Elastic client libraries
 
 This library was lifted from [`elasticsearch-py`](https://github.com/elastic/elasticsearch-py)
@@ -10,6 +13,12 @@ rather than only Elasticsearch.
 
 For almost all use-cases you should not need this library.
 The below use-cases are the common ones:
+
+### Installing from PyPI
+
+```
+$ python -m pip install elastic-transport
+```
 
 ### Creating your own Connection Class
 
@@ -55,6 +64,29 @@ $ python -m pip install requests
 This class is often useful when using libraries that integrate with Requests.
 Read more about [Requests on Read the Docs](https://requests.readthedocs.io).
 
+### Supported Connection Options
+
+The two connection classes support a variety of options, some connection classes
+only support a subset of the total options:
+
+| Option                 | Description                                                                                             | Default   | Supported by urllib3 | Supported by requests |
+|------------------------|---------------------------------------------------------------------------------------------------------|-----------|----------------------|-----------------------|
+| host                   | TCP host to connect                                                                                     | localhost | ✓                    | ✓                     |
+| port                   | TCP port to connect                                                                                     |           | ✓                    | ✓                     |
+| use_ssl                | Should connect via TLS/SSL?                                                                             | False     | ✓                    | ✓                     |
+| url_prefix             | Path prefix for all requests                                                                            | ""        | ✓                    | ✓                     |
+| request_timeout        | Default request timeout                                                                                 | 10.0      | ✓                    | ✓                     |
+| headers                | HTTP headers to add to every request                                                                    | {}        | ✓                    | ✓                     |
+| user_agent             | Default User-Agent HTTP header                                                                          | None      | ✓                    | ✓                     |
+| connections_per_host   | Number of HTTP connections per host                                                                     | 10        | ✓                    |                       |
+| verify_certs           | Whether to verify server certificate                                                                    | True      | ✓                    | ✓                     |
+| ca_certs               | CA certificates to use with TLS/SSL                                                                     | certifi   | ✓                    | ✓                     |
+| client_cert            | Client certificate to present during TLS/SSL handshake                                                  | None      | ✓                    | ✓                     |
+| client_key             | Client certificate key that goes with client_cert                                                       | None      | ✓                    | ✓                     |
+| ssl_version            | Version of TLS/SSL to use                                                                               | None      | ✓                    |                       |
+| ssl_assert_hostname    | Host to verify on the server TLS certificate. Set to False to disable certificate hostname verification | None      | ✓                    |                       |
+| ssl_assert_fingerprint | Checksum to verify against the server TLS certificate                                                   | None      | ✓                    |                       |
+| ssl_context            | Preconfigured SSLContext instance                                                                       | None      | ✓                    |                       |
 
 ## License
 
