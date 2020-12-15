@@ -240,7 +240,7 @@ class Transport(object):
             connection = self.get_connection()
 
             try:
-                status, headers_response, data = connection.perform_request(
+                resp_status, resp_headers, data = connection.perform_request(
                     method,
                     path,
                     params,
@@ -253,7 +253,7 @@ class Transport(object):
                 if method == "HEAD" and e.status == 404:
                     return Response(
                         status=404,
-                        headers={},
+                        headers=e.headers,
                         body=False,
                     )
 
@@ -289,14 +289,14 @@ class Transport(object):
 
                 if method == "HEAD":
                     return Response(
-                        status=status,
-                        headers=headers_response,
-                        body=200 <= status < 300,
+                        status=resp_status,
+                        headers=resp_headers,
+                        body=200 <= resp_status < 300,
                     )
 
                 if data:
                     data = self.deserializer.loads(
-                        data, headers_response.get("content-type")
+                        data, resp_headers.get("content-type")
                     )
 
                 # After the body is deserialized put the data
@@ -307,8 +307,8 @@ class Transport(object):
                 elif isinstance(data, dict):
                     response_cls = DictResponse
                 return response_cls(
-                    status=status,
-                    headers=headers_response,
+                    status=resp_status,
+                    headers=resp_headers,
                     body=data,
                 )
 

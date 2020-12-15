@@ -15,7 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import ssl
 import time
 import warnings
 
@@ -26,7 +25,7 @@ from urllib3.util.retry import Retry
 
 from ..compat import urlencode
 from ..exceptions import ConnectionError, ConnectionTimeout
-from ..utils import DEFAULT
+from ..utils import DEFAULT, normalize_headers
 from .base import Connection
 
 CA_CERTS = None
@@ -39,25 +38,13 @@ except ImportError:  # pragma: nocover
     pass
 
 
-def create_ssl_context(**kwargs):
-    """
-    A helper function around creating an SSL context
-
-    https://docs.python.org/3/library/ssl.html#context-creation
-
-    Accepts kwargs in the same manner as `create_default_context`.
-    """
-    ctx = ssl.create_default_context(**kwargs)
-    return ctx
-
-
 class Urllib3HttpConnection(Connection):
     """
     Default connection class using the `urllib3` library and the http protocol.
 
     :arg host: hostname of the node (default: localhost)
-    :arg port: port to use (integer, default: 9200)
-    :arg url_prefix: optional url prefix for elasticsearch
+    :arg port: port to use (integer)
+    :arg url_prefix: optional url prefix
     :arg timeout: default timeout in seconds (float, default: 10)
     :arg use_ssl: use ssl for the connection if `True`
     :arg verify_certs: whether to verify SSL certificates
@@ -223,6 +210,7 @@ class Urllib3HttpConnection(Connection):
 
             request_headers = self.headers.copy()
             request_headers.update(headers or ())
+            request_headers = normalize_headers(request_headers)
 
             if self.http_compress and body:
                 body = self._gzip_compress(body)
@@ -236,6 +224,7 @@ class Urllib3HttpConnection(Connection):
                 headers=request_headers,
                 **kw
             )
+            response_headers = dict(response.headers)
             duration = time.time() - start
             raw_data = response.data.decode("utf-8", "surrogatepass")
         except Exception as e:
@@ -262,7 +251,9 @@ class Urllib3HttpConnection(Connection):
                 status=response.status,
                 response=raw_data,
             )
-            self._raise_error(response.status, raw_data)
+            self._raise_error(
+                status=response.status, headers=response_headers, raw_data=raw_data
+            )
 
         self.log_request_success(
             method=method,
@@ -273,7 +264,7 @@ class Urllib3HttpConnection(Connection):
             duration=duration,
         )
 
-        return response.status, response.getheaders(), raw_data
+        return response.status, response_headers, raw_data
 
     def close(self):
         """

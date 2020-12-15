@@ -19,7 +19,7 @@ import json
 
 import pytest
 
-from elastic_transport.response import DictResponse, ListResponse, Response
+from elastic_transport.response import DictResponse, Headers, ListResponse, Response
 
 resp_dict = DictResponse(status=200, headers={}, body={"key": "val"})
 resp_list = ListResponse(status=404, headers={}, body=["a", 2, 3, {"k": "v"}])
@@ -47,6 +47,7 @@ def test_response_not_equals():
 def test_response_attributes():
     assert resp_bool.status == 200
     assert resp_bool.body is False
+    assert resp_bool.headers == {}
 
 
 def test_response_len():
@@ -109,3 +110,46 @@ def test_response_json():
 def test_response_instance_checks():
     assert isinstance(resp_list, list)
     assert isinstance(resp_dict, dict)
+
+
+def test_headers_empty():
+    assert isinstance(resp_dict.headers, Headers)
+
+    headers = Headers()
+
+    assert len(headers) == 0
+    with pytest.raises(KeyError) as e:
+        headers["Content-Length"]
+    assert str(e.value) == "'content-length'"
+    with pytest.raises(KeyError) as e:
+        headers[None]
+    assert str(e.value) == "None"
+    assert list(headers.items()) == []
+
+
+@pytest.mark.parametrize(
+    "initial", [{"Content-Length": "0"}, [("Content-Length", "0")]]
+)
+@pytest.mark.parametrize(
+    "get_key", ["content-length", "Content-Length", "cOntent-length"]
+)
+def test_headers_with_items(initial, get_key):
+    headers = Headers(initial)
+
+    assert len(headers) == 1
+    assert list(headers.keys()) == ["Content-Length"]
+    assert list(headers.values()) == ["0"]
+    assert list(headers.items()) == [("Content-Length", "0")]
+    assert headers.get(get_key) == "0"
+    assert headers[get_key] == "0"
+
+    other_headers = dict(initial)
+    assert headers == other_headers
+    assert headers == Headers(other_headers)
+
+    other_headers["content-type"] = "application/json"
+    assert headers != other_headers
+    assert headers != Headers(other_headers)
+
+    assert isinstance(headers.copy(), dict)
+    assert headers.copy() == headers

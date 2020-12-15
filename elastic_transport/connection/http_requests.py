@@ -176,7 +176,9 @@ class RequestsHttpConnection(Connection):
                 status=response.status_code,
                 response=raw_data,
             )
-            self._raise_error(response.status_code, raw_data)
+            self._raise_error(
+                status=response.status_code, headers=response.headers, raw_data=raw_data
+            )
 
         self.log_request_success(
             method=method,

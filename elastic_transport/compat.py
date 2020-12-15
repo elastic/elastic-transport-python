@@ -22,8 +22,15 @@ try:
 except NameError:
     string_types = (str, bytes)
 
+try:
+    from collections.abc import Mapping, MutableMapping
+except ImportError:
+    from collections import Mapping, MutableMapping
+
 __all__ = [
     "urlparse",
     "urlencode",
     "string_types",
+    "Mapping",
+    "MutableMapping",
 ]

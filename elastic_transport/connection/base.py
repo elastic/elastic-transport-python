@@ -180,7 +180,7 @@ class Connection(object):
         if response is not None:
             logger.debug("< %s", response)
 
-    def _raise_error(self, status, raw_data):
+    def _raise_error(self, status, headers, raw_data):
         """Locate appropriate exception and raise it. Attempts
         to decode the raw data as JSON for better usability.
         """
@@ -188,7 +188,9 @@ class Connection(object):
             raw_data = json.loads(six.ensure_str(raw_data, "utf-8", "ignore"))
         except Exception:
             pass
-        raise HTTP_EXCEPTIONS.get(status, APIError)(message=raw_data, status=status)
+        raise HTTP_EXCEPTIONS.get(status, APIError)(
+            message=raw_data, status=status, headers=headers
+        )
 
     def _gzip_compress(self, body):
         buf = io.BytesIO()
