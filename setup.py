@@ -48,7 +48,7 @@ setup(
     },
     packages=packages,
     install_requires=[
-        "urllib3>=1.21.1",
+        "urllib3>=1.21.1, <2",
         "six>=1.12",
         "certifi",
     ],
@@ -57,7 +57,7 @@ setup(
         "develop": ["pytest", "pytest-cov", "pytest-mock", "mock", "requests"],
     },
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "License :: OSI Approved :: Apache Software License",
         "Intended Audience :: Developers",
         "Operating System :: OS Independent",

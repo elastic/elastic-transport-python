@@ -17,6 +17,8 @@
 
 from six import add_metaclass, python_2_unicode_compatible
 
+from .response import Headers
+
 HTTP_EXCEPTIONS = {}
 
 
@@ -38,17 +40,22 @@ class TransportError(Exception):
     most recently raised (index=0) to least recently raised (index=N)
 
     If an HTTP status code is available with the error it
-    will be stored under 'status'.
+    will be stored under 'status'. If HTTP headers are available
+    they are stored under 'headers'.
     """
 
     status = None
 
-    def __init__(self, message, errors=(), status=None):
+    def __init__(self, message, errors=(), status=None, headers=None):
         super(TransportError, self).__init__(message)
         self.errors = tuple(errors)
         self.message = message
         if status is not None:
             self.status = status
+        if headers is not None:
+            self.headers = Headers(headers)
+        else:
+            self.headers = None
 
     def __repr__(self):
         parts = [repr(self.message)]

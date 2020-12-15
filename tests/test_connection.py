@@ -140,6 +140,7 @@ class TestUrllib3Connection(object):
         with patch.object(conn.pool, "urlopen") as pool_urlopen:
             resp = Mock()
             resp.status = 200
+            resp.headers = {}
             pool_urlopen.return_value = resp
 
             conn.perform_request("GET", "/")
@@ -158,6 +159,7 @@ class TestUrllib3Connection(object):
         with patch.object(conn.pool, "urlopen") as pool_urlopen:
             resp = Mock()
             resp.status = 200
+            resp.headers = {}
             pool_urlopen.return_value = resp
 
             conn.perform_request("GET", "/", request_timeout=request_timeout)
@@ -244,6 +246,7 @@ class TestUrllib3Connection(object):
             resp = Mock()
             resp.data = b'{"answer":42}'
             resp.status = 500
+            resp.headers = {}
             pool_urlopen.return_value = resp
 
             with pytest.raises(TransportError) as e:
