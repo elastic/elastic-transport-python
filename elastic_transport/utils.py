@@ -16,6 +16,7 @@
 #  under the License.
 
 import binascii
+import re
 from collections import namedtuple
 from platform import python_version
 
@@ -37,6 +38,16 @@ def create_user_agent(name, version):
         python_version(),
         __version__,
     )
+
+
+def client_meta_version(ver):
+    """Converts a Python package version to a meta version.
+    Meta version simply adds a 'p' suffix for all pre-releases
+    """
+    ver, ver_is_pre = re.match(r"^([0-9][0-9.]*[0-9]|[0-9])(.*)$", ver).groups()
+    if ver_is_pre:
+        ver += "p"
+    return ver
 
 
 def normalize_headers(headers):

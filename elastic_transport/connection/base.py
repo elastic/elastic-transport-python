@@ -51,6 +51,8 @@ class Connection(object):
     :arg user_agent: 'User-Agent' HTTP header for the given service.
     """
 
+    HTTP_CLIENT_META = None
+
     def __init__(
         self,
         host="localhost",

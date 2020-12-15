@@ -25,7 +25,7 @@ from urllib3.util.retry import Retry
 
 from ..compat import urlencode
 from ..exceptions import ConnectionError, ConnectionTimeout
-from ..utils import DEFAULT, normalize_headers
+from ..utils import DEFAULT, client_meta_version, normalize_headers
 from .base import Connection
 
 CA_CERTS = None
@@ -69,6 +69,8 @@ class Urllib3HttpConnection(Connection):
     :arg opaque_id: Send this value in the 'X-Opaque-Id' HTTP header
         For tracing all requests made by this transport.
     """
+
+    HTTP_CLIENT_META = ("ur", client_meta_version(urllib3.__version__))
 
     def __init__(
         self,
