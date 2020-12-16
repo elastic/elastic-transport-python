@@ -15,13 +15,16 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+from platform import python_version
+
+from ._version import __version__
 from .compat import string_types, urlparse
 from .connection import RequestsHttpConnection, Urllib3HttpConnection
 from .connection_pool import ConnectionPool, DummyConnectionPool, EmptyConnectionPool
 from .exceptions import ConnectionError, ConnectionTimeout, TransportError
 from .response import DictResponse, ListResponse, Response
 from .serializer import DEFAULT_SERIALIZERS, Deserializer
-from .utils import DEFAULT, normalize_headers
+from .utils import DEFAULT, client_meta_version, normalize_headers
 
 # Allows for using a connection_class by name rather than import.
 CONNECTION_CLASS_NAMES = {
@@ -88,6 +91,19 @@ class Transport(object):
                     )
                 )
             connection_class = CONNECTION_CLASS_NAMES[connection_class]
+
+        # Create the default metadata for the x-elastic-client-meta
+        # HTTP header. Only requires adding the (service, service_version)
+        # tuple to the beginning of the client_meta
+        self.transport_client_meta = (
+            ("py", client_meta_version(python_version())),
+            ("t", client_meta_version(__version__)),
+        )
+
+        # Grab the 'HTTP_CLIENT_META' property from the connection class
+        http_client_meta = getattr(connection_class, "HTTP_CLIENT_META", None)
+        if http_client_meta:
+            self.transport_client_meta += (http_client_meta,)
 
         # serialization config
         _serializers = DEFAULT_SERIALIZERS.copy()

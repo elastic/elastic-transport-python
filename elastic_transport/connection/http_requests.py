@@ -20,17 +20,19 @@ import warnings
 
 import urllib3
 
+from ..compat import urlencode
+from ..exceptions import ConnectionError, ConnectionTimeout
+from ..utils import DEFAULT, client_meta_version, normalize_headers
+from .base import Connection
+
 try:
     import requests
 
-    REQUESTS_AVAILABLE = True
+    _REQUESTS_AVAILABLE = True
+    _REQUESTS_META_VERSION = client_meta_version(requests.__version__)
 except ImportError:  # pragma: nocover
-    REQUESTS_AVAILABLE = False
-
-from ..compat import urlencode
-from ..exceptions import ConnectionError, ConnectionTimeout
-from ..utils import DEFAULT, normalize_headers
-from .base import Connection
+    _REQUESTS_AVAILABLE = False
+    _REQUESTS_META_VERSION = ""
 
 
 class RequestsHttpConnection(Connection):
@@ -52,6 +54,8 @@ class RequestsHttpConnection(Connection):
         For tracing all requests made by this transport.
     """
 
+    HTTP_CLIENT_META = ("rq", _REQUESTS_META_VERSION)
+
     def __init__(
         self,
         host="localhost",
@@ -67,7 +71,7 @@ class RequestsHttpConnection(Connection):
         opaque_id=None,
         **kwargs
     ):
-        if not REQUESTS_AVAILABLE:  # pragma: nocover
+        if not _REQUESTS_AVAILABLE:  # pragma: nocover
             raise ValueError(
                 "You must have 'requests' installed to use RequestsHttpConnection"
             )

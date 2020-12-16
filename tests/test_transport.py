@@ -16,6 +16,8 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import re
+
 import mock
 import pytest
 
@@ -398,3 +400,21 @@ def test_head_response_ignore_status(status):
     assert resp == False  # noqa
     assert resp.body is False
     assert bool(resp) is False
+
+
+@pytest.mark.parametrize(
+    "connection_class",
+    ["urllib3", "requests", Urllib3HttpConnection, RequestsHttpConnection],
+)
+def test_transport_client_meta_connection_class(connection_class):
+    t = Transport(connection_class=connection_class)
+    assert t.transport_client_meta[2] == t.connection_class.HTTP_CLIENT_META
+    assert t.transport_client_meta[2][0] in ("ur", "rq")
+    assert re.match(
+        r"^py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
+        ",".join("%s=%s" % (k, v) for k, v in t.transport_client_meta),
+    )
+
+    t = Transport()
+    assert t.transport_client_meta[2][0] == "ur"
+    assert [x[0] for x in t.transport_client_meta[:2]] == ["py", "t"]

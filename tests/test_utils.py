@@ -21,7 +21,11 @@ from platform import python_version
 import pytest
 
 from elastic_transport import __version__
-from elastic_transport.utils import create_user_agent, parse_cloud_id
+from elastic_transport.utils import (
+    client_meta_version,
+    create_user_agent,
+    parse_cloud_id,
+)
 
 
 def test_create_user_agent():
@@ -31,6 +35,19 @@ def test_create_user_agent():
         python_version(),
         __version__,
     )
+
+
+@pytest.mark.parametrize(
+    ["version", "meta_version"],
+    [
+        ("7.10.0", "7.10.0"),
+        ("7.10.0-alpha1", "7.10.0p"),
+        ("3.9.0b1", "3.9.0p"),
+        ("3.9.pre1", "3.9p"),
+    ],
+)
+def test_client_meta_version(version, meta_version):
+    assert client_meta_version(version) == meta_version
 
 
 def test_parse_cloud_id():
