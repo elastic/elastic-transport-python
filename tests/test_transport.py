@@ -58,7 +58,7 @@ def test_request_timeout_extracted_from_params_and_passed():
 
     t.perform_request("GET", "/", request_timeout=42)
     assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None, None) == t.get_connection().calls[0][0]
+    assert ("GET", "/", None) == t.get_connection().calls[0][0]
     assert {
         "request_timeout": 42,
         "ignore_status": (),
@@ -71,7 +71,7 @@ def test_opaque_id():
 
     t.perform_request("GET", "/")
     assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None, None) == t.get_connection().calls[0][0]
+    assert ("GET", "/", None) == t.get_connection().calls[0][0]
     assert {
         "request_timeout": DEFAULT,
         "ignore_status": (),
@@ -81,7 +81,7 @@ def test_opaque_id():
     # Now try with an 'x-opaque-id' set on perform_request().
     t.perform_request("GET", "/", headers={"x-opaque-id": "request-1"})
     assert 2 == len(t.get_connection().calls)
-    assert ("GET", "/", None, None) == t.get_connection().calls[1][0]
+    assert ("GET", "/", None) == t.get_connection().calls[1][0]
     assert {
         "request_timeout": DEFAULT,
         "ignore_status": (),
@@ -94,7 +94,7 @@ def test_ignore_status_as_int():
 
     t.perform_request("GET", "/", ignore_status=500)
     assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None, None) == t.get_connection().calls[0][0]
+    assert ("GET", "/", None) == t.get_connection().calls[0][0]
     assert {
         "request_timeout": DEFAULT,
         "ignore_status": (500,),
@@ -119,9 +119,7 @@ def test_body_gets_encoded_into_bytes():
 
     t.perform_request("GET", "/", body="你好")
     assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None, b"\xe4\xbd\xa0\xe5\xa5\xbd") == t.get_connection().calls[
-        0
-    ][0]
+    assert ("GET", "/", b"\xe4\xbd\xa0\xe5\xa5\xbd") == t.get_connection().calls[0][0]
 
 
 def test_body_bytes_get_passed_untouched():
@@ -130,7 +128,7 @@ def test_body_bytes_get_passed_untouched():
     body = b"\xe4\xbd\xa0\xe5\xa5\xbd"
     t.perform_request("GET", "/", body=body)
     assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None, body) == t.get_connection().calls[0][0]
+    assert ("GET", "/", body) == t.get_connection().calls[0][0]
 
 
 def test_body_surrogates_replaced_encoded_into_bytes():
@@ -141,7 +139,6 @@ def test_body_surrogates_replaced_encoded_into_bytes():
     assert (
         "GET",
         "/",
-        None,
         b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa",
     ) == t.get_connection().calls[0][0]
 
@@ -418,3 +415,52 @@ def test_transport_client_meta_connection_class(connection_class):
     t = Transport()
     assert t.transport_client_meta[2][0] == "ur"
     assert [x[0] for x in t.transport_client_meta[:2]] == ["py", "t"]
+
+
+@pytest.mark.parametrize(
+    ["params", "expected"],
+    [
+        (None, ""),
+        ({}, ""),
+        ([], ""),
+        ((), ""),
+        ({"k": "v"}, "?k=v"),
+        ({"k": 1}, "?k=1"),
+        ({"k": 1.1}, "?k=1.1"),
+        ({"k": b"v"}, "?k=v"),
+        ({"k": "你好"}, "?k=%E4%BD%A0%E5%A5%BD"),
+        ({"k": u"你好"}, "?k=%E4%BD%A0%E5%A5%BD"),  # Python 2
+        ({"k": u"你好".encode("utf-8")}, "?k=%E4%BD%A0%E5%A5%BD"),
+        (
+            {"k": r"\/"},
+            "?k=%5C%2F",
+        ),
+        ({"k": None}, "?k"),
+        ({"k": ""}, "?k="),
+        ([("k1", "v1"), ("k2", "v2")], "?k1=v1&k2=v2"),
+        ({"k": "value with spaces"}, "?k=value%20with%20spaces"),
+        ({"k": "1234567890-_~."}, "?k=1234567890-_~."),
+        (
+            {"k": " `=!@#$%^&*()+[];'{}:,<>?/\\\""},
+            "?k=%20%60%3D%21%40%23%24%25%5E%26%2A%28%29%2B%5B%5D%3B%27%7B%7D%3A%2C%3C%3E%3F%2F%5C%22",
+        ),
+    ],
+)
+def test_transport_default_params_encoder(params, expected):
+    t = Transport(connection_class=DummyConnection)
+    t.perform_request("GET", "/", params=params)
+
+    assert 1 == len(t.get_connection().calls)
+    assert ("GET", "/" + expected, None) == t.get_connection().calls[0][0]
+
+
+@pytest.mark.parametrize("param", [True, False, [], (), {}, object()])
+def test_transport_default_encoder_type_error(param):
+    t = Transport(connection_class=DummyConnection)
+
+    with pytest.raises(TypeError) as e:
+        t.perform_request("GET", "/", params={"key": param})
+    assert (
+        str(e.value)
+        == "Default Transport.params_encoder supports bytes, str, int, float values or 'None'"
+    )

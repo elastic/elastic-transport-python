@@ -17,23 +17,36 @@
 
 import pytest
 
-from elastic_transport import NotFoundError, Transport
+from elastic_transport import NotFoundError, QueryParams, Transport
 
 
 @pytest.mark.parametrize("connection_class", ["urllib3", "requests"])
 def test_simple_request(connection_class):
     t = Transport("https://httpbin.org", connection_class=connection_class)
+
+    params = QueryParams()
+    params.add("key[]", "1")
+    params.add("key[]", "2")
+    params.add("q1", None)
+    params.add("q2", "")
+
     resp = t.perform_request(
         "GET",
         "/anything",
         headers={"Custom": "headeR"},
-        params={"Query": "String"},
+        params=params,
         body={"JSON": "body"},
     )
     assert resp.status == 200
     assert resp["method"] == "GET"
-    assert resp["url"] == "https://httpbin.org/anything?Query=String"
-    assert resp["args"] == {"Query": "String"}
+    assert resp["url"] == "https://httpbin.org/anything?key[]=1&key[]=2&q1&q2="
+
+    # httpbin makes no-value query params into ''
+    assert resp["args"] == {
+        "key[]": ["1", "2"],
+        "q1": "",
+        "q2": "",
+    }
     assert resp["data"] == '{"JSON":"body"}'
     assert resp["json"] == {"JSON": "body"}
 

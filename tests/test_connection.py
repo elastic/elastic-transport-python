@@ -252,8 +252,7 @@ class TestUrllib3Connection(object):
             with pytest.raises(TransportError) as e:
                 conn.perform_request(
                     "GET",
-                    "/",
-                    {"param": 42},
+                    "/?param=42",
                     b"{}",
                 )
 
@@ -468,8 +467,7 @@ class TestRequestsConnection(object):
         with pytest.raises(TransportError) as e:
             con.perform_request(
                 "GET",
-                "/",
-                {"param": 42},
+                "/?param=42",
                 b"{}",
             )
         assert norm_repr(e.value) == "InternalServerError({'answer': 42}, status=500)"
@@ -495,8 +493,7 @@ class TestRequestsConnection(object):
         with pytest.raises(TransportError) as e:
             con.perform_request(
                 "GET",
-                "/",
-                {"param": 42},
+                "/?param=42",
                 b"{}",
             )
         assert e.value.message == "this is a plaintext error"
@@ -525,8 +522,7 @@ class TestRequestsConnection(object):
         with pytest.raises(ConnectionError) as e:
             con.perform_request(
                 "GET",
-                "/",
-                {"param": 42},
+                "/?param=42",
                 b"{}",
             )
         assert norm_repr(
@@ -549,8 +545,7 @@ class TestRequestsConnection(object):
         with pytest.raises(ConnectionTimeout) as e:
             con.perform_request(
                 "GET",
-                "/",
-                {"param": 42},
+                "/?param=42",
                 b"{}",
             )
         assert norm_repr(
@@ -574,8 +569,7 @@ class TestRequestsConnection(object):
         con = self._get_mock_connection(response_body=b"""{"answer": "that's it!"}""")
         con.perform_request(
             "GET",
-            "/",
-            {"param": 42},
+            "/?param=42",
             """{"question": "what's that?"}""".encode("utf-8"),
         )
 
@@ -621,16 +615,6 @@ class TestRequestsConnection(object):
         assert "http://localhost/" == request.url
         assert con.port is None
         assert con.host == "localhost"
-        assert "GET" == request.method
-        assert None is request.body
-
-    def test_params_properly_encoded(self):
-        con = self._get_mock_connection()
-        request = self._get_request(
-            con, "GET", "/", params={"param": "value with spaces"}
-        )
-
-        assert "http://localhost/?param=value+with+spaces" == request.url
         assert "GET" == request.method
         assert None is request.body
 

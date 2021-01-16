@@ -123,8 +123,7 @@ class Connection(object):
     def perform_request(
         self,
         method,
-        path,
-        params=None,
+        target,
         body=None,
         request_timeout=DEFAULT,
         ignore_status=(),
