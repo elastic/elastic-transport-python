@@ -23,7 +23,6 @@ import urllib3
 from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
 from urllib3.util.retry import Retry
 
-from ..compat import urlencode
 from ..exceptions import ConnectionError, ConnectionTimeout
 from ..utils import DEFAULT, client_meta_version, normalize_headers
 from .base import Connection
@@ -186,17 +185,13 @@ class Urllib3HttpConnection(Connection):
     def perform_request(
         self,
         method,
-        path,
-        params=None,
+        target,
         body=None,
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
     ):
-        target = self.url_prefix + path
-        if params:
-            target = "%s?%s" % (path, urlencode(params))
-        url = self.base_url + target
+        url = self.base_url + self.url_prefix + target
 
         start = time.time()
         orig_body = body

@@ -15,6 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+from six.moves.urllib_parse import quote as _quote
 from six.moves.urllib_parse import urlencode, urlparse
 
 try:
@@ -27,7 +28,22 @@ try:
 except ImportError:
     from collections import Mapping, MutableMapping
 
+
+_QUOTE_ALWAYS_SAFE = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~"
+)
+
+
+def quote(string, safe="/"):
+    # type: (str, str) -> str
+    # Redefines 'urllib.parse.quote()' to always have the '~' character
+    # within the 'ALWAYS_SAFE' list. The character was added in Python 3.7
+    safe = "".join(_QUOTE_ALWAYS_SAFE.union(set(safe)))
+    return _quote(string, safe)
+
+
 __all__ = [
+    "quote",
     "urlparse",
     "urlencode",
     "string_types",

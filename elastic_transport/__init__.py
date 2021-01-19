@@ -47,6 +47,7 @@ from .exceptions import (
     UnauthorizedError,
     UnprocessableEntityError,
 )
+from .models import QueryParams
 from .serializer import Deserializer, JSONSerializer, Serializer, TextSerializer
 from .transport import Transport
 
@@ -71,6 +72,7 @@ __all__ = [
     "NotFoundError",
     "PayloadTooLargeError",
     "PaymentRequiredError",
+    "QueryParams",
     "RandomSelector",
     "RequestsHttpConnection",
     "RoundRobinSelector",

@@ -20,7 +20,6 @@ import warnings
 
 import urllib3
 
-from ..compat import urlencode
 from ..exceptions import ConnectionError, ConnectionTimeout
 from ..utils import DEFAULT, client_meta_version, normalize_headers
 from .base import Connection
@@ -119,17 +118,14 @@ class RequestsHttpConnection(Connection):
     def perform_request(
         self,
         method,
-        path,
-        params=None,
+        target,
         body=None,
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
     ):
-        url = self.base_url + path
+        url = self.base_url + target
         headers = normalize_headers(headers)
-        if params:
-            url = "%s?%s" % (url, urlencode(params or {}))
 
         orig_body = body
         if self.http_compress and body:

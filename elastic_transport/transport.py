@@ -17,11 +17,14 @@
 
 from platform import python_version
 
+import six
+
 from ._version import __version__
-from .compat import string_types, urlparse
+from .compat import quote, string_types, urlparse
 from .connection import RequestsHttpConnection, Urllib3HttpConnection
 from .connection_pool import ConnectionPool, DummyConnectionPool, EmptyConnectionPool
 from .exceptions import ConnectionError, ConnectionTimeout, TransportError
+from .models import QueryParams
 from .response import DictResponse, ListResponse, Response
 from .serializer import DEFAULT_SERIALIZERS, Deserializer
 from .utils import DEFAULT, client_meta_version, normalize_headers
@@ -31,6 +34,41 @@ CONNECTION_CLASS_NAMES = {
     "urllib3": Urllib3HttpConnection,
     "requests": RequestsHttpConnection,
 }
+
+
+def _default_params_encoder(params):
+    # type: (QueryParams) -> str
+    """Default encoder of QueryParams objects for Transport"""
+    to_encode = []
+    for key, val in params.items():
+        if val is not None and (
+            not isinstance(val, (bytes, str, int, float) + six.string_types)
+            or isinstance(
+                val, bool
+            )  # bool subclasses int, but we don't want to support bool.
+        ):
+            raise TypeError(
+                "Default Transport.params_encoder supports "
+                "bytes, str, int, float values or 'None'"
+            )
+
+        # Don't send 'None' through quote()
+        if val is not None:
+            # If a non-stringlike type then convert to str first
+            if isinstance(val, (int, float)):
+                val = str(val)
+
+            # Python 2 unicode
+            elif not isinstance(val, (str, bytes)) and hasattr(val, "encode"):
+                val = val.encode("utf-8")
+
+            # safe="" to quote slashes '/'
+            val = quote(val, safe="")
+
+        to_encode.append((quote(key, safe=""), val))
+
+    # If there's a None value then leave off the '='
+    return "&".join("%s=%s" % (k, v) if v is not None else k for k, v in to_encode)
 
 
 class Transport(object):
@@ -51,6 +89,7 @@ class Transport(object):
         serializers=None,
         default_mimetype="application/json",
         default_hosts=None,
+        params_encoder=_default_params_encoder,
         max_retries=3,
         retry_on_status=(502, 503, 504),
         retry_on_timeout=False,
@@ -64,6 +103,8 @@ class Transport(object):
         :arg connection_pool_class: subclass of :class:`~elastic_transport.ConnectionPool` to use
         :arg serializers: optional dict of serializer instances that will be
             used for deserializing data coming from the server. (key is the mimetype)
+        :arg params_encoder: Callable which takes query params and
+            returns a string of encoded query params
         :arg default_mimetype: when no mimetype is specified by the server
             response assume this mimetype, defaults to `'application/json'`
         :arg default_hosts: Default hosts config to use if none is given.
@@ -119,6 +160,9 @@ class Transport(object):
 
         # data serializer
         self.serializer = _serializers[default_mimetype]
+
+        # query params encoder
+        self.params_encoder = params_encoder
 
         # store all strategies...
         self.connection_pool_class = connection_pool_class
@@ -248,6 +292,14 @@ class Transport(object):
                 pass
 
         headers = normalize_headers(headers)
+        if params is not None and not isinstance(params, QueryParams):
+            params = QueryParams(params)
+
+        # Add path and optionally 'params' to make
+        # the request target.
+        target = path
+        if params:
+            target += "?" + self.params_encoder(params)
 
         # Errors are stored from (oldest->newest)
         errors = []
@@ -258,8 +310,7 @@ class Transport(object):
             try:
                 resp_status, resp_headers, data = connection.perform_request(
                     method,
-                    path,
-                    params,
+                    target,
                     body,
                     headers=headers,
                     ignore_status=ignore_status,
