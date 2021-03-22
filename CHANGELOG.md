@@ -1,5 +1,9 @@
 # Changelog
 
+## 7.12.0 (2021-03-22)
+
+Release created to be compatible with 7.12 clients
+
 ## 7.11.0 (2021-02-10)
 
 ### Added
