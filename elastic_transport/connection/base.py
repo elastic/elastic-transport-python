@@ -19,10 +19,8 @@ import gzip
 import io
 import logging
 
-import six
-
 from ..exceptions import HTTP_EXCEPTIONS, APIError
-from ..utils import DEFAULT, normalize_headers
+from ..utils import DEFAULT, normalize_headers, to_str
 
 try:
     import simplejson as json
@@ -32,7 +30,7 @@ except ImportError:
 logger = logging.getLogger("elastic_transport.connection")
 
 
-class Connection(object):
+class Connection:
     """
     Class responsible for maintaining a connection to an Enterprise Search node. It
     holds persistent connection pool to it and it's main interface
@@ -64,7 +62,7 @@ class Connection(object):
         http_compress=None,
         opaque_id=None,
         user_agent=None,
-        **kwargs
+        **kwargs,
     ):
         # Work-around if the implementing class doesn't
         # define the headers property before calling super().__init__()
@@ -97,11 +95,11 @@ class Connection(object):
         self.request_timeout = request_timeout
 
     def __repr__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.base_url)
+        return f"<{self.__class__.__name__}: {self.base_url}>"
 
     def __eq__(self, other):
         if not isinstance(other, Connection):
-            raise TypeError("Unsupported equality check for %s and %s" % (self, other))
+            raise TypeError(f"Unsupported equality check for {self} and {other}")
         return self.__hash__() == other.__hash__()
 
     def __hash__(self):
@@ -186,7 +184,7 @@ class Connection(object):
         to decode the raw data as JSON for better usability.
         """
         try:
-            raw_data = json.loads(six.ensure_str(raw_data, "utf-8", "ignore"))
+            raw_data = json.loads(to_str(raw_data, "utf-8", errors="ignore"))
         except Exception:
             pass
         raise HTTP_EXCEPTIONS.get(status, APIError)(

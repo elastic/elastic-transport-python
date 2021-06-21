@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #  Licensed to Elasticsearch B.V. under one or more contributor
 #  license agreements. See the NOTICE file distributed with
 #  this work for additional information regarding copyright
@@ -21,11 +20,11 @@ import io
 import re
 import ssl
 import warnings
+from unittest.mock import Mock, patch
 
 import pytest
 import requests
 import urllib3
-from mock import Mock, patch
 from urllib3._collections import HTTPHeaderDict
 
 from elastic_transport import (
@@ -39,7 +38,6 @@ from elastic_transport import (
     TransportError,
     Urllib3HttpConnection,
 )
-from tests.conftest import norm_repr
 
 
 def gzip_decompress(data):
@@ -47,7 +45,7 @@ def gzip_decompress(data):
     return buf.read()
 
 
-class TestUrllib3Connection(object):
+class TestUrllib3Connection:
     def _get_mock_connection(self, connection_params={}, response_body=b"{}"):
         con = Urllib3HttpConnection(**connection_params)
 
@@ -256,7 +254,7 @@ class TestUrllib3Connection(object):
                     b"{}",
                 )
 
-        assert norm_repr(e.value) == "InternalServerError({'answer': 42}, status=500)"
+        assert repr(e.value) == "InternalServerError({'answer': 42}, status=500)"
 
         # log url and duration
         assert 1 == logger.warning.call_count
@@ -273,10 +271,10 @@ class TestUrllib3Connection(object):
         buf = b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
         con = self._get_mock_connection(response_body=buf)
         status, headers, data = con.perform_request("GET", "/")
-        assert u"你好\uda6a" == data
+        assert "你好\uda6a" == data
 
 
-class TestRequestsConnection(object):
+class TestRequestsConnection:
     def _get_mock_connection(
         self,
         connection_params={},
@@ -470,7 +468,7 @@ class TestRequestsConnection(object):
                 "/?param=42",
                 b"{}",
             )
-        assert norm_repr(e.value) == "InternalServerError({'answer': 42}, status=500)"
+        assert repr(e.value) == "InternalServerError({'answer': 42}, status=500)"
 
         # log url and duration
         assert 1 == logger.warning.call_count
@@ -499,7 +497,7 @@ class TestRequestsConnection(object):
         assert e.value.message == "this is a plaintext error"
         assert e.value.status == 500
         assert (
-            norm_repr(e.value)
+            repr(e.value)
             == "InternalServerError('this is a plaintext error', status=500)"
         )
 
@@ -525,9 +523,10 @@ class TestRequestsConnection(object):
                 "/?param=42",
                 b"{}",
             )
-        assert norm_repr(
-            e.value
-        ) == "ConnectionError('connection error!', errors=%r)" % (e.value.errors,)
+        assert (
+            repr(e.value)
+            == f"ConnectionError('connection error!', errors={e.value.errors!r})"
+        )
 
         # log url and duration
         assert 1 == logger.warning.call_count
@@ -548,9 +547,9 @@ class TestRequestsConnection(object):
                 "/?param=42",
                 b"{}",
             )
-        assert norm_repr(
+        assert repr(
             e.value
-        ) == "ConnectionTimeout('Connection timed out during request', errors=%r)" % (
+        ) == "ConnectionTimeout('Connection timed out during request', errors={!r})".format(
             e.value.errors,
         )
 
@@ -570,7 +569,7 @@ class TestRequestsConnection(object):
         con.perform_request(
             "GET",
             "/?param=42",
-            """{"question": "what's that?"}""".encode("utf-8"),
+            b"""{"question": "what's that?"}""",
         )
 
         # log url and duration
@@ -624,7 +623,7 @@ class TestRequestsConnection(object):
 
         assert "http://localhost/" == request.url
         assert "GET" == request.method
-        assert '{"answer": 42}'.encode("utf-8") == request.body
+        assert b'{"answer": 42}' == request.body
 
     @patch("elastic_transport.connection.base.logger")
     def test_url_prefix(self, logger):
@@ -635,7 +634,7 @@ class TestRequestsConnection(object):
 
         assert "http://localhost:3002/some-prefix/_search" == request.url
         assert "GET" == request.method
-        assert '{"answer": 42}'.encode("utf-8") == request.body
+        assert b'{"answer": 42}' == request.body
 
         assert 1 == logger.info.call_count
         assert re.match(
@@ -647,7 +646,7 @@ class TestRequestsConnection(object):
         buf = b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
         con = self._get_mock_connection(response_body=buf)
         status, headers, data = con.perform_request("GET", "/")
-        assert u"你好\uda6a" == data
+        assert "你好\uda6a" == data
 
     def test_client_cert_is_used_as_session_cert(self):
         conn = RequestsHttpConnection(

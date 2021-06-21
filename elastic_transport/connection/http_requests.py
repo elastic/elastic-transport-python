@@ -68,7 +68,7 @@ class RequestsHttpConnection(Connection):
         headers=None,
         http_compress=None,
         opaque_id=None,
-        **kwargs
+        **kwargs,
     ):
         if not _REQUESTS_AVAILABLE:  # pragma: nocover
             raise ValueError(
@@ -83,14 +83,14 @@ class RequestsHttpConnection(Connection):
                 continue
             self.session.headers.pop(key)
 
-        super(RequestsHttpConnection, self).__init__(
+        super().__init__(
             host=host,
             port=port,
             use_ssl=use_ssl,
             headers=headers,
             http_compress=http_compress,
             opaque_id=opaque_id,
-            **kwargs
+            **kwargs,
         )
 
         self.session.verify = verify_certs
@@ -111,8 +111,7 @@ class RequestsHttpConnection(Connection):
 
         if self.use_ssl and not verify_certs and ssl_show_warn:
             warnings.warn(
-                "Connecting to %r using SSL with verify_certs=False is insecure"
-                % self.base_url
+                f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure"
             )
 
     def perform_request(

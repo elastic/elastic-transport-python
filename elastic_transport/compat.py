@@ -15,13 +15,10 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from six.moves.urllib_parse import quote as _quote
-from six.moves.urllib_parse import urlencode, urlparse
+from urllib.parse import quote as _quote
+from urllib.parse import urlencode, urlparse
 
-try:
-    string_types = (basestring,)  # noqa: F821
-except NameError:
-    string_types = (str, bytes)
+string_types = (str, bytes)
 
 try:
     from collections.abc import Mapping, MutableMapping

@@ -15,8 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from six import add_metaclass, python_2_unicode_compatible
-
 from .response import Headers
 
 HTTP_EXCEPTIONS = {}
@@ -31,9 +29,7 @@ class TransportErrorMeta(type):
         return cls
 
 
-@python_2_unicode_compatible
-@add_metaclass(TransportErrorMeta)
-class TransportError(Exception):
+class TransportError(Exception, metaclass=TransportErrorMeta):
     """Generic exception for the 'elastic-transport' package.
 
     For the 'errors' attribute, errors are ordered from
@@ -47,7 +43,7 @@ class TransportError(Exception):
     status = None
 
     def __init__(self, message, errors=(), status=None, headers=None):
-        super(TransportError, self).__init__(message)
+        super().__init__(message)
         self.errors = tuple(errors)
         self.message = message
         if status is not None:
@@ -62,12 +58,12 @@ class TransportError(Exception):
         if self.status is not None:
             parts.append("status=%r" % self.status)
         if self.errors:
-            parts.append("errors=%r" % (self.errors,))
-        return "%s(%s)" % (self.__class__.__name__, ", ".join(parts))
+            parts.append(f"errors={self.errors!r}")
+        return "{}({})".format(self.__class__.__name__, ", ".join(parts))
 
     def __str__(self):
         if self.status:
-            return "[%s] %s" % (self.status, self.message)
+            return f"[{self.status}] {self.message}"
         return str(self.message)
 
 

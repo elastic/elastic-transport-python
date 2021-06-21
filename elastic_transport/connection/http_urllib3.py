@@ -18,13 +18,12 @@
 import time
 import warnings
 
-import six
 import urllib3
 from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
 from urllib3.util.retry import Retry
 
 from ..exceptions import ConnectionError, ConnectionTimeout
-from ..utils import DEFAULT, client_meta_version, normalize_headers
+from ..utils import DEFAULT, client_meta_version, normalize_headers, to_str
 from .base import Connection
 
 CA_CERTS = None
@@ -89,19 +88,19 @@ class Urllib3HttpConnection(Connection):
         ssl_context=None,
         http_compress=None,
         opaque_id=None,
-        **kwargs
+        **kwargs,
     ):
         # Initialize headers before calling super().__init__().
         self.headers = urllib3.make_headers(keep_alive=True)
 
-        super(Urllib3HttpConnection, self).__init__(
+        super().__init__(
             host=host,
             port=port,
             use_ssl=use_ssl,
             headers=headers,
             http_compress=http_compress,
             opaque_id=opaque_id,
-            **kwargs
+            **kwargs,
         )
         pool_class = urllib3.HTTPConnectionPool
         kw = {}
@@ -167,8 +166,7 @@ class Urllib3HttpConnection(Connection):
                 kw["cert_reqs"] = "CERT_NONE"
                 if ssl_show_warn:
                     warnings.warn(
-                        "Connecting to %r using SSL with verify_certs=False is insecure"
-                        % self.base_url
+                        f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure"
                     )
                 else:
                     urllib3.disable_warnings()
@@ -179,7 +177,7 @@ class Urllib3HttpConnection(Connection):
             timeout=self.request_timeout,
             maxsize=connections_per_host,
             block=True,
-            **kw
+            **kw,
         )
 
     def perform_request(
@@ -202,8 +200,8 @@ class Urllib3HttpConnection(Connection):
 
             # in python2 we need to make sure the url and method are not
             # unicode. Otherwise the body will be decoded into unicode too
-            target = six.ensure_str(target, "utf-8")
-            method = six.ensure_str(method, "ascii")
+            target = to_str(target, "utf-8")
+            method = to_str(method, "ascii")
 
             request_headers = self.headers.copy()
             request_headers.update(headers or ())
@@ -219,7 +217,7 @@ class Urllib3HttpConnection(Connection):
                 body,
                 retries=Retry(False),
                 headers=request_headers,
-                **kw
+                **kw,
             )
             response_headers = dict(response.headers)
             duration = time.time() - start

@@ -19,8 +19,7 @@ import binascii
 import re
 from collections import namedtuple
 from platform import python_version
-
-from six import ensure_binary, ensure_str
+from typing import Union
 
 from ._version import __version__
 
@@ -32,11 +31,8 @@ DEFAULT = namedtuple("DEFAULT", ())()
 
 def create_user_agent(name, version):
     """Creates the 'User-Agent' header given the library name and version"""
-    return "%s/%s (Python/%s; elastic-transport/%s)" % (
-        name,
-        version,
-        python_version(),
-        __version__,
+    return (
+        f"{name}/{version} (Python/{python_version()}; elastic-transport/{__version__})"
     )
 
 
@@ -70,11 +66,11 @@ CloudID = namedtuple(
 def parse_cloud_id(cloud_id):
     """Parses a Cloud ID into its components"""
     try:
-        cloud_id = ensure_str(cloud_id)
+        cloud_id = to_str(cloud_id)
         cluster_name, _, cloud_id = cloud_id.partition(":")
-        parts = ensure_str(
-            binascii.a2b_base64(ensure_binary(cloud_id, "ascii")), "ascii"
-        ).split("$")
+        parts = to_str(binascii.a2b_base64(to_bytes(cloud_id, "ascii")), "ascii").split(
+            "$"
+        )
         parent_dn = parts[0]
         if not parent_dn:
             raise ValueError()  # Caught and re-raised properly below
@@ -94,8 +90,8 @@ def parse_cloud_id(cloud_id):
     except (ValueError, IndexError, UnicodeError):
         raise ValueError("Cloud ID is not properly formatted")
 
-    es_host = "%s.%s" % (es_uuid, parent_dn) if es_uuid else None
-    kibana_host = "%s.%s" % (kibana_uuid, parent_dn) if kibana_uuid else None
+    es_host = f"{es_uuid}.{parent_dn}" if es_uuid else None
+    kibana_host = f"{kibana_uuid}.{parent_dn}" if kibana_uuid else None
 
     return CloudID(
         cluster_name=cluster_name,
@@ -104,3 +100,15 @@ def parse_cloud_id(cloud_id):
         kibana_host=kibana_host,
         kibana_port=port,
     )
+
+
+def to_str(value: Union[str, bytes], encoding="utf-8", errors="strict") -> str:
+    if type(value) == bytes:
+        return value.decode(encoding, errors)
+    return value
+
+
+def to_bytes(value: Union[str, bytes], encoding="utf-8", errors="strict") -> bytes:
+    if type(value) == str:
+        return value.encode(encoding, errors)
+    return value

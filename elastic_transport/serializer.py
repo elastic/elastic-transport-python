@@ -15,22 +15,16 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-try:
-    import simplejson as json
-except ImportError:
-    import json
-
+import json
 import uuid
 from datetime import date
 from decimal import Decimal
-
-import six
 
 from .compat import string_types
 from .exceptions import SerializationError
 
 
-class Serializer(object):
+class Serializer:
     mimetype = None
 
     def loads(self, s):  # pragma: nocover
@@ -62,9 +56,7 @@ class JSONSerializer(Serializer):
             return str(data)
         elif isinstance(data, Decimal):
             return float(data)
-        raise SerializationError(
-            "Unable to serialize %r (type: %s)" % (data, type(data))
-        )
+        raise SerializationError(f"Unable to serialize {data!r} (type: {type(data)})")
 
     def loads(self, s):
         try:
@@ -83,7 +75,7 @@ class JSONSerializer(Serializer):
         # call but just in case we also wrap these.
         except (ValueError, UnicodeError, TypeError) as e:  # pragma: nocover
             raise SerializationError(
-                message="Unable to serialize %r (type: %s)" % (data, type(data)),
+                message=f"Unable to serialize {data!r} (type: {type(data)})",
                 errors=(e,),
             )
 
@@ -94,12 +86,14 @@ DEFAULT_SERIALIZERS = {
 }
 
 
-class Deserializer(object):
+class Deserializer:
     def __init__(self, serializers, default_mimetype="application/json"):
         try:
             self.default = serializers[default_mimetype]
         except KeyError:
-            raise ValueError("Cannot find default serializer (%s)" % default_mimetype)
+            raise ValueError(
+                "Cannot find default serializer (%s)" % default_mimetype
+            ) from None
         self.serializers = serializers
 
     def loads(self, s, mimetype=None):
@@ -111,11 +105,8 @@ class Deserializer(object):
             try:
                 deserializer = self.serializers[mimetype]
             except KeyError:
-                return six.raise_from(
-                    SerializationError(
-                        "Unknown mimetype, unable to deserialize: %s" % mimetype
-                    ),
-                    None,
-                )
+                raise SerializationError(
+                    f"Unknown mimetype, unable to deserialize: {mimetype}"
+                ) from None
 
         return deserializer.loads(s)

@@ -20,8 +20,6 @@ $ python -m pip install elastic-transport
 Versioning follows the major and minor version of the Elastic Stack version and
 the patch number is incremented for bug fixes within a minor release.
 
-`elastic-transport-python` supports Python 2.7 and Python 3.6+
-
 ## User Guide
 
 For almost all use-cases you should not need this library.

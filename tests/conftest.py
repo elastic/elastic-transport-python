@@ -24,7 +24,7 @@ class DummyConnection(Connection):
         self.status = kwargs.pop("status", 200)
         self.body = kwargs.pop("body", "{}")
         self.calls = []
-        super(DummyConnection, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.headers = kwargs.pop("headers", {})
 
     def perform_request(self, *args, **kwargs):
@@ -32,8 +32,3 @@ class DummyConnection(Connection):
         if self.exception:
             raise self.exception
         return self.status, self.headers, self.body
-
-
-def norm_repr(x):
-    # Normalizes u'...' strings within reprs for Python 2.x
-    return repr(x).replace("u'", "'")

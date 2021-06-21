@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #  Licensed to Elasticsearch B.V. under one or more contributor
 #  license agreements. See the NOTICE file distributed with
 #  this work for additional information regarding copyright
@@ -21,7 +20,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-import six
 
 from elastic_transport import (
     Deserializer,
@@ -68,16 +66,10 @@ def test_raises_serialization_error_on_load_error():
         JSONSerializer().loads("{{")
 
 
-@pytest.mark.parametrize("string", [u"你好", b"\x00\x01"])
+@pytest.mark.parametrize("string", ["你好", b"\x00\x01"])
 def test_strings_are_left_untouched(string):
     assert string == JSONSerializer().dumps(string)
     assert string == TextSerializer().dumps(string)
-
-
-@pytest.mark.skipif(not six.PY2, reason="Only runs on Python 2.x")
-def test_unicode_strings_for_json_python2():
-    x = JSONSerializer().loads('{"key": "val"}')
-    assert all(isinstance(item, unicode) for item in x.popitem())  # noqa: F821
 
 
 def test_deserializes_json_by_default():

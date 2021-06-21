@@ -23,7 +23,7 @@ else:
     from collections import OrderedDict as ordered_dict
 
 
-class QueryParams(object):
+class QueryParams:
     """Class which handles duplicate keys and ordered parameters for query"""
 
     __slots__ = ("_internal",)
@@ -72,7 +72,7 @@ class QueryParams(object):
     def _check_types(self, key):
         if not isinstance(key, str):
             raise TypeError(
-                "Keys in 'params' must be type str not %s" % (type(key).__name__,)
+                f"Keys in 'params' must be type str not {type(key).__name__}"
             )
 
     def __setitem__(self, key, value):
@@ -89,8 +89,6 @@ class QueryParams(object):
 
     def __bool__(self):
         return len(self) > 0
-
-    __nonzero__ = __bool__  # Python 2
 
     def __eq__(self, other):
         if isinstance(other, QueryParams):
@@ -112,6 +110,6 @@ class QueryParams(object):
         return item in self._internal
 
     def __repr__(self):
-        return "QueryParams(%r)" % (list(self.items()),)
+        return f"QueryParams({list(self.items())!r})"
 
     __str__ = __repr__
