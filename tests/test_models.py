@@ -15,8 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import sys
-
 import pytest
 
 from elastic_transport import QueryParams
@@ -205,16 +203,9 @@ def test_query_params_contains():
 def test_query_params_keys_must_be_string():
     params = QueryParams()
 
-    # Python 2 bytes == str
-    if sys.version_info > (3,):
-        with pytest.raises(TypeError) as e:
-            params.add(b"key", "value")
-        assert str(e.value) == "Keys in 'params' must be type str not bytes"
-
-    else:
-        with pytest.raises(TypeError) as e:
-            params.add(u"key", "value")
-        assert str(e.value) == "Keys in 'params' must be type str not unicode"
+    with pytest.raises(TypeError) as e:
+        params.add(b"key", "value")
+    assert str(e.value) == "Keys in 'params' must be type str not bytes"
 
     with pytest.raises(TypeError) as e:
         params[1] = "value"

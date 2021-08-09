@@ -28,7 +28,7 @@ except ImportError:
 logger = logging.getLogger("elastic_transport.connection_pool")
 
 
-class ConnectionSelector(object):
+class ConnectionSelector:
     """
     Simple class used to select a connection from a list of currently live
     connection instances. In init time it is passed a dictionary containing all
@@ -77,7 +77,7 @@ class RoundRobinSelector(ConnectionSelector):
     """
 
     def __init__(self, opts):
-        super(RoundRobinSelector, self).__init__(opts)
+        super().__init__(opts)
         self.data = threading.local()
 
     def select(self, connections):
@@ -92,7 +92,7 @@ SELECTOR_CLASS_NAMES = {
 }
 
 
-class ConnectionPool(object):
+class ConnectionPool:
     """
     Container holding the :class:`~elastic_transport.Connection` instances,
     managing the selection process (via a
@@ -122,7 +122,7 @@ class ConnectionPool(object):
         timeout_cutoff=5,
         selector_class=RoundRobinSelector,
         randomize_hosts=True,
-        **kwargs
+        **kwargs,
     ):
         """
         :arg connections: list of tuples containing the
@@ -289,7 +289,7 @@ class ConnectionPool(object):
             conn.close()
 
     def __repr__(self):
-        return "<%s: %r>" % (type(self).__name__, self.connections)
+        return f"<{type(self).__name__}: {self.connections!r}>"
 
 
 class DummyConnectionPool(ConnectionPool):

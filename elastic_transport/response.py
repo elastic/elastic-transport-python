@@ -74,7 +74,7 @@ class Headers(Mapping):
         return key.lower() if hasattr(key, "lower") else key
 
 
-class Response(object):
+class Response:
     """HTTP response"""
 
     def __init__(self, status, headers, body):
@@ -96,9 +96,6 @@ class Response(object):
 
     def __bool__(self):
         return bool(self.body)
-
-    # Python 2 compatibility
-    __nonzero__ = __bool__
 
     def __iter__(self):
         return iter(self.body)

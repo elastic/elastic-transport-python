@@ -29,9 +29,7 @@ SOURCE_FILES = (
 @nox.session()
 def format(session):
     session.install("black", "isort")
-    session.run(
-        "black", "--target-version=py27", "--target-version=py37", *SOURCE_FILES
-    )
+    session.run("black", "--target-version=py36", *SOURCE_FILES)
     session.run("isort", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "fix", *SOURCE_FILES)
 
@@ -41,25 +39,19 @@ def format(session):
 @nox.session
 def lint(session):
     session.install("flake8", "black", "isort")
-    session.run(
-        "black",
-        "--check",
-        "--target-version=py27",
-        "--target-version=py37",
-        *SOURCE_FILES
-    )
+    session.run("black", "--check", "--target-version=py36", *SOURCE_FILES)
     session.run("isort", "--check", *SOURCE_FILES)
     session.run("flake8", "--ignore=E501,W503", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "check", *SOURCE_FILES)
 
 
-@nox.session(python=["2.7", "3.6", "3.7", "3.8", "3.9"])
+@nox.session(python=["3.6", "3.7", "3.8", "3.9", "3.10"])
 def test(session):
     session.install(".[develop]")
     session.run(
         "pytest",
         "--cov=elastic_transport",
         *(session.posargs or ("tests/",)),
-        env={"PYTHONWARNINGS": "always::DeprecationWarning"}
+        env={"PYTHONWARNINGS": "always::DeprecationWarning"},
     )
     session.run("coverage", "report", "-m")

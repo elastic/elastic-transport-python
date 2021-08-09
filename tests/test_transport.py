@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #  Licensed to Elasticsearch B.V. under one or more contributor
 #  license agreements. See the NOTICE file distributed with
 #  this work for additional information regarding copyright
@@ -17,8 +16,8 @@
 #  under the License.
 
 import re
+from unittest import mock
 
-import mock
 import pytest
 
 from elastic_transport import (
@@ -134,7 +133,7 @@ def test_body_bytes_get_passed_untouched():
 def test_body_surrogates_replaced_encoded_into_bytes():
     t = Transport([{}], connection_class=DummyConnection)
 
-    t.perform_request("GET", "/", body=u"你好\uda6a")
+    t.perform_request("GET", "/", body="你好\uda6a")
     assert 1 == len(t.get_connection().calls)
     assert (
         "GET",
@@ -160,7 +159,7 @@ def test_kwargs_passed_on_to_connection_pool():
 
 
 def test_custom_connection_class():
-    class MyConnection(object):
+    class MyConnection:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
@@ -235,7 +234,7 @@ def test_retry_on_status():
         t.perform_request("GET", "/")
     assert e.value.status == 555
     assert len(e.value.errors) == 3
-    assert set([err.status for err in e.value.errors]) == {404, 500, 402}
+    assert {err.status for err in e.value.errors} == {404, 500, 402}
 
 
 def test_failed_connection_will_be_marked_as_dead():
@@ -409,7 +408,7 @@ def test_transport_client_meta_connection_class(connection_class):
     assert t.transport_client_meta[2][0] in ("ur", "rq")
     assert re.match(
         r"^py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
-        ",".join("%s=%s" % (k, v) for k, v in t.transport_client_meta),
+        ",".join(f"{k}={v}" for k, v in t.transport_client_meta),
     )
 
     t = Transport()
@@ -429,8 +428,7 @@ def test_transport_client_meta_connection_class(connection_class):
         ({"k": 1.1}, "?k=1.1"),
         ({"k": b"v"}, "?k=v"),
         ({"k": "你好"}, "?k=%E4%BD%A0%E5%A5%BD"),
-        ({"k": u"你好"}, "?k=%E4%BD%A0%E5%A5%BD"),  # Python 2
-        ({"k": u"你好".encode("utf-8")}, "?k=%E4%BD%A0%E5%A5%BD"),
+        ({"k": "你好".encode("utf-8")}, "?k=%E4%BD%A0%E5%A5%BD"),
         (
             {"k": r"\/"},
             "?k=%5C%2F",

@@ -61,9 +61,7 @@ def test_disable_shuffling():
 def test_selectors_have_access_to_connection_opts():
     class MySelector(RoundRobinSelector):
         def select(self, connections):
-            return self.connection_opts[super(MySelector, self).select(connections)][
-                "actual"
-            ]
+            return self.connection_opts[super().select(connections)]["actual"]
 
     pool = ConnectionPool(
         [(x, {"actual": x * x}) for x in range(100)],

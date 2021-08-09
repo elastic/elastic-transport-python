@@ -16,20 +16,19 @@
 #  under the License.
 
 from elastic_transport import TransportError
-from tests.conftest import norm_repr
 
 
 def test_exception_repr_and_str():
     e = TransportError({"errors": [{"status": 500}]}, status=500)
-    assert norm_repr(e) == "TransportError({'errors': [{'status': 500}]}, status=500)"
+    assert repr(e) == "TransportError({'errors': [{'status': 500}]}, status=500)"
     assert str(e) == "[500] {'errors': [{'status': 500}]}"
 
     e = TransportError("error", errors=(ValueError("value error"),), status=500)
-    assert norm_repr(e) == "TransportError('error', status=500, errors=%r)" % (
+    assert repr(e) == "TransportError('error', status=500, errors={!r})".format(
         e.errors,
     )
     assert str(e) == "[500] error"
 
     e = TransportError("error", errors=(ValueError("value error"),))
-    assert norm_repr(e) == "TransportError('error', errors=%r)" % (e.errors,)
+    assert repr(e) == f"TransportError('error', errors={e.errors!r})"
     assert str(e) == "error"

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #  Licensed to Elasticsearch B.V. under one or more contributor
 #  license agreements. See the NOTICE file distributed with
 #  this work for additional information regarding copyright
@@ -31,7 +30,7 @@ from elastic_transport.utils import (
 def test_create_user_agent():
     assert create_user_agent(
         "enterprise-search-python", "7.10.0"
-    ) == "enterprise-search-python/7.10.0 (Python/%s; elastic-transport/%s)" % (
+    ) == "enterprise-search-python/7.10.0 (Python/{}; elastic-transport/{})".format(
         python_version(),
         __version__,
     )
@@ -126,7 +125,7 @@ def test_parse_cloud_id_no_es(cloud_id):
     [
         "cluster:",
         "dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyQ0ZmE4ODIxZTc1NjM0MDMyYmVkMWNmMjIxMTBlMmY5NyQ=",
-        u"cluster:ā",
+        "cluster:ā",
     ],
 )
 def test_invalid_cloud_id(cloud_id):

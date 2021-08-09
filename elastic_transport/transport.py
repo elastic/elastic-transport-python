@@ -17,8 +17,6 @@
 
 from platform import python_version
 
-import six
-
 from ._version import __version__
 from .compat import quote, string_types, urlparse
 from .connection import RequestsHttpConnection, Urllib3HttpConnection
@@ -42,7 +40,7 @@ def _default_params_encoder(params):
     to_encode = []
     for key, val in params.items():
         if val is not None and (
-            not isinstance(val, (bytes, str, int, float) + six.string_types)
+            not isinstance(val, (bytes, str, int, float) + (str,))
             or isinstance(
                 val, bool
             )  # bool subclasses int, but we don't want to support bool.
@@ -57,8 +55,6 @@ def _default_params_encoder(params):
             # If a non-stringlike type then convert to str first
             if isinstance(val, (int, float)):
                 val = str(val)
-
-            # Python 2 unicode
             elif not isinstance(val, (str, bytes)) and hasattr(val, "encode"):
                 val = val.encode("utf-8")
 
@@ -68,10 +64,10 @@ def _default_params_encoder(params):
         to_encode.append((quote(key, safe=""), val))
 
     # If there's a None value then leave off the '='
-    return "&".join("%s=%s" % (k, v) if v is not None else k for k, v in to_encode)
+    return "&".join(f"{k}={v}" if v is not None else k for k, v in to_encode)
 
 
-class Transport(object):
+class Transport:
     """
     Encapsulation of transport-related to logic. Handles instantiation of the
     individual connections as well as creating a connection pool to hold them.
@@ -93,7 +89,7 @@ class Transport(object):
         max_retries=3,
         retry_on_status=(502, 503, 504),
         retry_on_timeout=False,
-        **kwargs
+        **kwargs,
     ):
         """
         :arg hosts: list of dictionaries, each containing keyword arguments to
@@ -123,13 +119,10 @@ class Transport(object):
             connection_class = self.DEFAULT_CONNECTION_CLASS
         elif isinstance(connection_class, str):
             if connection_class not in CONNECTION_CLASS_NAMES:
+                options = "', '".join(sorted(CONNECTION_CLASS_NAMES.keys()))
                 raise ValueError(
-                    "Unknown option for connection_class: '%s'. "
-                    "Available options are: '%s'"
-                    % (
-                        connection_class,
-                        "', '".join(sorted(CONNECTION_CLASS_NAMES.keys())),
-                    )
+                    f"Unknown option for connection_class: '{connection_class}'. "
+                    f"Available options are: '{options}'"
                 )
             connection_class = CONNECTION_CLASS_NAMES[connection_class]
 
