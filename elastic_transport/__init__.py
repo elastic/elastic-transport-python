@@ -17,16 +17,15 @@
 
 """Transport classes and utilities shared among Python Elastic client libraries"""
 
-from ._version import __version__  # noqa
-from .connection import Connection, RequestsHttpConnection, Urllib3HttpConnection
-from .connection_pool import (
-    ConnectionPool,
-    ConnectionSelector,
-    DummyConnectionPool,
-    EmptyConnectionPool,
+from ._node_pool import (
+    EmptyNodePool,
+    NodePool,
+    NodeSelector,
     RandomSelector,
     RoundRobinSelector,
+    SingleNodePool,
 )
+from ._version import __version__  # noqa
 from .exceptions import (
     APIError,
     BadGatewayError,
@@ -48,6 +47,7 @@ from .exceptions import (
     UnprocessableEntityError,
 )
 from .models import QueryParams
+from .nodes import BaseNode, RequestsHttpNode, Urllib3HttpNode
 from .serializer import Deserializer, JSONSerializer, Serializer, TextSerializer
 from .transport import Transport
 
@@ -55,34 +55,34 @@ __all__ = [
     "APIError",
     "BadGatewayError",
     "BadRequestError",
+    "BaseNode",
     "ConflictError",
-    "Connection",
     "ConnectionError",
-    "ConnectionPool",
-    "ConnectionSelector",
     "ConnectionTimeout",
     "Deserializer",
-    "DummyConnectionPool",
-    "EmptyConnectionPool",
+    "EmptyNodePool",
     "ForbiddenError",
     "GatewayTimeoutError",
     "InternalServerError",
     "JSONSerializer",
     "MethodNotImplementedError",
+    "NodePool",
+    "NodeSelector",
     "NotFoundError",
     "PayloadTooLargeError",
     "PaymentRequiredError",
     "QueryParams",
     "RandomSelector",
-    "RequestsHttpConnection",
+    "RequestsHttpNode",
     "RoundRobinSelector",
     "SerializationError",
     "Serializer",
     "ServiceUnavailableError",
+    "SingleNodePool",
     "TextSerializer",
     "Transport",
     "TransportError",
     "UnauthorizedError",
     "UnprocessableEntityError",
-    "Urllib3HttpConnection",
+    "Urllib3HttpNode",
 ]

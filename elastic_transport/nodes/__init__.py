@@ -15,12 +15,12 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from .base import Connection
-from .http_requests import RequestsHttpConnection
-from .http_urllib3 import Urllib3HttpConnection
+from .base import BaseNode
+from .http_requests import RequestsHttpNode
+from .http_urllib3 import Urllib3HttpNode
 
 __all__ = [
-    "Connection",
-    "RequestsHttpConnection",
-    "Urllib3HttpConnection",
+    "BaseNode",
+    "RequestsHttpNode",
+    "Urllib3HttpNode",
 ]

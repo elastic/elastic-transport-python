@@ -25,41 +25,50 @@ the patch number is incremented for bug fixes within a minor release.
 For almost all use-cases you should not need this library.
 The below use-cases are the common ones:
 
-### Creating your own Connection Class
+### Creating your own Node Class
 
-If you need to have custom behavior for a `Connection` you can subclass the
-base connection class you want and then pass the class in via `connection_class`:
+If you need to have custom behavior for a `Node` you can subclass the
+base node class you want and then pass the class in via `node_class`:
 
 ```python
-from elastic_transport import Urllib3HttpConnection
+from elastic_transport import Urllib3HttpNode
 from elastic_enterprise_search import EnterpriseSearch
 
 
-class CustomHttpConnection(Urllib3HttpConnection):
-    ... # Custom HTTP behavior
+class CustomHttpNode(Urllib3HttpNode):
+    def perform_request(
+        self,
+        method,
+        target,
+        body=None,
+        request_timeout=DEFAULT,
+        ignore_status=(),
+        headers=None,
+    ): ... # Custom HTTP behavior
 
 
-# Create the Client with 'connection_class' defined
+# Create the Client with 'node_class' defined
 client = EnterpriseSearch(
     ...,
-    connection_class=CustomHttpConnection
+    node_class=CustomHttpNode
 )
 ```
 
-The above also works for `ConnectionPool` (via `connection_pool_class`) and `Transport` (via `transport_class`).
+The above also works for `NodePool` (via `node_pool_class`) and `Transport` (via `transport_class`).
 
-## Connection Classes
+## Nodes
 
+A node describes a single instance of a service within a potentially larger cluster.
 `elastic-transport-python` supports two HTTP client libraries:
 
-### `Urllib3HttpConnection`
+### `Urllib3HttpNode`
 
-This is the default connection class. This connection class uses urllib3` to issue requests.
-Read more about [urllib3 on Read the Docs](https://urllib3.readthedocs.io).
+This is the default node class. This node class uses [urllib3](https://urllib3.readthedocs.io)
+to issue requests.
 
-### `RequestsHttpConnection`
+### `RequestsHttpNode`
 
-This connection class requires the [Requests](https://github.com/psf/requests)
+This node class requires the [Requests](https://github.com/psf/requests)
 library to be installed to use:
  
 ```bash
@@ -69,9 +78,9 @@ $ python -m pip install requests
 This class is often useful when using libraries that integrate with Requests.
 Read more about [Requests on Read the Docs](https://requests.readthedocs.io).
 
-### Supported Connection Options
+### Supported Node Options
 
-The two connection classes support a variety of options, some connection classes
+The two node classes support a variety of options, some node classes
 only support a subset of the total options:
 
 | Option                 | Description                                                                                             | Default   | Supported by urllib3 | Supported by requests |
@@ -83,7 +92,7 @@ only support a subset of the total options:
 | request_timeout        | Default request timeout                                                                                 | 10.0      | ✓                    | ✓                     |
 | headers                | HTTP headers to add to every request                                                                    | {}        | ✓                    | ✓                     |
 | user_agent             | Default User-Agent HTTP header                                                                          | None      | ✓                    | ✓                     |
-| connections_per_host   | Number of HTTP connections per host                                                                     | 10        | ✓                    |                       |
+| connections_per_node   | Number of HTTP connections per Node                                                                     | 10        | ✓                    |                       |
 | verify_certs           | Whether to verify server certificate                                                                    | True      | ✓                    | ✓                     |
 | ca_certs               | CA certificates to use with TLS/SSL                                                                     | certifi   | ✓                    | ✓                     |
 | client_cert            | Client certificate to present during TLS/SSL handshake                                                  | None      | ✓                    | ✓                     |

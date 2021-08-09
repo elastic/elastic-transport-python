@@ -24,7 +24,7 @@ from urllib3.util.retry import Retry
 
 from ..exceptions import ConnectionError, ConnectionTimeout
 from ..utils import DEFAULT, client_meta_version, normalize_headers, to_str
-from .base import Connection
+from .base import BaseNode
 
 CA_CERTS = None
 
@@ -36,9 +36,9 @@ except ImportError:  # pragma: nocover
     pass
 
 
-class Urllib3HttpConnection(Connection):
+class Urllib3HttpNode(BaseNode):
     """
-    Default connection class using the `urllib3` library and the http protocol.
+    Default node class using the `urllib3` library via HTTP.
 
     :arg host: hostname of the node (default: localhost)
     :arg port: port to use (integer)
@@ -59,7 +59,7 @@ class Urllib3HttpConnection(Connection):
         ``ssl`` module for exact options for your environment).
     :arg ssl_assert_hostname: use hostname verification if not `False`
     :arg ssl_assert_fingerprint: verify the supplied certificate fingerprint if not `None`
-    :arg connections_per_host: the number of connections which will be kept open to this
+    :arg connections_per_node: the number of connections which will be kept open to this
         host. See https://urllib3.readthedocs.io/en/latest/reference/urllib3.connectionpool.html
         for more information.
     :arg headers: any custom http headers to be add to requests
@@ -83,7 +83,7 @@ class Urllib3HttpConnection(Connection):
         ssl_version=None,
         ssl_assert_hostname=None,
         ssl_assert_fingerprint=None,
-        connections_per_host=10,
+        connections_per_node=10,
         headers=None,
         ssl_context=None,
         http_compress=None,
@@ -175,7 +175,7 @@ class Urllib3HttpConnection(Connection):
             self.host,
             port=self.port,
             timeout=self.request_timeout,
-            maxsize=connections_per_host,
+            maxsize=connections_per_node,
             block=True,
             **kw,
         )

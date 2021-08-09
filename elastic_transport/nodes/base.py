@@ -27,14 +27,14 @@ try:
 except ImportError:
     import json
 
-logger = logging.getLogger("elastic_transport.connection")
+logger = logging.getLogger("elastic_transport.nodes")
 
 
-class Connection:
+class BaseNode:
     """
     Class responsible for maintaining a connection to an Enterprise Search node. It
-    holds persistent connection pool to it and it's main interface
-    (`perform_request`) is thread-safe.
+    holds persistent node pool to it and it's main interface
+    (``perform_request``) is thread-safe.
 
     Also responsible for logging.
 
@@ -98,7 +98,7 @@ class Connection:
         return f"<{self.__class__.__name__}: {self.base_url}>"
 
     def __eq__(self, other):
-        if not isinstance(other, Connection):
+        if not isinstance(other, BaseNode):
             raise TypeError(f"Unsupported equality check for {self} and {other}")
         return self.__hash__() == other.__hash__()
 

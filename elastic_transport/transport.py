@@ -17,20 +17,20 @@
 
 from platform import python_version
 
+from ._compat import quote, string_types, urlparse
+from ._node_pool import EmptyNodePool, NodePool, SingleNodePool
 from ._version import __version__
-from .compat import quote, string_types, urlparse
-from .connection import RequestsHttpConnection, Urllib3HttpConnection
-from .connection_pool import ConnectionPool, DummyConnectionPool, EmptyConnectionPool
 from .exceptions import ConnectionError, ConnectionTimeout, TransportError
 from .models import QueryParams
+from .nodes import RequestsHttpNode, Urllib3HttpNode
 from .response import DictResponse, ListResponse, Response
 from .serializer import DEFAULT_SERIALIZERS, Deserializer
 from .utils import DEFAULT, client_meta_version, normalize_headers
 
-# Allows for using a connection_class by name rather than import.
+# Allows for using a node_class by name rather than import.
 CONNECTION_CLASS_NAMES = {
-    "urllib3": Urllib3HttpConnection,
-    "requests": RequestsHttpConnection,
+    "urllib3": Urllib3HttpNode,
+    "requests": RequestsHttpNode,
 }
 
 
@@ -70,18 +70,18 @@ def _default_params_encoder(params):
 class Transport:
     """
     Encapsulation of transport-related to logic. Handles instantiation of the
-    individual connections as well as creating a connection pool to hold them.
+    individual nodes as well as creating a node pool to hold them.
 
     Main interface is the `perform_request` method.
     """
 
-    DEFAULT_CONNECTION_CLASS = Urllib3HttpConnection
+    DEFAULT_CONNECTION_CLASS = Urllib3HttpNode
 
     def __init__(
         self,
         hosts=None,
-        connection_class=None,
-        connection_pool_class=ConnectionPool,
+        node_class=None,
+        node_pool_class=NodePool,
         serializers=None,
         default_mimetype="application/json",
         default_hosts=None,
@@ -93,10 +93,10 @@ class Transport:
     ):
         """
         :arg hosts: list of dictionaries, each containing keyword arguments to
-            create a `connection_class` instance
-        :arg connection_class: subclass of :class:`~elastic_transport.Connection` to use
+            create a `node_class` instance
+        :arg node_class: subclass of :class:`~elastic_transport.BaseNode` to use
             or the name of the Connection (ie 'urllib3', 'requests')
-        :arg connection_pool_class: subclass of :class:`~elastic_transport.ConnectionPool` to use
+        :arg node_pool_class: subclass of :class:`~elastic_transport.NodePool` to use
         :arg serializers: optional dict of serializer instances that will be
             used for deserializing data coming from the server. (key is the mimetype)
         :arg params_encoder: Callable which takes query params and
@@ -110,21 +110,21 @@ class Transport:
         :arg retry_on_timeout: should timeout trigger a retry on different
             node? (default ``False``)
 
-        Any extra keyword arguments will be passed to the `connection_class`
-        when creating and instance unless overridden by that connection's
+        Any extra keyword arguments will be passed to the `node_class`
+        when creating and instance unless overridden by that node's
         options provided as part of the hosts parameter.
         """
         hosts = _normalize_hosts(hosts, default_hosts)
-        if connection_class is None:
-            connection_class = self.DEFAULT_CONNECTION_CLASS
-        elif isinstance(connection_class, str):
-            if connection_class not in CONNECTION_CLASS_NAMES:
+        if node_class is None:
+            node_class = self.DEFAULT_CONNECTION_CLASS
+        elif isinstance(node_class, str):
+            if node_class not in CONNECTION_CLASS_NAMES:
                 options = "', '".join(sorted(CONNECTION_CLASS_NAMES.keys()))
                 raise ValueError(
-                    f"Unknown option for connection_class: '{connection_class}'. "
+                    f"Unknown option for node_class: '{node_class}'. "
                     f"Available options are: '{options}'"
                 )
-            connection_class = CONNECTION_CLASS_NAMES[connection_class]
+            node_class = CONNECTION_CLASS_NAMES[node_class]
 
         # Create the default metadata for the x-elastic-client-meta
         # HTTP header. Only requires adding the (service, service_version)
@@ -134,8 +134,8 @@ class Transport:
             ("t", client_meta_version(__version__)),
         )
 
-        # Grab the 'HTTP_CLIENT_META' property from the connection class
-        http_client_meta = getattr(connection_class, "HTTP_CLIENT_META", None)
+        # Grab the 'HTTP_CLIENT_META' property from the node class
+        http_client_meta = getattr(node_class, "HTTP_CLIENT_META", None)
         if http_client_meta:
             self.transport_client_meta += (http_client_meta,)
 
@@ -158,85 +158,83 @@ class Transport:
         self.params_encoder = params_encoder
 
         # store all strategies...
-        self.connection_pool_class = connection_pool_class
-        self.connection_class = connection_class
+        self.node_pool_class = node_pool_class
+        self.node_class = node_class
 
-        # ...save kwargs to be passed to the connections
+        # ...save kwargs to be passed to the nodes
         self.kwargs = kwargs
         self.hosts = hosts
 
         # Start with an empty pool specifically for `AsyncTransport`.
         # It should never be used, will be replaced on first call to
-        # .set_connections()
-        self.connection_pool = EmptyConnectionPool()
+        # .set_nodes()
+        self.node_pool = EmptyNodePool()
 
         if hosts:
             # ...and instantiate them
-            self.set_connections(hosts)
-            # retain the original connection instances for sniffing
-            self.seed_connections = list(self.connection_pool.connections[:])
+            self.set_nodes(hosts)
+            # retain the original node instances for sniffing
+            self.seed_nodes = list(self.node_pool.nodes[:])
         else:
-            self.seed_connections = []
+            self.seed_nodes = []
 
-    def add_connection(self, host):
+    def add_node(self, host):
         """
-        Create a new :class:`~elastic_enterprise_search.Connection` instance and add it to the pool.
+        Create a new :class:`~elastic_enterprise_search.BaseNode` instance and add it to the pool.
 
         :arg host: kwargs that will be used to create the instance
         """
         self.hosts.append(host)
-        self.set_connections(self.hosts)
+        self.set_nodes(self.hosts)
 
-    def set_connections(self, hosts):
+    def set_nodes(self, hosts):
         """
-        Instantiate all the connections and create new connection pool to hold them.
+        Instantiate all the nodes and create new node pool to hold them.
         Tries to identify unchanged hosts and re-use existing
-        :class:`~elastic_transport.Connection` instances.
+        :class:`~elastic_transport.BaseNode` instances.
 
         :arg hosts: same as `__init__`
         """
-        # construct the connections
-        def _create_connection(host):
-            # if this is not the initial setup look at the existing connection
-            # options and identify connections that haven't changed and can be
+        # construct the nodes
+        def _create_node(host):
+            # if this is not the initial setup look at the existing node
+            # options and identify nodes that haven't changed and can be
             # kept around.
-            if hasattr(self, "connection_pool"):
-                for (connection, old_host) in self.connection_pool.connection_opts:
+            if hasattr(self, "node_pool"):
+                for (node, old_host) in self.node_pool.node_options:
                     if old_host == host:
-                        return connection
+                        return node
 
-            # previously unseen params, create new connection
+            # previously unseen params, create new node
             kwargs = self.kwargs.copy()
             kwargs.update(host)
-            return self.connection_class(**kwargs)
+            return self.node_class(**kwargs)
 
-        connections = map(_create_connection, hosts)
+        nodes = map(_create_node, hosts)
 
-        connections = list(zip(connections, hosts))
-        if len(connections) == 1:
-            self.connection_pool = DummyConnectionPool(connections)
+        nodes = list(zip(nodes, hosts))
+        if len(nodes) == 1:
+            self.node_pool = SingleNodePool(nodes)
         else:
-            # pass the hosts dicts to the connection pool to optionally extract parameters from
-            self.connection_pool = self.connection_pool_class(
-                connections, **self.kwargs
-            )
+            # pass the hosts dicts to the node pool to optionally extract parameters from
+            self.node_pool = self.node_pool_class(nodes, **self.kwargs)
 
-    def get_connection(self):
+    def get_node(self):
         """
-        Retrieve a :class:`~elastic_transport.Connection` instance from the
-        :class:`~elastic_transport.ConnectionPool` instance.
+        Retrieve a :class:`~elastic_transport.BaseNode` instance from the
+        :class:`~elastic_transport.NodePool` instance.
         """
-        return self.connection_pool.get_connection()
+        return self.node_pool.get_node()
 
-    def mark_dead(self, connection):
+    def mark_dead(self, node):
         """
-        Mark a connection as dead (failed) in the connection pool. If sniffing
+        Mark a node as dead (failed) in the node pool. If sniffing
         on failure is enabled this will initiate the sniffing process.
 
-        :arg connection: instance of :class:`~elastic_transport.Connection` that failed
+        :arg node: instance of :class:`~elastic_transport.BaseNode` that failed
         """
         # mark as dead even when sniffing to avoid hitting this host during the sniff process
-        self.connection_pool.mark_dead(connection)
+        self.node_pool.mark_dead(node)
 
     def perform_request(
         self,
@@ -249,24 +247,24 @@ class Transport:
         ignore_status=(),
     ):
         """
-        Perform the actual request. Retrieve a connection from the connection
+        Perform the actual request. Retrieve a node from the node
         pool, pass all the information to it's perform_request method and
         return the data.
 
-        If an exception was raised, mark the connection as failed and retry (up
+        If an exception was raised, mark the node as failed and retry (up
         to `max_retries` times).
 
-        If the operation was successful and the connection used was previously
+        If the operation was successful and the node used was previously
         marked as dead, mark it as live, resetting it's failure count.
 
         :arg method: HTTP method to use
         :arg path: relative URL to target
         :arg headers: dictionary of headers, will be handed over to the
-            underlying :class:`~elastic_transport.Connection` class
+            underlying :class:`~elastic_transport.BaseNode` class
         :arg params: dictionary of query parameters, will be handed over to the
-            underlying :class:`~elastic_transport.Connection` class for serialization
+            underlying :class:`~elastic_transport.BaseNode` class for serialization
         :arg body: body of the request, will be serialized using serializer and
-            passed to the connection
+            passed to the node
         :arg request_timeout: Timeout to be passed to the HTTP client for the request
         :arg ignore_status: Collection of HTTP status codes to not raise an error for.
         :returns: Deserialized Response
@@ -298,10 +296,10 @@ class Transport:
         errors = []
 
         for attempt in range(self.max_retries + 1):
-            connection = self.get_connection()
+            node = self.get_node()
 
             try:
-                resp_status, resp_headers, data = connection.perform_request(
+                resp_status, resp_headers, data = node.perform_request(
                     method,
                     target,
                     body,
@@ -328,7 +326,7 @@ class Transport:
                 if retry:
                     try:
                         # only mark as dead if we are retrying
-                        self.mark_dead(connection)
+                        self.mark_dead(node)
                     except TransportError:
                         # If sniffing on failure, it could fail too. Catch the
                         # exception not to interrupt the retries.
@@ -344,8 +342,8 @@ class Transport:
                     raise
 
             else:
-                # connection didn't fail, confirm it's live status
-                self.connection_pool.mark_live(connection)
+                # node didn't fail, confirm it's live status
+                self.node_pool.mark_live(node)
 
                 if method == "HEAD":
                     return Response(
@@ -374,9 +372,9 @@ class Transport:
 
     def close(self):
         """
-        Explicitly closes connections
+        Explicitly closes nodes
         """
-        self.connection_pool.close()
+        self.node_pool.close()
 
 
 def _normalize_hosts(hosts, default_hosts):

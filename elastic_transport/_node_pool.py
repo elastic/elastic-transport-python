@@ -19,22 +19,21 @@ import logging
 import random
 import threading
 import time
+from queue import Empty, PriorityQueue
+from typing import Any, Dict, Optional, Sequence, Tuple, Type, Union, overload
 
-try:
-    from Queue import Empty, PriorityQueue
-except ImportError:
-    from queue import Empty, PriorityQueue
+from .nodes import BaseNode
 
 logger = logging.getLogger("elastic_transport.connection_pool")
 
 
-class ConnectionSelector:
+class NodeSelector:
     """
-    Simple class used to select a connection from a list of currently live
-    connection instances. In init time it is passed a dictionary containing all
-    the connections' options which it can then use during the selection
+    Simple class used to select a node from a list of currently live
+    node instances. In init time it is passed a dictionary containing all
+    the nodes options which it can then use during the selection
     process. When the `select` method is called it is given a list of
-    *currently* live connections to choose from.
+    *currently* live nodes to choose from.
 
     The options dictionary is the one that has been passed to
     :class:`~elastic_transport.Transport` as `hosts` param and the same that is
@@ -51,27 +50,27 @@ class ConnectionSelector:
         """
         :arg opts: dictionary of connection instances and their options
         """
-        self.connection_opts = opts
+        self.node_options = opts
 
-    def select(self, connections):  # pragma: nocover
+    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:  # pragma: nocover
         """
         Select a connection from the given list.
 
-        :arg connections: list of live connections to choose from
+        :arg nodes: list of live connections to choose from
         """
         raise NotImplementedError()
 
 
-class RandomSelector(ConnectionSelector):
+class RandomSelector(NodeSelector):
     """
     Select a connection at random
     """
 
-    def select(self, connections):
-        return random.choice(connections)
+    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
+        return random.choice(nodes)
 
 
-class RoundRobinSelector(ConnectionSelector):
+class RoundRobinSelector(NodeSelector):
     """
     Selector using round-robin.
     """
@@ -80,33 +79,32 @@ class RoundRobinSelector(ConnectionSelector):
         super().__init__(opts)
         self.data = threading.local()
 
-    def select(self, connections):
-        self.data.rr = getattr(self.data, "rr", -1) + 1
-        self.data.rr %= len(connections)
-        return connections[self.data.rr]
+    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
+        self.data.rr = (getattr(self.data, "rr", -1) + 1) % len(nodes)
+        return nodes[self.data.rr]
 
 
-SELECTOR_CLASS_NAMES = {
+SELECTOR_CLASS_NAMES: Dict[str, Type[NodeSelector]] = {
     "round_robin": RoundRobinSelector,
     "random": RandomSelector,
 }
 
 
-class ConnectionPool:
+class NodePool:
     """
-    Container holding the :class:`~elastic_transport.Connection` instances,
+    Container holding the :class:`~elastic_transport.BaseNode` instances,
     managing the selection process (via a
-    :class:`~elastic_transport.ConnectionSelector`) and dead connections.
+    :class:`~elastic_transport.NodeSelector`) and dead connections.
 
     It's only interactions are with the :class:`~elastic_transport.Transport` class
-    that drives all the actions within `ConnectionPool`.
+    that drives all the actions within ``NodePool``.
 
     Initially connections are stored on the class as a list and, along with the
-    connection options, get passed to the `ConnectionSelector` instance for
+    connection options, get passed to the ``NodeSelector`` instance for
     future reference.
 
-    Upon each request the `Transport` will ask for a `Connection` via the
-    `get_connection` method. If the connection fails (it's `perform_request`
+    Upon each request the ``Transport`` will ask for a ``BaseNode`` via the
+    ``get_node`` method. If the connection fails (it's `perform_request`
     raises a `ConnectionError`) it will be marked as dead (via `mark_dead`) and
     put on a timeout (if it fails N times in a row the timeout is exponentially
     longer - the formula is `default_timeout * 2 ** (fail_count - 1)`). When
@@ -117,26 +115,25 @@ class ConnectionPool:
 
     def __init__(
         self,
-        connections,
-        dead_timeout=60,
-        timeout_cutoff=5,
-        selector_class=RoundRobinSelector,
-        randomize_hosts=True,
-        **kwargs,
+        nodes,
+        dead_timeout: float = 60,
+        timeout_cutoff: float = 5,
+        selector_class: Union[str, Type[NodeSelector]] = RoundRobinSelector,
+        randomize_nodes: bool = True,
     ):
         """
-        :arg connections: list of tuples containing the
+        :arg nodes: list of tuples containing the
             :class:`~elasticsearch.Connection` instance and it's options
         :arg dead_timeout: number of seconds a connection should be retired for
             after a failure, increases on consecutive failures
         :arg timeout_cutoff: number of consecutive failures after which the
             timeout doesn't increase
-        :arg selector_class: :class:`~elastic_transport.ConnectionSelector`
+        :arg selector_class: :class:`~elastic_transport.NodeSelector`
             subclass to use if more than one connection is live
-        :arg randomize_hosts: shuffle the list of connections upon arrival to
+        :arg randomize_nodes: shuffle the list of nodes upon arrival to
             avoid dog piling effect across processes
         """
-        if not connections:
+        if not nodes:
             raise ValueError(
                 "No defined connections, you need to specify at least one host"
             )
@@ -152,78 +149,78 @@ class ConnectionPool:
                 )
             selector_class = SELECTOR_CLASS_NAMES[selector_class]
 
-        self.connection_opts = connections
-        self.connections = [c for (c, opts) in connections]
+        self.node_options = nodes
+        self.nodes = [kv[0] for kv in nodes]
         # remember original connection list for resurrect(force=True)
-        self.orig_connections = tuple(self.connections)
+        self.orig_connections = tuple(self.nodes)
         # PriorityQueue for thread safety and ease of timeout management
-        self.dead = PriorityQueue(len(self.connections))
+        self.dead = PriorityQueue(len(self.nodes))
         self.dead_count = {}
 
-        if randomize_hosts:
+        if randomize_nodes:
             # randomize the connection list to avoid all clients hitting same node
             # after startup/restart
-            random.shuffle(self.connections)
+            random.shuffle(self.nodes)
 
         # default timeout after which to try resurrecting a connection
         self.dead_timeout = dead_timeout
         self.timeout_cutoff = timeout_cutoff
 
-        self.selector = selector_class(dict(connections))
+        self.selector = selector_class(dict(nodes))
 
-    def mark_dead(self, connection, now=None):
+    def mark_dead(self, node: BaseNode, _now: Optional[float] = None) -> None:
         """
-        Mark the connection as dead (failed). Remove it from the live pool and
-        put it on a timeout.
+        Mark the node as dead (failed). Remove it from the live pool and put it on a timeout.
 
-        :arg connection: the failed instance
+        :arg node: the failed instance
         """
-        # allow inject for testing purposes
-        now = now if now else time.time()
+        now: float = _now if _now is not None else time.time()
         try:
-            self.connections.remove(connection)
+            self.nodes.remove(node)
         except ValueError:
             logger.info(
-                "Attempted to remove %r, but it does not exist in the connection pool",
-                connection,
+                "Attempted to remove %r, but it does not exist in the node pool",
+                node,
             )
-            # connection not alive or another thread marked it already, ignore
+            # node not alive or another thread marked it already, ignore
             return
         else:
-            dead_count = self.dead_count.get(connection, 0) + 1
-            self.dead_count[connection] = dead_count
+            dead_count = self.dead_count.get(node, 0) + 1
+            self.dead_count[node] = dead_count
             timeout = self.dead_timeout * 2 ** min(dead_count - 1, self.timeout_cutoff)
-            self.dead.put((now + timeout, connection))
+            self.dead.put((now + timeout, node))
             logger.warning(
-                "Connection %r has failed for %i times in a row, putting on %i second timeout",
-                connection,
+                "Node %r has failed for %i times in a row, putting on %i second timeout",
+                node,
                 dead_count,
                 timeout,
             )
 
-    def mark_live(self, connection):
+    def mark_live(self, node: BaseNode) -> None:
         """
-        Mark connection as healthy after a resurrection. Resets the fail
-        counter for the connection.
+        Mark node as healthy after a resurrection. Resets the fail counter for the node.
 
-        :arg connection: the connection to redeem
+        :arg node: The ``BaseNode`` instance to remark as alive
         """
         try:
-            del self.dead_count[connection]
+            del self.dead_count[node]
         except KeyError:
             # race condition, safe to ignore
             pass
 
-    def resurrect(self, force=False):
+    @overload
+    def resurrect(self, force: bool = True) -> BaseNode:
+        ...
+
+    def resurrect(self, force: bool = False) -> Optional[BaseNode]:
         """
         Attempt to resurrect a connection from the dead pool. It will try to
-        locate one (not all) eligible (it's timeout is over) connection to
-        return to the live pool. Any resurrected connection is also returned.
+        locate one (not all) eligible (it's timeout is over) node to
+        return to the live pool. Any resurrected node is also returned.
 
         :arg force: resurrect a connection even if there is none eligible (used
-            when we have no live connections). If force is specified resurrect
+            when we have no live connections). If force is 'True'' resurrect
             always returns a connection.
-
         """
         # no dead connections
         if self.dead.empty():
@@ -252,81 +249,79 @@ class ConnectionPool:
             return None
 
         # either we were forced or the connection is elligible to be retried
-        self.connections.append(connection)
+        self.nodes.append(connection)
         logger.info("Resurrecting connection %r (force=%s)", connection, force)
         return connection
 
-    def get_connection(self):
+    def get_node(self):
         """
-        Return a connection from the pool using the `ConnectionSelector`
+        Return a node from the pool using the ``NodeSelector``
         instance.
 
-        It tries to resurrect eligible connections, forces a resurrection when
-        no connections are available and passes the list of live connections to
+        It tries to resurrect eligible nodes, forces a resurrection when
+        no nodes are available and passes the list of live nodes to
         the selector instance to choose from.
 
-        Returns a connection instance and it's current fail count.
+        Returns a node instance and it's current fail count.
         """
         self.resurrect()
-        connections = self.connections[:]
+        nodes = self.nodes[:]
 
         # no live nodes, resurrect one by force and return it
-        if not connections:
+        if not nodes:
             return self.resurrect(force=True)
 
         # only call selector if we have a selection
-        if len(connections) > 1:
-            return self.selector.select(connections)
+        if len(nodes) > 1:
+            return self.selector.select(nodes)
 
         # only one connection, no need for a selector
-        return connections[0]
+        return nodes[0]
 
-    def close(self):
+    def close(self) -> None:
         """
-        Explicitly closes connections
+        Explicitly closes nodes
         """
-        for conn in self.connections:
+        for conn in self.nodes:
             conn.close()
 
-    def __repr__(self):
-        return f"<{type(self).__name__}: {self.connections!r}>"
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {self.nodes!r}>"
 
 
-class DummyConnectionPool(ConnectionPool):
-    def __init__(self, connections, **kwargs):
-        if len(connections) != 1:
-            raise ValueError(
-                "DummyConnectionPool needs exactly one connection defined."
-            )
+class SingleNodePool(NodePool):
+    def __init__(self, nodes, **_):
+        if len(nodes) != 1:
+            raise ValueError("SingleNodePool needs exactly one node defined.")
+
         # we need connection opts for sniffing logic
-        self.connection_opts = connections
-        self.connection = connections[0][0]
-        self.connections = (self.connection,)
+        self.node_options = nodes
+        self.nodes: Tuple[BaseNode] = (nodes[0][0],)
 
-    def get_connection(self):
-        return self.connection
+    def get_node(self) -> BaseNode:
+        return self.nodes[0]
 
-    def close(self):
+    def close(self) -> None:
         """
         Explicitly closes connections
         """
-        self.connection.close()
+        self.nodes[0].close()
 
-    def _noop(self, *args, **kwargs):
+    def _noop(self, *args: Any, **kwargs: Any) -> Any:
         pass
 
     mark_dead = mark_live = resurrect = _noop
 
 
-class EmptyConnectionPool(ConnectionPool):
-    """A connection pool that is empty. Errors out if used."""
+class EmptyNodePool(NodePool):
+    """A node pool that is empty. Errors out if used."""
 
     def __init__(self, *_, **__):
-        self.connections = []
-        self.connection_opts = []
+        self.nodes = []
+        self.node_options = []
 
-    def get_connection(self):
-        raise ValueError("No connections were configured")
+    def get_node(self) -> BaseNode:
+        raise ValueError("No nodes were configured")
 
     def _noop(self, *args, **kwargs):
         pass
