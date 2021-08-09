@@ -15,7 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from .compat import Mapping
+from ._compat import Mapping
 
 
 class Headers(Mapping):

@@ -15,10 +15,10 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from elastic_transport import Connection
+from elastic_transport import BaseNode
 
 
-class DummyConnection(Connection):
+class DummyNode(BaseNode):
     def __init__(self, **kwargs):
         self.exception = kwargs.pop("exception", None)
         self.status = kwargs.pop("status", 200)

@@ -22,10 +22,11 @@ import urllib3
 
 from ..exceptions import ConnectionError, ConnectionTimeout
 from ..utils import DEFAULT, client_meta_version, normalize_headers
-from .base import Connection
+from .base import BaseNode
 
 try:
     import requests
+    from requests.adapters import HTTPAdapter
 
     _REQUESTS_AVAILABLE = True
     _REQUESTS_META_VERSION = client_meta_version(requests.__version__)
@@ -34,9 +35,9 @@ except ImportError:  # pragma: nocover
     _REQUESTS_META_VERSION = ""
 
 
-class RequestsHttpConnection(Connection):
+class RequestsHttpNode(BaseNode):
     """
-    Connection using the `requests` library.
+    Connection using the `requests` library communicating via HTTP.
 
     :arg use_ssl: use ssl for the connection if `True`
     :arg verify_certs: whether to verify SSL certificates
@@ -65,6 +66,7 @@ class RequestsHttpConnection(Connection):
         ca_certs=None,
         client_cert=None,
         client_key=None,
+        connections_per_node=10,
         headers=None,
         http_compress=None,
         opaque_id=None,
@@ -113,6 +115,15 @@ class RequestsHttpConnection(Connection):
             warnings.warn(
                 f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure"
             )
+
+        # Create and mount custom adapter for constraining number of connections
+        adapter = HTTPAdapter(
+            pool_connections=connections_per_node,
+            pool_maxsize=connections_per_node,
+            pool_block=True,
+        )
+        for prefix in ("http://", "https://"):
+            self.session.mount(prefix=prefix, adapter=adapter)
 
     def perform_request(
         self,

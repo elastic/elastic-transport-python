@@ -20,9 +20,9 @@ import pytest
 from elastic_transport import NotFoundError, QueryParams, Transport
 
 
-@pytest.mark.parametrize("connection_class", ["urllib3", "requests"])
-def test_simple_request(connection_class):
-    t = Transport("https://httpbin.org", connection_class=connection_class)
+@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
+def test_simple_request(node_class):
+    t = Transport("https://httpbin.org", node_class=node_class)
 
     params = QueryParams()
     params.add("key[]", "1")
@@ -62,10 +62,10 @@ def test_simple_request(connection_class):
     assert resp.headers["Content-Type"] == "application/json"
 
 
-@pytest.mark.parametrize("connection_class", ["urllib3", "requests"])
+@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
 @pytest.mark.parametrize("status", [200, 404])
-def test_head_request(connection_class, status):
-    t = Transport("https://httpbin.org", connection_class=connection_class)
+def test_head_request(node_class, status):
+    t = Transport("https://httpbin.org", node_class=node_class)
     resp = t.perform_request(
         "HEAD",
         "/status/%d" % status,
@@ -77,9 +77,9 @@ def test_head_request(connection_class, status):
     assert bool(resp) is (status == 200)
 
 
-@pytest.mark.parametrize("connection_class", ["urllib3", "requests"])
-def test_get_404_request(connection_class):
-    t = Transport("https://httpbin.org", connection_class=connection_class)
+@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
+def test_get_404_request(node_class):
+    t = Transport("https://httpbin.org", node_class=node_class)
     with pytest.raises(NotFoundError) as e:
         t.perform_request(
             "GET",

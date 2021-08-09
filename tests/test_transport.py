@@ -24,167 +24,166 @@ from elastic_transport import (
     APIError,
     ConnectionError,
     ConnectionTimeout,
-    DummyConnectionPool,
     InternalServerError,
     NotFoundError,
     PaymentRequiredError,
-    RequestsHttpConnection,
+    RequestsHttpNode,
+    SingleNodePool,
     Transport,
     TransportError,
-    Urllib3HttpConnection,
+    Urllib3HttpNode,
 )
 from elastic_transport.response import Response
 from elastic_transport.utils import DEFAULT
-from tests.conftest import DummyConnection
+from tests.conftest import DummyNode
 
 
-def test_transport_close_connection_pool():
+def test_transport_close_node_pool():
     t = Transport([{}])
-    with mock.patch.object(t.connection_pool, "close") as cp_close:
+    with mock.patch.object(t.node_pool, "close") as node_pool_close:
         t.close()
-        cp_close.assert_called_with()
+        node_pool_close.assert_called_with()
 
 
-def test_single_connection_uses_dummy_connection_pool():
+def test_single_connection_uses_dummy_node_pool():
     t = Transport([{}])
-    assert isinstance(t.connection_pool, DummyConnectionPool)
+    assert isinstance(t.node_pool, SingleNodePool)
+
     t = Transport([{"host": "localhost"}])
-    assert isinstance(t.connection_pool, DummyConnectionPool)
+    assert isinstance(t.node_pool, SingleNodePool)
 
 
 def test_request_timeout_extracted_from_params_and_passed():
-    t = Transport([{}], connection_class=DummyConnection)
+    t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", request_timeout=42)
-    assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None) == t.get_connection().calls[0][0]
+    assert 1 == len(t.get_node().calls)
+    assert ("GET", "/", None) == t.get_node().calls[0][0]
     assert {
         "request_timeout": 42,
         "ignore_status": (),
         "headers": {},
-    } == t.get_connection().calls[0][1]
+    } == t.get_node().calls[0][1]
 
 
 def test_opaque_id():
-    t = Transport([{}], opaque_id="app-1", connection_class=DummyConnection)
+    t = Transport([{}], opaque_id="app-1", node_class=DummyNode)
 
     t.perform_request("GET", "/")
-    assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None) == t.get_connection().calls[0][0]
+    assert 1 == len(t.get_node().calls)
+    assert ("GET", "/", None) == t.get_node().calls[0][0]
     assert {
         "request_timeout": DEFAULT,
         "ignore_status": (),
         "headers": {},
-    } == t.get_connection().calls[0][1]
+    } == t.get_node().calls[0][1]
 
     # Now try with an 'x-opaque-id' set on perform_request().
     t.perform_request("GET", "/", headers={"x-opaque-id": "request-1"})
-    assert 2 == len(t.get_connection().calls)
-    assert ("GET", "/", None) == t.get_connection().calls[1][0]
+    assert 2 == len(t.get_node().calls)
+    assert ("GET", "/", None) == t.get_node().calls[1][0]
     assert {
         "request_timeout": DEFAULT,
         "ignore_status": (),
         "headers": {"x-opaque-id": "request-1"},
-    } == t.get_connection().calls[1][1]
+    } == t.get_node().calls[1][1]
 
 
 def test_ignore_status_as_int():
-    t = Transport([{}], connection_class=DummyConnection)
+    t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", ignore_status=500)
-    assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", None) == t.get_connection().calls[0][0]
+    assert 1 == len(t.get_node().calls)
+    assert ("GET", "/", None) == t.get_node().calls[0][0]
     assert {
         "request_timeout": DEFAULT,
         "ignore_status": (500,),
         "headers": {},
-    } == t.get_connection().calls[0][1]
+    } == t.get_node().calls[0][1]
 
 
 def test_request_with_custom_user_agent_header():
-    t = Transport([{}], connection_class=DummyConnection)
+    t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", headers={"user-agent": "my-custom-value/1.2.3"})
-    assert 1 == len(t.get_connection().calls)
+    assert 1 == len(t.get_node().calls)
     assert {
         "request_timeout": DEFAULT,
         "ignore_status": (),
         "headers": {"user-agent": "my-custom-value/1.2.3"},
-    } == t.get_connection().calls[0][1]
+    } == t.get_node().calls[0][1]
 
 
 def test_body_gets_encoded_into_bytes():
-    t = Transport([{}], connection_class=DummyConnection)
+    t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", body="你好")
-    assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", b"\xe4\xbd\xa0\xe5\xa5\xbd") == t.get_connection().calls[0][0]
+    assert 1 == len(t.get_node().calls)
+    assert ("GET", "/", b"\xe4\xbd\xa0\xe5\xa5\xbd") == t.get_node().calls[0][0]
 
 
 def test_body_bytes_get_passed_untouched():
-    t = Transport([{}], connection_class=DummyConnection)
+    t = Transport([{}], node_class=DummyNode)
 
     body = b"\xe4\xbd\xa0\xe5\xa5\xbd"
     t.perform_request("GET", "/", body=body)
-    assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/", body) == t.get_connection().calls[0][0]
+    assert 1 == len(t.get_node().calls)
+    assert ("GET", "/", body) == t.get_node().calls[0][0]
 
 
 def test_body_surrogates_replaced_encoded_into_bytes():
-    t = Transport([{}], connection_class=DummyConnection)
+    t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", body="你好\uda6a")
-    assert 1 == len(t.get_connection().calls)
-    assert (
-        "GET",
-        "/",
-        b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa",
-    ) == t.get_connection().calls[0][0]
+    assert 1 == len(t.get_node().calls)
+    assert ("GET", "/", b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa",) == t.get_node().calls[
+        0
+    ][0]
 
 
 def test_kwargs_passed_on_to_connections():
     t = Transport([{"host": "example.com"}], port=123)
-    assert 1 == len(t.connection_pool.connections)
-    conn = t.connection_pool.connections[0]
+    assert 1 == len(t.node_pool.nodes)
+    conn = t.node_pool.nodes[0]
     assert conn.base_url == "http://example.com:123"
     assert conn.scheme == "http"
     assert conn.port == 123
     assert conn.host == "example.com"
 
 
-def test_kwargs_passed_on_to_connection_pool():
+def test_kwargs_passed_on_to_node_pool():
     dt = object()
     t = Transport([{}, {}], dead_timeout=dt)
-    assert dt is t.connection_pool.dead_timeout
+    assert dt is t.node_pool.dead_timeout
 
 
-def test_custom_connection_class():
+def test_custom_node_class():
     class MyConnection:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
-    t = Transport([{}], connection_class=MyConnection)
-    assert 1 == len(t.connection_pool.connections)
-    assert isinstance(t.connection_pool.connections[0], MyConnection)
+    t = Transport([{}], node_class=MyConnection)
+    assert 1 == len(t.node_pool.nodes)
+    assert isinstance(t.node_pool.nodes[0], MyConnection)
 
 
 def test_add_connection():
-    t = Transport([{}], randomize_hosts=False)
-    t.add_connection({"host": "example.com", "port": 1234})
+    t = Transport([{}], randomize_nodes=False)
+    t.add_node({"host": "example.com", "port": 1234})
 
-    assert 2 == len(t.connection_pool.connections)
-    assert "http://example.com:1234" == t.connection_pool.connections[1].base_url
+    assert 2 == len(t.node_pool.nodes)
+    assert "http://example.com:1234" == t.node_pool.nodes[1].base_url
 
 
 def test_request_will_fail_after_X_retries():
     t = Transport(
         [{"exception": ConnectionError("abandon ship")}],
-        connection_class=DummyConnection,
+        node_class=DummyNode,
     )
 
     with pytest.raises(ConnectionError) as e:
         t.perform_request("GET", "/")
-    assert 4 == len(t.get_connection().calls)
+    assert 4 == len(t.get_node().calls)
     assert len(e.value.errors) == 3
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
@@ -196,9 +195,9 @@ def test_retry_on_timeout(retry_on_timeout):
             {"exception": ConnectionTimeout("abandon ship")},
             {"exception": InternalServerError("")},
         ],
-        connection_class=DummyConnection,
+        node_class=DummyNode,
         retry_on_timeout=retry_on_timeout,
-        randomize_hosts=False,
+        randomize_nodes=False,
     )
 
     if retry_on_timeout:
@@ -223,10 +222,10 @@ def test_retry_on_status():
             {"exception": PaymentRequiredError("")},
             {"exception": APIError("", status=555)},
         ],
-        connection_class=DummyConnection,
+        node_class=DummyNode,
         selector_class="round_robin",
         retry_on_status=(402, 404, 500),
-        randomize_hosts=False,
+        randomize_nodes=False,
         max_retries=5,
     )
 
@@ -240,61 +239,61 @@ def test_retry_on_status():
 def test_failed_connection_will_be_marked_as_dead():
     t = Transport(
         [{"exception": ConnectionError("abandon ship")}] * 2,
-        connection_class=DummyConnection,
+        node_class=DummyNode,
     )
 
     with pytest.raises(ConnectionError) as e:
         t.perform_request("GET", "/")
-    assert 0 == len(t.connection_pool.connections)
+    assert 0 == len(t.node_pool.nodes)
     assert len(e.value.errors) == 3
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
 
 def test_resurrected_connection_will_be_marked_as_live_on_success():
     for method in ("GET", "HEAD"):
-        t = Transport([{}, {}], connection_class=DummyConnection)
-        con1 = t.connection_pool.get_connection()
-        con2 = t.connection_pool.get_connection()
-        t.connection_pool.mark_dead(con1)
-        t.connection_pool.mark_dead(con2)
+        t = Transport([{}, {}], node_class=DummyNode)
+        con1 = t.node_pool.get_node()
+        con2 = t.node_pool.get_node()
+        t.node_pool.mark_dead(con1)
+        t.node_pool.mark_dead(con2)
 
         t.perform_request(method, "/")
-        assert 1 == len(t.connection_pool.connections)
-        assert 1 == len(t.connection_pool.dead_count)
+        assert 1 == len(t.node_pool.nodes)
+        assert 1 == len(t.node_pool.dead_count)
 
 
 def test_mark_dead_error_doesnt_raise():
     t = Transport(
         [{"exception": APIError("502", status=502)}, {}],
         retry_on_status=(502,),
-        connection_class=DummyConnection,
-        randomize_hosts=False,
+        node_class=DummyNode,
+        randomize_nodes=False,
     )
-    bad_conn = t.connection_pool.connections[0]
+    bad_conn = t.node_pool.nodes[0]
     with mock.patch.object(t, "mark_dead") as mark_dead:
         mark_dead.side_effect = TransportError("sniffing error!")
         t.perform_request("GET", "/")
     mark_dead.assert_called_with(bad_conn)
 
 
-def test_connection_class_as_string():
-    t = Transport(connection_class="urllib3")
-    assert isinstance(t.connection_pool.connections[0], Urllib3HttpConnection)
+def test_node_class_as_string():
+    t = Transport(node_class="urllib3")
+    assert isinstance(t.node_pool.nodes[0], Urllib3HttpNode)
 
-    t = Transport(connection_class="requests")
-    assert isinstance(t.connection_pool.connections[0], RequestsHttpConnection)
+    t = Transport(node_class="requests")
+    assert isinstance(t.node_pool.nodes[0], RequestsHttpNode)
 
     with pytest.raises(ValueError) as e:
-        Transport(connection_class="huh?")
+        Transport(node_class="huh?")
     assert str(e.value) == (
-        "Unknown option for connection_class: 'huh?'. "
+        "Unknown option for node_class: 'huh?'. "
         "Available options are: 'requests', 'urllib3'"
     )
 
 
 def test_no_hosts_or_default_hosts():
     t = Transport()
-    conns = t.connection_pool.connections
+    conns = t.node_pool.nodes
     assert len(conns) == 1
     assert conns[0].host == "localhost"
     assert conns[0].port is None
@@ -303,7 +302,7 @@ def test_no_hosts_or_default_hosts():
 
 def test_default_hosts():
     t = Transport(default_hosts=[{"host": "localhost", "port": 3002, "use_ssl": False}])
-    conns = t.connection_pool.connections
+    conns = t.node_pool.nodes
     assert len(conns) == 1
     assert conns[0].host == "localhost"
     assert conns[0].port == 3002
@@ -339,7 +338,7 @@ def test_default_hosts():
 )
 def test_string_url_hosts(hosts, base_url, url_prefix):
     t = Transport(hosts)
-    conns = t.connection_pool.connections
+    conns = t.node_pool.nodes
     assert len(conns) == 1
     assert conns[0].base_url == base_url
     assert "[" not in conns[0].host  # Make sure [] are stripped from IPv6
@@ -351,7 +350,7 @@ def test_string_url_hosts(hosts, base_url, url_prefix):
 def test_response_and_request():
     t = Transport(
         [{"headers": {"c": "d"}, "body": b'{"e": ["f"]}'}],
-        connection_class=DummyConnection,
+        node_class=DummyNode,
     )
     resp = t.perform_request("POST", "/url/path", params={"k": "v"}, headers={"a": "b"})
     assert isinstance(resp, Response)
@@ -361,7 +360,7 @@ def test_response_and_request():
 
     t = Transport(
         [{"body": b"[1,2,3]"}],
-        connection_class=DummyConnection,
+        node_class=DummyNode,
     )
     resp = t.perform_request("POST", "/url/path", params={"k": "v"}, headers={"a": "b"})
     assert isinstance(resp, Response)
@@ -371,7 +370,7 @@ def test_response_and_request():
 
 @pytest.mark.parametrize(["status", "boolean"], [(200, True), (299, True)])
 def test_head_response_true(status, boolean):
-    t = Transport([{"status": status}], connection_class=DummyConnection)
+    t = Transport([{"status": status}], node_class=DummyNode)
     resp = t.perform_request("HEAD", "/")
     assert resp.status == status
     assert resp == boolean
@@ -381,7 +380,7 @@ def test_head_response_true(status, boolean):
 
 @pytest.mark.parametrize("exception", [NotFoundError(""), APIError("", status=404)])
 def test_head_response_false(exception):
-    t = Transport([{"exception": exception}], connection_class=DummyConnection)
+    t = Transport([{"exception": exception}], node_class=DummyNode)
     resp = t.perform_request("HEAD", "/")
     assert resp.status == 404
     assert resp == False  # noqa
@@ -391,7 +390,7 @@ def test_head_response_false(exception):
 
 @pytest.mark.parametrize("status", [300, 400, 404, 500])
 def test_head_response_ignore_status(status):
-    t = Transport([{"status": status}], connection_class=DummyConnection)
+    t = Transport([{"status": status}], node_class=DummyNode)
     resp = t.perform_request("HEAD", "/", ignore_status=(status,))
     assert resp == False  # noqa
     assert resp.body is False
@@ -399,12 +398,12 @@ def test_head_response_ignore_status(status):
 
 
 @pytest.mark.parametrize(
-    "connection_class",
-    ["urllib3", "requests", Urllib3HttpConnection, RequestsHttpConnection],
+    "node_class",
+    ["urllib3", "requests", Urllib3HttpNode, RequestsHttpNode],
 )
-def test_transport_client_meta_connection_class(connection_class):
-    t = Transport(connection_class=connection_class)
-    assert t.transport_client_meta[2] == t.connection_class.HTTP_CLIENT_META
+def test_transport_client_meta_node_class(node_class):
+    t = Transport(node_class=node_class)
+    assert t.transport_client_meta[2] == t.node_class.HTTP_CLIENT_META
     assert t.transport_client_meta[2][0] in ("ur", "rq")
     assert re.match(
         r"^py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
@@ -445,16 +444,16 @@ def test_transport_client_meta_connection_class(connection_class):
     ],
 )
 def test_transport_default_params_encoder(params, expected):
-    t = Transport(connection_class=DummyConnection)
+    t = Transport(node_class=DummyNode)
     t.perform_request("GET", "/", params=params)
 
-    assert 1 == len(t.get_connection().calls)
-    assert ("GET", "/" + expected, None) == t.get_connection().calls[0][0]
+    assert 1 == len(t.get_node().calls)
+    assert ("GET", "/" + expected, None) == t.get_node().calls[0][0]
 
 
 @pytest.mark.parametrize("param", [True, False, [], (), {}, object()])
 def test_transport_default_encoder_type_error(param):
-    t = Transport(connection_class=DummyConnection)
+    t = Transport(node_class=DummyNode)
 
     with pytest.raises(TypeError) as e:
         t.perform_request("GET", "/", params={"key": param})

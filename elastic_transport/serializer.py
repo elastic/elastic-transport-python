@@ -20,7 +20,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from .compat import string_types
+from ._compat import string_types
 from .exceptions import SerializationError
 
 

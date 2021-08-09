@@ -19,7 +19,7 @@ Client libraries must handle the following:
 - Acting on specific HTTP headers (e.g the `Warning` header)
 
 Client libraries should document patterns that make
-using `elastic-transport-python` simple, such as `connection_class="requests"`
-instead of `connection_class=elastic_transport.RequestsHttpConnection`.
+using `elastic-transport-python` simple, such as `node_class="requests"`
+instead of `node_class=elastic_transport.RequestsHttpNode`.
 Only power users should need to ever `import elastic_transport` while
 using a client library.

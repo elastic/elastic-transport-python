@@ -28,7 +28,7 @@ SOURCE_FILES = (
 
 @nox.session()
 def format(session):
-    session.install("black", "isort")
+    session.install("black", "isort", "pyupgrade")
     session.run("black", "--target-version=py36", *SOURCE_FILES)
     session.run("isort", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "fix", *SOURCE_FILES)

@@ -1,5 +1,24 @@
 # Changelog
 
+## 8.0.0 (unreleased)
+
+### Added
+
+- Added `connections_per_node` parameter to `RequestsHttpConnection`
+
+### Changed
+
+- Changed `*Connection` classes to use `*Node` terminology
+- Changed `connection_class` to `node_class`
+- Changed `ConnectionPool` to `NodePool`
+- Changed `DummyConnectionPool` to `SingleNodePool`
+- Changed `EmptyConnectionPool` to `EmptyNodePool`
+- Changed `ConnectionSelector` to `NodeSelector`
+- Changed `NodeSelector(randomize_hosts)` parameter to `randomize_nodes`
+- Changed `NodeSelector.get_connection()` method to `get_node()`
+- Changed `elastic_transport.connection` logger name to `elastic_transport.node`
+- Changed `Urllib3HttpNode(connections_per_host)` parameter to `connections_per_node`
+
 ## 7.14.0 (2021-08-02)
 
 Release created to be compatible with 7.14 clients

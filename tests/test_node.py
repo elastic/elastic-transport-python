@@ -34,9 +34,9 @@ from elastic_transport import (
     ConnectionTimeout,
     InternalServerError,
     NotFoundError,
-    RequestsHttpConnection,
+    RequestsHttpNode,
     TransportError,
-    Urllib3HttpConnection,
+    Urllib3HttpNode,
 )
 
 
@@ -47,7 +47,7 @@ def gzip_decompress(data):
 
 class TestUrllib3Connection:
     def _get_mock_connection(self, connection_params={}, response_body=b"{}"):
-        con = Urllib3HttpConnection(**connection_params)
+        con = Urllib3HttpNode(**connection_params)
 
         def _dummy_urlopen(*args, **kwargs):
             dummy_response = Mock()
@@ -61,29 +61,29 @@ class TestUrllib3Connection:
         return con
 
     def test_close_pool(self):
-        conn = Urllib3HttpConnection()
+        conn = Urllib3HttpNode()
         with patch.object(conn.pool, "close") as pool_close:
             conn.close()
         pool_close.assert_called_with()
 
     def test_ssl_context(self):
         context = ssl.create_default_context()
-        con = Urllib3HttpConnection(use_ssl=True, ssl_context=context)
+        con = Urllib3HttpNode(use_ssl=True, ssl_context=context)
         assert len(con.pool.conn_kw.keys()) == 1
         assert isinstance(con.pool.conn_kw["ssl_context"], ssl.SSLContext)
         assert con.use_ssl
         assert con.scheme == "https"
 
     def test_opaque_id(self):
-        con = Urllib3HttpConnection(opaque_id="app-1")
+        con = Urllib3HttpNode(opaque_id="app-1")
         assert con.headers["x-opaque-id"] == "app-1"
 
     def test_user_agent(self):
-        con = Urllib3HttpConnection(user_agent="user-agent")
+        con = Urllib3HttpNode(user_agent="user-agent")
         assert con.headers["user-agent"] == "user-agent"
 
         # User-Agent given via headers takes priority.
-        con = Urllib3HttpConnection(
+        con = Urllib3HttpNode(
             user_agent="user-agent-1", headers={"user-agent": "user-agent-2"}
         )
         assert con.headers["user-agent"] == "user-agent-2"
@@ -128,11 +128,11 @@ class TestUrllib3Connection:
 
     @pytest.mark.parametrize("request_timeout", [42, None])
     def test_timeout_set(self, request_timeout):
-        con = Urllib3HttpConnection(request_timeout=request_timeout)
+        con = Urllib3HttpNode(request_timeout=request_timeout)
         assert request_timeout == con.request_timeout
 
     def test_timeout_is_10_seconds_by_default(self):
-        conn = Urllib3HttpConnection()
+        conn = Urllib3HttpNode()
         assert conn.request_timeout == 10
 
         with patch.object(conn.pool, "urlopen") as pool_urlopen:
@@ -149,7 +149,7 @@ class TestUrllib3Connection:
 
     @pytest.mark.parametrize("request_timeout", [None, 15])
     def test_timeout_override_default(self, request_timeout):
-        conn = Urllib3HttpConnection(request_timeout=5)
+        conn = Urllib3HttpNode(request_timeout=5)
         assert conn.request_timeout == 5
         assert conn.pool.timeout.connect_timeout == 5
         assert conn.pool.timeout.read_timeout == 5
@@ -167,7 +167,7 @@ class TestUrllib3Connection:
         assert kwargs["timeout"] == request_timeout
 
     def test_keep_alive_is_on_by_default(self):
-        con = Urllib3HttpConnection()
+        con = Urllib3HttpNode()
         assert {
             "connection": "keep-alive",
             "content-type": "application/json",
@@ -175,7 +175,7 @@ class TestUrllib3Connection:
 
     def test_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:
-            con = Urllib3HttpConnection(use_ssl=True, verify_certs=False)
+            con = Urllib3HttpNode(use_ssl=True, verify_certs=False)
             assert 1 == len(w)
             assert (
                 "Connecting to 'https://localhost' using SSL with verify_certs=False is insecure"
@@ -186,21 +186,19 @@ class TestUrllib3Connection:
 
     def test_no_warn_when_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:
-            con = Urllib3HttpConnection(
-                use_ssl=True, verify_certs=False, ssl_show_warn=False
-            )
+            con = Urllib3HttpNode(use_ssl=True, verify_certs=False, ssl_show_warn=False)
             assert 0 == len(w)
 
         assert isinstance(con.pool, urllib3.HTTPSConnectionPool)
 
     def test_doesnt_use_https_if_not_specified(self):
-        con = Urllib3HttpConnection()
+        con = Urllib3HttpNode()
         assert isinstance(con.pool, urllib3.HTTPConnectionPool)
 
     def test_no_warning_when_using_ssl_context(self):
         ctx = ssl.create_default_context()
         with warnings.catch_warnings(record=True) as w:
-            Urllib3HttpConnection(ssl_context=ctx)
+            Urllib3HttpNode(ssl_context=ctx)
             assert 0 == len(w)
 
     def test_warns_if_using_non_default_ssl_kwargs_with_ssl_context(self):
@@ -217,7 +215,7 @@ class TestUrllib3Connection:
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
 
-                Urllib3HttpConnection(**kwargs)
+                Urllib3HttpNode(**kwargs)
 
                 assert 1 == len(w)
                 assert (
@@ -225,7 +223,7 @@ class TestUrllib3Connection:
                     == str(w[0].message)
                 )
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_uncompressed_body_logged(self, logger):
         con = self._get_mock_connection(connection_params={"http_compress": True})
         con.perform_request("GET", "/", body=b'{"example": "body"}')
@@ -236,9 +234,9 @@ class TestUrllib3Connection:
         assert '> {"example": "body"}' == req[0][0] % req[0][1:]
         assert "< {}" == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_failed_request_logs(self, logger):
-        conn = Urllib3HttpConnection()
+        conn = Urllib3HttpNode()
 
         with patch.object(conn.pool, "urlopen") as pool_urlopen:
             resp = Mock()
@@ -283,7 +281,7 @@ class TestRequestsConnection:
         response_body=b"{}",
         exception=None,
     ):
-        con = RequestsHttpConnection(**connection_params)
+        con = RequestsHttpNode(**connection_params)
 
         def _dummy_send(*args, **kwargs):
             dummy_response = Mock()
@@ -316,19 +314,19 @@ class TestRequestsConnection:
 
     @pytest.mark.parametrize("request_timeout", [42, None])
     def test_timeout_set(self, request_timeout):
-        con = RequestsHttpConnection(request_timeout=request_timeout)
+        con = RequestsHttpNode(request_timeout=request_timeout)
         assert request_timeout == con.request_timeout
 
     def test_opaque_id(self):
-        con = RequestsHttpConnection(opaque_id="app-1")
+        con = RequestsHttpNode(opaque_id="app-1")
         assert con.headers["x-opaque-id"] == "app-1"
 
     def test_user_agent(self):
-        con = RequestsHttpConnection(user_agent="user-agent")
+        con = RequestsHttpNode(user_agent="user-agent")
         assert con.headers["user-agent"] == "user-agent"
 
         # User-Agent given via headers takes priority.
-        con = RequestsHttpConnection(
+        con = RequestsHttpNode(
             user_agent="user-agent-1", headers={"user-agent": "user-agent-2"}
         )
         assert con.headers["user-agent"] == "user-agent-2"
@@ -433,7 +431,7 @@ class TestRequestsConnection:
 
     def test_repr(self):
         con = self._get_mock_connection({"host": "elasticsearch.com", "port": 443})
-        assert "<RequestsHttpConnection: http://elasticsearch.com:443>" == repr(con)
+        assert "<RequestsHttpNode: http://elasticsearch.com:443>" == repr(con)
 
     def test_conflict_error_is_returned_on_409(self):
         con = self._get_mock_connection(status_code=409)
@@ -450,14 +448,14 @@ class TestRequestsConnection:
         with pytest.raises(BadRequestError):
             con.perform_request("GET", "/", {}, "")
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_head_with_404_doesnt_get_logged(self, logger):
         con = self._get_mock_connection(status_code=404)
         with pytest.raises(NotFoundError):
             con.perform_request("HEAD", "/", {}, "")
         assert 0 == logger.warning.call_count
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_failed_request_logs(self, logger):
         con = self._get_mock_connection(
             response_body=b'{"answer": 42}', status_code=500
@@ -481,7 +479,7 @@ class TestRequestsConnection:
         assert "> {}" == req[0][0] % req[0][1:]
         assert '< {"answer": 42}' == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_failed_request_not_json(self, logger):
         con = self._get_mock_connection(
             response_body=b"this is a plaintext error",
@@ -512,7 +510,7 @@ class TestRequestsConnection:
         assert "> {}" == req[0][0] % req[0][1:]
         assert "< this is a plaintext error" == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_exception_request_logs(self, logger):
         con = self._get_mock_connection(
             exception=requests.ConnectionError("connection error!")
@@ -538,7 +536,7 @@ class TestRequestsConnection:
         (req,) = logger.debug.call_args_list
         assert "> {}" == req[0][0] % req[0][1:]
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_timeout_exception_request_logs(self, logger):
         con = self._get_mock_connection(exception=requests.Timeout("timeout error!"))
         with pytest.raises(ConnectionTimeout) as e:
@@ -563,7 +561,7 @@ class TestRequestsConnection:
         (req,) = logger.debug.call_args_list
         assert "> {}" == req[0][0] % req[0][1:]
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_success_logs(self, logger):
         con = self._get_mock_connection(response_body=b"""{"answer": "that's it!"}""")
         con.perform_request(
@@ -584,7 +582,7 @@ class TestRequestsConnection:
         assert '> {"question": "what\'s that?"}' == req[0][0] % req[0][1:]
         assert '< {"answer": "that\'s it!"}' == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_uncompressed_body_logged(self, logger):
         con = self._get_mock_connection(connection_params={"http_compress": True})
         con.perform_request("GET", "/", body=b'{"example": "body"}')
@@ -625,7 +623,7 @@ class TestRequestsConnection:
         assert "GET" == request.method
         assert b'{"answer": 42}' == request.body
 
-    @patch("elastic_transport.connection.base.logger")
+    @patch("elastic_transport.nodes.base.logger")
     def test_url_prefix(self, logger):
         con = self._get_mock_connection({"url_prefix": "/some-prefix/", "port": 3002})
         request = self._get_request(
@@ -649,22 +647,20 @@ class TestRequestsConnection:
         assert "你好\uda6a" == data
 
     def test_client_cert_is_used_as_session_cert(self):
-        conn = RequestsHttpConnection(
-            client_cert="/client/cert", client_key="/client/key"
-        )
+        conn = RequestsHttpNode(client_cert="/client/cert", client_key="/client/key")
         assert conn.session.cert == ("/client/cert", "/client/key")
 
     def test_ca_certs_is_used_as_session_verify(self):
-        conn = RequestsHttpConnection(ca_certs="/ca/certs")
+        conn = RequestsHttpNode(ca_certs="/ca/certs")
         assert conn.session.verify == "/ca/certs"
 
     def test_ca_certs_with_verify_ssl_false_raises_error(self):
         with pytest.raises(ValueError) as e:
-            RequestsHttpConnection(ca_certs="/ca/certs", verify_certs=False)
+            RequestsHttpNode(ca_certs="/ca/certs", verify_certs=False)
         assert str(e.value) == "You cannot pass CA certificates when verify_ssl=False."
 
     def test_closing_connection_closes_session(self):
-        conn = RequestsHttpConnection()
+        conn = RequestsHttpNode()
         with patch.object(conn.session, "close") as session_close:
             conn.close()
         session_close.assert_called_with()
