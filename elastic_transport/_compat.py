@@ -21,7 +21,7 @@ from urllib.parse import urlencode, urlparse
 string_types = (str, bytes)
 
 try:
-    from collections.abc import Mapping, MutableMapping
+    from typing import Mapping, MutableMapping
 except ImportError:
     from collections import Mapping, MutableMapping
 

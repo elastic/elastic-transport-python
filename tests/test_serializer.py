@@ -23,7 +23,7 @@ import pytest
 
 from elastic_transport import (
     Deserializer,
-    JSONSerializer,
+    JsonSerializer,
     SerializationError,
     TextSerializer,
 )
@@ -33,63 +33,82 @@ deserializer = Deserializer(DEFAULT_SERIALIZERS)
 
 
 def test_date_serialization():
-    assert '{"d":"2010-10-01"}' == JSONSerializer().dumps({"d": date(2010, 10, 1)})
+    assert b'{"d":"2010-10-01"}' == JsonSerializer().dumps({"d": date(2010, 10, 1)})
 
 
 def test_decimal_serialization():
-    assert '{"d":3.8}' == JSONSerializer().dumps({"d": Decimal("3.8")})
+    assert b'{"d":3.8}' == JsonSerializer().dumps({"d": Decimal("3.8")})
 
 
 def test_uuid_serialization():
-    assert '{"d":"00000000-0000-0000-0000-000000000003"}' == JSONSerializer().dumps(
+    assert b'{"d":"00000000-0000-0000-0000-000000000003"}' == JsonSerializer().dumps(
         {"d": uuid.UUID("00000000-0000-0000-0000-000000000003")}
     )
 
 
 def test_serializes_nan():
-    assert '{"d":NaN}' == JSONSerializer().dumps({"d": float("NaN")})
+    assert b'{"d":NaN}' == JsonSerializer().dumps({"d": float("NaN")})
 
 
 def test_raises_serialization_error_on_dump_error():
     with pytest.raises(SerializationError):
-        JSONSerializer().dumps(object())
+        JsonSerializer().dumps(object())
     with pytest.raises(SerializationError):
         TextSerializer().dumps({})
 
 
 def test_raises_serialization_error_on_load_error():
     with pytest.raises(SerializationError):
-        JSONSerializer().loads(object())
+        JsonSerializer().loads(object())
     with pytest.raises(SerializationError):
-        JSONSerializer().loads("")
+        JsonSerializer().loads(b"")
     with pytest.raises(SerializationError):
-        JSONSerializer().loads("{{")
+        JsonSerializer().loads(b"{{")
 
 
-@pytest.mark.parametrize("string", ["你好", b"\x00\x01"])
-def test_strings_are_left_untouched(string):
-    assert string == JSONSerializer().dumps(string)
-    assert string == TextSerializer().dumps(string)
+def test_unicode_is_handled():
+    j = JsonSerializer()
+    assert j.dumps({"你好": "你好"}) == b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}'
+    assert j.loads(b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}') == {"你好": "你好"}
+
+    t = TextSerializer()
+    assert t.dumps("你好") == b"\xe4\xbd\xa0\xe5\xa5\xbd"
+    assert t.loads(b"\xe4\xbd\xa0\xe5\xa5\xbd") == "你好"
+
+
+def test_unicode_surrogates_handled():
+    j = JsonSerializer()
+    assert j.dumps({"key": "你好\uda6a"}) == b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}'
+    assert j.loads(b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}') == {'key': '你好\uda6a'}
+
+    t = TextSerializer()
+    assert t.dumps("你好\uda6a") == b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
+    assert t.loads(b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa") == "你好\uda6a"
 
 
 def test_deserializes_json_by_default():
-    assert {"some": "data"} == deserializer.loads('{"some":"data"}')
+    assert {"some": "data"} == deserializer.loads(b'{"some":"data"}')
 
 
 def test_deserializes_text_with_correct_ct():
-    assert '{"some":"data"}' == deserializer.loads('{"some":"data"}', "text/plain")
+    assert '{"some":"data"}' == deserializer.loads(b'{"some":"data"}', "text/plain")
     assert '{"some":"data"}' == deserializer.loads(
-        '{"some":"data"}', "text/plain; charset=whatever"
+        b'{"some":"data"}', "text/plain; charset=whatever"
     )
 
 
 def test_raises_serialization_error_on_unknown_mimetype():
     with pytest.raises(SerializationError) as e:
-        deserializer.loads("{}", "text/html")
-    assert str(e.value) == "Unknown mimetype, unable to deserialize: text/html"
+        deserializer.loads(b"{}", "fake/type")
+    assert str(e.value) == "Unknown mimetype, unable to deserialize: fake/type"
 
 
 def test_raises_improperly_configured_when_default_mimetype_cannot_be_deserialized():
     with pytest.raises(ValueError) as e:
         Deserializer({})
     assert str(e.value) == "Cannot find default serializer (application/json)"
+
+
+def test_text_asterisk_works_for_all_text_types():
+    assert deserializer.loads(b"{}", "text/html") == "{}"
+    assert deserializer.dumps("{}", "text/html") == b"{}"

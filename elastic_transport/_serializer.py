@@ -19,69 +19,73 @@ import json
 import uuid
 from datetime import date
 from decimal import Decimal
+from typing import Any, Optional, ClassVar
 
-from ._compat import string_types
 from ._exceptions import SerializationError
 
 
 class Serializer:
-    mimetype = None
+    mimetype: ClassVar[str]
 
-    def loads(self, s):  # pragma: nocover
+    def loads(self, data: bytes) -> Any:  # pragma: nocover
         raise NotImplementedError()
 
-    def dumps(self, data):  # pragma: nocover
+    def dumps(self, data: Any) -> bytes:  # pragma: nocover
         raise NotImplementedError()
 
 
 class TextSerializer(Serializer):
-    mimetype = "text/plain"
+    mimetype = "text/*"
 
-    def loads(self, s):
-        return s
+    def loads(self, data: bytes) -> str:
+        try:
+            return data.decode("utf-8", "surrogatepass")
+        except UnicodeError:
+            raise SerializationError(f"Unable to deserialize as text: {data!r}")
 
-    def dumps(self, data):
-        if isinstance(data, string_types):
-            return data
-        raise SerializationError("Cannot serialize %r into text" % data)
+    def dumps(self, data: str) -> bytes:
+        try:
+            return data.encode("utf-8", "surrogatepass")
+        except (AttributeError, UnicodeError, TypeError) as e:
+            raise SerializationError(f"Unable to serialize to text: {data!r}", errors=(e,))
 
 
-class JSONSerializer(Serializer):
+class JsonSerializer(Serializer):
     mimetype = "application/json"
 
-    def default(self, data):
+    def default(self, data: Any) -> Any:
         if isinstance(data, date):
             return data.isoformat()
         elif isinstance(data, uuid.UUID):
             return str(data)
         elif isinstance(data, Decimal):
             return float(data)
-        raise SerializationError(f"Unable to serialize {data!r} (type: {type(data)})")
+        raise SerializationError(
+            message=f"Unable to serialize to JSON: {data!r} (type: {type(data).__name__})",
+        )
 
-    def loads(self, s):
+    def loads(self, data: bytes) -> Any:
         try:
-            return json.loads(s)
+            return json.loads(data)
         except (ValueError, TypeError) as e:
-            raise SerializationError(message=s, errors=(e,))
+            raise SerializationError(message=f"Unable to deserialize as JSON: {data!r}", errors=(e,))
 
-    def dumps(self, data):
-        if isinstance(data, string_types):
-            return data
+    def dumps(self, data: Any) -> bytes:
         try:
             return json.dumps(
                 data, default=self.default, ensure_ascii=False, separators=(",", ":")
-            )
+            ).encode("utf-8", "surrogatepass")
         # This should be captured by the .default()
         # call but just in case we also wrap these.
         except (ValueError, UnicodeError, TypeError) as e:  # pragma: nocover
             raise SerializationError(
-                message=f"Unable to serialize {data!r} (type: {type(data)})",
+                message=f"Unable to serialize to JSON: {data!r} (type: {type(data).__name__})",
                 errors=(e,),
             )
 
 
 DEFAULT_SERIALIZERS = {
-    JSONSerializer.mimetype: JSONSerializer(),
+    JsonSerializer.mimetype: JsonSerializer(),
     TextSerializer.mimetype: TextSerializer(),
 }
 
@@ -98,17 +102,27 @@ class Deserializer:
             ) from None
         self.serializers = serializers
 
-    def loads(self, s, mimetype=None):
-        if not mimetype:
-            deserializer = self.default
+    def dumps(self, data: Any, mimetype: Optional[str]=None) -> bytes:
+        return self._serializer_for_mimetype(mimetype).dumps(data)
+
+    def loads(self, data: bytes, mimetype: Optional[str]=None) -> Any:
+        return self._serializer_for_mimetype(mimetype).loads(data)
+
+    def _serializer_for_mimetype(self, mimetype: Optional[str]) -> Serializer:
+        # split out charset
+        if mimetype is None:
+            serializer = self.default
         else:
-            # split out charset
             mimetype, _, _ = mimetype.partition(";")
             try:
-                deserializer = self.serializers[mimetype]
+                serializer = self.serializers[mimetype]
             except KeyError:
-                raise SerializationError(
-                    f"Unknown mimetype, unable to deserialize: {mimetype}"
-                ) from None
-
-        return deserializer.loads(s)
+                # Try for '<mimetype-supertype>/*' types after the specific type fails.
+                try:
+                    mimetype_supertype = mimetype.partition("/")[0]
+                    serializer = self.serializers[f"{mimetype_supertype}/*"]
+                except KeyError:
+                    raise SerializationError(
+                        f"Unknown mimetype, unable to deserialize: {mimetype}"
+                    ) from None
+        return serializer
