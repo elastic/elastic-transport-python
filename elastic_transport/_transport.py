@@ -18,17 +18,22 @@
 from platform import python_version
 
 from ._compat import quote, string_types, urlparse
+from ._exceptions import (
+    HTTP_STATUS_TO_ERROR,
+    ApiError,
+    ConnectionError,
+    ConnectionTimeout,
+    TransportError,
+)
+from ._models import QueryParams
+from ._node import RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import EmptyNodePool, NodePool, SingleNodePool
+from ._serializer import DEFAULT_SERIALIZERS, Deserializer
 from ._version import __version__
-from .exceptions import ConnectionError, ConnectionTimeout, TransportError
-from .models import QueryParams
-from .nodes import RequestsHttpNode, Urllib3HttpNode
-from .response import DictResponse, ListResponse, Response
-from .serializer import DEFAULT_SERIALIZERS, Deserializer
 from .utils import DEFAULT, client_meta_version, normalize_headers
 
 # Allows for using a node_class by name rather than import.
-CONNECTION_CLASS_NAMES = {
+_NODE_CLASS_NAMES = {
     "urllib3": Urllib3HttpNode,
     "requests": RequestsHttpNode,
 }
@@ -75,12 +80,10 @@ class Transport:
     Main interface is the `perform_request` method.
     """
 
-    DEFAULT_CONNECTION_CLASS = Urllib3HttpNode
-
     def __init__(
         self,
         hosts=None,
-        node_class=None,
+        node_class=Urllib3HttpNode,
         node_pool_class=NodePool,
         serializers=None,
         default_mimetype="application/json",
@@ -115,29 +118,28 @@ class Transport:
         options provided as part of the hosts parameter.
         """
         hosts = _normalize_hosts(hosts, default_hosts)
-        if node_class is None:
-            node_class = self.DEFAULT_CONNECTION_CLASS
-        elif isinstance(node_class, str):
-            if node_class not in CONNECTION_CLASS_NAMES:
-                options = "', '".join(sorted(CONNECTION_CLASS_NAMES.keys()))
+
+        if isinstance(node_class, str):
+            if node_class not in _NODE_CLASS_NAMES:
+                options = "', '".join(sorted(_NODE_CLASS_NAMES.keys()))
                 raise ValueError(
                     f"Unknown option for node_class: '{node_class}'. "
                     f"Available options are: '{options}'"
                 )
-            node_class = CONNECTION_CLASS_NAMES[node_class]
+            node_class = _NODE_CLASS_NAMES[node_class]
 
         # Create the default metadata for the x-elastic-client-meta
         # HTTP header. Only requires adding the (service, service_version)
         # tuple to the beginning of the client_meta
-        self.transport_client_meta = (
+        self._transport_client_meta = (
             ("py", client_meta_version(python_version())),
             ("t", client_meta_version(__version__)),
         )
 
         # Grab the 'HTTP_CLIENT_META' property from the node class
-        http_client_meta = getattr(node_class, "HTTP_CLIENT_META", None)
+        http_client_meta = getattr(node_class, "_ELASTIC_CLIENT_META", None)
         if http_client_meta:
-            self.transport_client_meta += (http_client_meta,)
+            self._transport_client_meta += (http_client_meta,)
 
         # serialization config
         _serializers = DEFAULT_SERIALIZERS.copy()
@@ -224,7 +226,7 @@ class Transport:
         Retrieve a :class:`~elastic_transport.BaseNode` instance from the
         :class:`~elastic_transport.NodePool` instance.
         """
-        return self.node_pool.get_node()
+        return self.node_pool.get()
 
     def mark_dead(self, node):
         """
@@ -299,7 +301,7 @@ class Transport:
             node = self.get_node()
 
             try:
-                resp_status, resp_headers, data = node.perform_request(
+                response, raw_data = node.perform_request(
                     method,
                     target,
                     body,
@@ -307,14 +309,19 @@ class Transport:
                     ignore_status=ignore_status,
                     request_timeout=request_timeout,
                 )
-            except TransportError as e:
-                if method == "HEAD" and e.status == 404:
-                    return Response(
-                        status=404,
-                        headers=e.headers,
-                        body=False,
+
+                if raw_data not in (None, b""):
+                    data = self.deserializer.loads(raw_data, response.mimetype)
+                else:
+                    data = None
+
+                # Non-2XX statuses should be re-raised as ApiErrors.
+                if not (200 <= response.status <= 299):
+                    raise HTTP_STATUS_TO_ERROR.get(response.status, ApiError)(
+                        data, status=response.status
                     )
 
+            except TransportError as e:
                 retry = False
                 if isinstance(e, ConnectionTimeout):
                     retry = self.retry_on_timeout
@@ -344,31 +351,7 @@ class Transport:
             else:
                 # node didn't fail, confirm it's live status
                 self.node_pool.mark_live(node)
-
-                if method == "HEAD":
-                    return Response(
-                        status=resp_status,
-                        headers=resp_headers,
-                        body=200 <= resp_status < 300,
-                    )
-
-                if data:
-                    data = self.deserializer.loads(
-                        data, resp_headers.get("content-type")
-                    )
-
-                # After the body is deserialized put the data
-                # into one of the typed responses
-                response_cls = Response
-                if isinstance(data, list):
-                    response_cls = ListResponse
-                elif isinstance(data, dict):
-                    response_cls = DictResponse
-                return response_cls(
-                    status=resp_status,
-                    headers=resp_headers,
-                    body=data,
-                )
+                return response, data
 
     def close(self):
         """

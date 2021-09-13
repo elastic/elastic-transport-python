@@ -18,6 +18,8 @@
 - Changed `NodeSelector.get_connection()` method to `get_node()`
 - Changed `elastic_transport.connection` logger name to `elastic_transport.node`
 - Changed `Urllib3HttpNode(connections_per_host)` parameter to `connections_per_node`
+- Changed return type of `BaseNode.perform_request()` to `Tuple[HttpResponse, bytes]`
+- Changed return type of `Transport.perform_request()` to `Tuple[HttpResponse, <deserialized>]`
 
 ## 7.14.0 (2021-08-02)
 

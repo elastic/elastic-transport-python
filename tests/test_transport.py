@@ -21,7 +21,7 @@ from unittest import mock
 import pytest
 
 from elastic_transport import (
-    APIError,
+    ApiError,
     ConnectionError,
     ConnectionTimeout,
     InternalServerError,
@@ -33,7 +33,6 @@ from elastic_transport import (
     TransportError,
     Urllib3HttpNode,
 )
-from elastic_transport.response import Response
 from elastic_transport.utils import DEFAULT
 from tests.conftest import DummyNode
 
@@ -211,7 +210,6 @@ def test_retry_on_timeout(retry_on_timeout):
         with pytest.raises(ConnectionTimeout) as e:
             t.perform_request("GET", "/")
         assert len(e.value.errors) == 0
-        assert e.value.status is None
 
 
 def test_retry_on_status():
@@ -220,7 +218,7 @@ def test_retry_on_status():
             {"exception": NotFoundError("")},
             {"exception": InternalServerError("")},
             {"exception": PaymentRequiredError("")},
-            {"exception": APIError("", status=555)},
+            {"exception": ApiError("", status=555)},
         ],
         node_class=DummyNode,
         selector_class="round_robin",
@@ -229,7 +227,7 @@ def test_retry_on_status():
         max_retries=5,
     )
 
-    with pytest.raises(APIError) as e:
+    with pytest.raises(ApiError) as e:
         t.perform_request("GET", "/")
     assert e.value.status == 555
     assert len(e.value.errors) == 3
@@ -252,8 +250,8 @@ def test_failed_connection_will_be_marked_as_dead():
 def test_resurrected_connection_will_be_marked_as_live_on_success():
     for method in ("GET", "HEAD"):
         t = Transport([{}, {}], node_class=DummyNode)
-        con1 = t.node_pool.get_node()
-        con2 = t.node_pool.get_node()
+        con1 = t.node_pool.get()
+        con2 = t.node_pool.get()
         t.node_pool.mark_dead(con1)
         t.node_pool.mark_dead(con2)
 
@@ -264,7 +262,7 @@ def test_resurrected_connection_will_be_marked_as_live_on_success():
 
 def test_mark_dead_error_doesnt_raise():
     t = Transport(
-        [{"exception": APIError("502", status=502)}, {}],
+        [{"exception": ApiError("502", status=502)}, {}],
         retry_on_status=(502,),
         node_class=DummyNode,
         randomize_nodes=False,
@@ -352,49 +350,37 @@ def test_response_and_request():
         [{"headers": {"c": "d"}, "body": b'{"e": ["f"]}'}],
         node_class=DummyNode,
     )
-    resp = t.perform_request("POST", "/url/path", params={"k": "v"}, headers={"a": "b"})
-    assert isinstance(resp, Response)
+    resp, data = t.perform_request(
+        "POST", "/url/path", params={"k": "v"}, headers={"a": "b"}
+    )
     assert resp.status == 200
     assert resp.headers == {"c": "d"}
-    assert resp.body == resp == {"e": ["f"]}
+    assert data == {"e": ["f"]}
 
     t = Transport(
         [{"body": b"[1,2,3]"}],
         node_class=DummyNode,
     )
-    resp = t.perform_request("POST", "/url/path", params={"k": "v"}, headers={"a": "b"})
-    assert isinstance(resp, Response)
+    resp, data = t.perform_request(
+        "POST", "/url/path", params={"k": "v"}, headers={"a": "b"}
+    )
     assert resp.status == 200
-    assert resp.body == resp == [1, 2, 3]
+    assert data == [1, 2, 3]
 
 
 @pytest.mark.parametrize(["status", "boolean"], [(200, True), (299, True)])
 def test_head_response_true(status, boolean):
-    t = Transport([{"status": status}], node_class=DummyNode)
-    resp = t.perform_request("HEAD", "/")
+    t = Transport([{"status": status, "body": b""}], node_class=DummyNode)
+    resp, data = t.perform_request("HEAD", "/")
     assert resp.status == status
-    assert resp == boolean
-    assert resp.body is boolean
-    assert bool(resp) is boolean
+    assert data is None
 
 
-@pytest.mark.parametrize("exception", [NotFoundError(""), APIError("", status=404)])
-def test_head_response_false(exception):
-    t = Transport([{"exception": exception}], node_class=DummyNode)
-    resp = t.perform_request("HEAD", "/")
-    assert resp.status == 404
-    assert resp == False  # noqa
-    assert resp.body is False
-    assert bool(resp) is False
-
-
-@pytest.mark.parametrize("status", [300, 400, 404, 500])
-def test_head_response_ignore_status(status):
-    t = Transport([{"status": status}], node_class=DummyNode)
-    resp = t.perform_request("HEAD", "/", ignore_status=(status,))
-    assert resp == False  # noqa
-    assert resp.body is False
-    assert bool(resp) is False
+def test_head_response_false():
+    t = Transport([{"status": 404, "body": b""}], node_class=DummyNode)
+    with pytest.raises(NotFoundError) as e:
+        t.perform_request("HEAD", "/")
+    assert e.value.status == 404
 
 
 @pytest.mark.parametrize(
@@ -403,16 +389,16 @@ def test_head_response_ignore_status(status):
 )
 def test_transport_client_meta_node_class(node_class):
     t = Transport(node_class=node_class)
-    assert t.transport_client_meta[2] == t.node_class.HTTP_CLIENT_META
-    assert t.transport_client_meta[2][0] in ("ur", "rq")
+    assert t._transport_client_meta[2] == t.node_class._ELASTIC_CLIENT_META
+    assert t._transport_client_meta[2][0] in ("ur", "rq")
     assert re.match(
         r"^py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
-        ",".join(f"{k}={v}" for k, v in t.transport_client_meta),
+        ",".join(f"{k}={v}" for k, v in t._transport_client_meta),
     )
 
     t = Transport()
-    assert t.transport_client_meta[2][0] == "ur"
-    assert [x[0] for x in t.transport_client_meta[:2]] == ["py", "t"]
+    assert t._transport_client_meta[2][0] == "ur"
+    assert [x[0] for x in t._transport_client_meta[:2]] == ["py", "t"]
 
 
 @pytest.mark.parametrize(

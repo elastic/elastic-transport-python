@@ -17,14 +17,16 @@
 
 import time
 import warnings
+from typing import Tuple
 
 import urllib3
 from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
 from urllib3.util.retry import Retry
 
-from ..exceptions import ConnectionError, ConnectionTimeout
+from .._exceptions import ConnectionError, ConnectionTimeout
+from .._models import HttpHeaders, HttpResponse
 from ..utils import DEFAULT, client_meta_version, normalize_headers, to_str
-from .base import BaseNode
+from ._base import BaseNode
 
 CA_CERTS = None
 
@@ -68,7 +70,7 @@ class Urllib3HttpNode(BaseNode):
         For tracing all requests made by this transport.
     """
 
-    HTTP_CLIENT_META = ("ur", client_meta_version(urllib3.__version__))
+    _ELASTIC_CLIENT_META = ("ur", client_meta_version(urllib3.__version__))
 
     def __init__(
         self,
@@ -188,18 +190,14 @@ class Urllib3HttpNode(BaseNode):
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ):
-        url = self.base_url + self.url_prefix + target
+    ) -> Tuple[HttpResponse, bytes]:
 
         start = time.time()
-        orig_body = body
         try:
             kw = {}
             if request_timeout is not DEFAULT:
                 kw["timeout"] = request_timeout
 
-            # in python2 we need to make sure the url and method are not
-            # unicode. Otherwise the body will be decoded into unicode too
             target = to_str(target, "utf-8")
             method = to_str(method, "ascii")
 
@@ -219,47 +217,23 @@ class Urllib3HttpNode(BaseNode):
                 headers=request_headers,
                 **kw,
             )
-            response_headers = dict(response.headers)
+            data = response.data
             duration = time.time() - start
-            raw_data = response.data.decode("utf-8", "surrogatepass")
+            response_headers = HttpHeaders(response.headers)
         except Exception as e:
-            self.log_request_fail(
-                method=method,
-                url=url,
-                body=orig_body,
-                duration=time.time() - start,
-                exception=e,
-            )
             if isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
             raise ConnectionError(str(e), errors=(e,))
 
-        # raise errors based on http status codes, let the client handle those if needed
-        if not (200 <= response.status < 300) and response.status not in ignore_status:
-            self.log_request_fail(
-                method=method,
-                url=url,
-                body=orig_body,
-                duration=duration,
-                status=response.status,
-                response=raw_data,
-            )
-            self._raise_error(
-                status=response.status, headers=response_headers, raw_data=raw_data
-            )
-
-        self.log_request_success(
-            method=method,
-            url=url,
-            body=orig_body,
-            status=response.status,
-            response=raw_data,
+        response = HttpResponse(
             duration=duration,
+            version="1.1",
+            status=response.status,
+            headers=response_headers,
         )
-
-        return response.status, response_headers, raw_data
+        return response, data
 
     def close(self):
         """

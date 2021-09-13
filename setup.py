@@ -50,6 +50,7 @@ setup(
     install_requires=[
         "urllib3>=1.21.1, <2",
         "certifi",
+        "dataclasses; python_version<'3.7'",
     ],
     python_requires=">=3.6",
     extras_require={

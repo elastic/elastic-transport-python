@@ -19,16 +19,12 @@ from elastic_transport import TransportError
 
 
 def test_exception_repr_and_str():
-    e = TransportError({"errors": [{"status": 500}]}, status=500)
-    assert repr(e) == "TransportError({'errors': [{'status': 500}]}, status=500)"
-    assert str(e) == "[500] {'errors': [{'status': 500}]}"
-
-    e = TransportError("error", errors=(ValueError("value error"),), status=500)
-    assert repr(e) == "TransportError('error', status=500, errors={!r})".format(
-        e.errors,
-    )
-    assert str(e) == "[500] error"
+    e = TransportError({"errors": [{"status": 500}]})
+    assert repr(e) == "TransportError({'errors': [{'status': 500}]})"
+    assert str(e) == "{'errors': [{'status': 500}]}"
 
     e = TransportError("error", errors=(ValueError("value error"),))
-    assert repr(e) == f"TransportError('error', errors={e.errors!r})"
+    assert repr(e) == "TransportError('error', errors={!r})".format(
+        e.errors,
+    )
     assert str(e) == "error"

@@ -22,9 +22,9 @@ import time
 from queue import Empty, PriorityQueue
 from typing import Any, Dict, Optional, Sequence, Tuple, Type, Union, overload
 
-from .nodes import BaseNode
+from ._node import BaseNode
 
-logger = logging.getLogger("elastic_transport.connection_pool")
+logger = logging.getLogger("elastic_transport.node_pool")
 
 
 class NodeSelector:
@@ -253,10 +253,9 @@ class NodePool:
         logger.info("Resurrecting connection %r (force=%s)", connection, force)
         return connection
 
-    def get_node(self):
+    def get(self):
         """
-        Return a node from the pool using the ``NodeSelector``
-        instance.
+        Return a node from the pool using the ``NodeSelector`` instance.
 
         It tries to resurrect eligible nodes, forces a resurrection when
         no nodes are available and passes the list of live nodes to
@@ -298,7 +297,7 @@ class SingleNodePool(NodePool):
         self.node_options = nodes
         self.nodes: Tuple[BaseNode] = (nodes[0][0],)
 
-    def get_node(self) -> BaseNode:
+    def get(self) -> BaseNode:
         return self.nodes[0]
 
     def close(self) -> None:
@@ -320,7 +319,7 @@ class EmptyNodePool(NodePool):
         self.nodes = []
         self.node_options = []
 
-    def get_node(self) -> BaseNode:
+    def get(self) -> BaseNode:
         raise ValueError("No nodes were configured")
 
     def _noop(self, *args, **kwargs):

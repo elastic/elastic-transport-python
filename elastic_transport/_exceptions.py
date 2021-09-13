@@ -15,21 +15,8 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from .response import Headers
 
-HTTP_EXCEPTIONS = {}
-
-
-class TransportErrorMeta(type):
-    def __new__(meta_cls, *args, **kwargs):
-        cls = type.__new__(meta_cls, *args, **kwargs)
-        status = getattr(cls, "status", None)
-        if status is not None:
-            HTTP_EXCEPTIONS[status] = cls
-        return cls
-
-
-class TransportError(Exception, metaclass=TransportErrorMeta):
+class TransportError(Exception):
     """Generic exception for the 'elastic-transport' package.
 
     For the 'errors' attribute, errors are ordered from
@@ -42,28 +29,21 @@ class TransportError(Exception, metaclass=TransportErrorMeta):
 
     status = None
 
-    def __init__(self, message, errors=(), status=None, headers=None):
+    def __init__(self, message, errors=(), status=None):
         super().__init__(message)
         self.errors = tuple(errors)
         self.message = message
-        if status is not None:
-            self.status = status
-        if headers is not None:
-            self.headers = Headers(headers)
-        else:
-            self.headers = None
+        self.status = status
 
     def __repr__(self):
         parts = [repr(self.message)]
         if self.status is not None:
-            parts.append("status=%r" % self.status)
+            parts.append(f"status={self.status!r}")
         if self.errors:
             parts.append(f"errors={self.errors!r}")
         return "{}({})".format(self.__class__.__name__, ", ".join(parts))
 
-    def __str__(self):
-        if self.status:
-            return f"[{self.status}] {self.message}"
+    def __str__(self) -> str:
         return str(self.message)
 
 
@@ -81,23 +61,28 @@ class ConnectionTimeout(TransportError):
     """Connection timed out during an operation"""
 
 
-class APIError(TransportError):
-    """Error that is raised from the service via HTTP status codes"""
+class ApiError(TransportError):
+    """Error that is raised by the service or API"""
+
+    def __init__(self, message, errors=(), status=None):
+        if status is None:
+            status = getattr(self, "status", None)
+        super().__init__(message=message, errors=errors, status=status)
 
 
-class BadRequestError(APIError):
+class BadRequestError(ApiError):
     """Error for HTTP status 400 'Bad Request'"""
 
     status = 400
 
 
-class UnauthorizedError(APIError):
+class UnauthorizedError(ApiError):
     """Error for HTTP status 401 'Unauthorized'"""
 
     status = 401
 
 
-class PaymentRequiredError(APIError):
+class PaymentRequiredError(ApiError):
     """Error for HTTP status 402 'Payment Required'
     Usually signals that your instance doesn't have
     a proper license active for the operation
@@ -106,61 +91,85 @@ class PaymentRequiredError(APIError):
     status = 402
 
 
-class ForbiddenError(APIError):
+class ForbiddenError(ApiError):
     """Error for HTTP status 403 'Forbidden'"""
 
     status = 403
 
 
-class NotFoundError(APIError):
+class NotFoundError(ApiError):
     """Error for HTTP status 404 'Not Found'"""
 
     status = 404
 
 
-class ConflictError(APIError):
+class ConflictError(ApiError):
     """Error for HTTP status 409 'Conflict'"""
 
     status = 409
 
 
-class PayloadTooLargeError(APIError):
+class PayloadTooLargeError(ApiError):
     """Error for HTTP status 413 'Payload Too Large'"""
 
     status = 413
 
 
-class UnprocessableEntityError(APIError):
+class UnprocessableEntityError(ApiError):
     """Error for HTTP status 422 'Unprocessable Entity'"""
 
     status = 422
 
 
-class InternalServerError(APIError):
+class TooManyRequestsError(ApiError):
+    """Error for HTTP status 429 'Too Many Requests'"""
+
+    status = 429
+
+
+class InternalServerError(ApiError):
     """Error for HTTP status 500 'Internal Server Error'"""
 
     status = 500
 
 
-class MethodNotImplementedError(APIError):
+class MethodNotImplementedError(ApiError):
     """Error for HTTP status 501 'Method Not Allowed'"""
 
     status = 501
 
 
-class BadGatewayError(APIError):
+class BadGatewayError(ApiError):
     """Error for HTTP status 502 'Bad Gateway'"""
 
     status = 502
 
 
-class ServiceUnavailableError(APIError):
+class ServiceUnavailableError(ApiError):
     """Error for HTTP status 503 'Service Unavailable'"""
 
     status = 503
 
 
-class GatewayTimeoutError(APIError):
+class GatewayTimeoutError(ApiError):
     """Error for HTTP status 504 'Gateway Timeout'"""
 
     status = 504
+
+
+HTTP_STATUS_TO_ERROR = {
+    400: BadRequestError,
+    401: UnauthorizedError,
+    402: PaymentRequiredError,
+    403: ForbiddenError,
+    404: NotFoundError,
+    405: MethodNotImplementedError,
+    409: ConflictError,
+    413: PayloadTooLargeError,
+    422: UnprocessableEntityError,
+    429: TooManyRequestsError,
+    500: InternalServerError,
+    502: BadGatewayError,
+    503: ServiceUnavailableError,
+    504: GatewayTimeoutError,
+}

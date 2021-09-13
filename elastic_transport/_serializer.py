@@ -21,7 +21,7 @@ from datetime import date
 from decimal import Decimal
 
 from ._compat import string_types
-from .exceptions import SerializationError
+from ._exceptions import SerializationError
 
 
 class Serializer:
@@ -87,7 +87,9 @@ DEFAULT_SERIALIZERS = {
 
 
 class Deserializer:
-    def __init__(self, serializers, default_mimetype="application/json"):
+    def __init__(self, serializers=None, default_mimetype="application/json"):
+        if serializers is None:
+            serializers = DEFAULT_SERIALIZERS
         try:
             self.default = serializers[default_mimetype]
         except KeyError:

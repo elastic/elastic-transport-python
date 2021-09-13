@@ -16,6 +16,10 @@
 #  under the License.
 
 import sys
+from dataclasses import dataclass
+from typing import Optional
+
+from ._compat import Mapping
 
 if sys.version_info >= (3, 7):  # dict is insert ordered on Python 3.7+
     ordered_dict = dict
@@ -113,3 +117,91 @@ class QueryParams:
         return f"QueryParams({list(self.items())!r})"
 
     __str__ = __repr__
+
+
+class HttpHeaders(Mapping[str, str]):
+    """HTTP headers"""
+
+    def __init__(self, initial=None):
+        self._internal = {}
+        if initial:
+            for key, val in dict(initial).items():
+                self._internal[self._normalize_key(key)] = (key, val)
+
+    def __setitem__(self, key, value):
+        self._internal[self._normalize_key(key)] = (key, value)
+
+    def __getitem__(self, item):
+        return self._internal[self._normalize_key(item)][1]
+
+    def __eq__(self, other):
+        if isinstance(other, Mapping):
+            return dict(self.items()) == dict(other.items())
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, Mapping):
+            return dict(self.items()) != dict(other.items())
+        return NotImplemented
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def __len__(self):
+        return len(self._internal)
+
+    def __bool__(self):
+        return bool(self._internal)
+
+    def __contains__(self, item):
+        return self._normalize_key(item) in self._internal
+
+    def __repr__(self):
+        return repr(dict(self.items()))
+
+    def __str__(self):
+        return str(dict(self.items()))
+
+    def get(self, key, default=None):
+        return self._internal.get(self._normalize_key(key), (None, default))[1]
+
+    def keys(self):
+        return [key for _, (key, _) in self._internal.items()]
+
+    def values(self):
+        return [val for _, (_, val) in self._internal.items()]
+
+    def items(self):
+        return [(key, val) for _, (key, val) in self._internal.items()]
+
+    def copy(self):
+        return HttpHeaders(self.items())
+
+    def _normalize_key(self, key):
+        return key.lower() if hasattr(key, "lower") else key
+
+
+@dataclass
+class HttpResponse:
+    """Response from BaseNode.perform_request()"""
+
+    #: Number of seconds from start of request to start of response
+    duration: float
+
+    #: HTTP version being used
+    version: str
+
+    #: HTTP status code
+    status: int
+
+    #: HTTP headers
+    headers: HttpHeaders
+
+    @property
+    def mimetype(self) -> Optional[str]:
+        """Mimetype to be used by the serializer to decode the raw response bytes"""
+        try:
+            content_type = self.headers["content-type"]
+            return content_type.partition(";")[0] or None
+        except KeyError:
+            return None

@@ -17,17 +17,8 @@
 
 """Transport classes and utilities shared among Python Elastic client libraries"""
 
-from ._node_pool import (
-    EmptyNodePool,
-    NodePool,
-    NodeSelector,
-    RandomSelector,
-    RoundRobinSelector,
-    SingleNodePool,
-)
-from ._version import __version__  # noqa
-from .exceptions import (
-    APIError,
+from ._exceptions import (
+    ApiError,
     BadGatewayError,
     BadRequestError,
     ConflictError,
@@ -42,17 +33,27 @@ from .exceptions import (
     PaymentRequiredError,
     SerializationError,
     ServiceUnavailableError,
+    TooManyRequestsError,
     TransportError,
     UnauthorizedError,
     UnprocessableEntityError,
 )
-from .models import QueryParams
-from .nodes import BaseNode, RequestsHttpNode, Urllib3HttpNode
-from .serializer import Deserializer, JSONSerializer, Serializer, TextSerializer
-from .transport import Transport
+from ._models import HttpHeaders, HttpResponse, QueryParams
+from ._node import BaseNode, RequestsHttpNode, Urllib3HttpNode
+from ._node_pool import (
+    EmptyNodePool,
+    NodePool,
+    NodeSelector,
+    RandomSelector,
+    RoundRobinSelector,
+    SingleNodePool,
+)
+from ._serializer import Deserializer, JSONSerializer, Serializer, TextSerializer
+from ._transport import Transport
+from ._version import __version__ as __version__  # noqa
 
 __all__ = [
-    "APIError",
+    "ApiError",
     "BadGatewayError",
     "BadRequestError",
     "BaseNode",
@@ -63,6 +64,8 @@ __all__ = [
     "EmptyNodePool",
     "ForbiddenError",
     "GatewayTimeoutError",
+    "HttpHeaders",
+    "HttpResponse",
     "InternalServerError",
     "JSONSerializer",
     "MethodNotImplementedError",
@@ -80,6 +83,7 @@ __all__ = [
     "ServiceUnavailableError",
     "SingleNodePool",
     "TextSerializer",
+    "TooManyRequestsError",
     "Transport",
     "TransportError",
     "UnauthorizedError",
