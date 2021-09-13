@@ -17,7 +17,13 @@
 
 import pytest
 
-from elastic_transport import NotFoundError, QueryParams, Transport
+from elastic_transport import (
+    ApiError,
+    InternalServerError,
+    NotFoundError,
+    QueryParams,
+    Transport,
+)
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
@@ -30,7 +36,7 @@ def test_simple_request(node_class):
     params.add("q1", None)
     params.add("q2", "")
 
-    resp = t.perform_request(
+    resp, data = t.perform_request(
         "GET",
         "/anything",
         headers={"Custom": "headeR"},
@@ -38,17 +44,17 @@ def test_simple_request(node_class):
         body={"JSON": "body"},
     )
     assert resp.status == 200
-    assert resp["method"] == "GET"
-    assert resp["url"] == "https://httpbin.org/anything?key[]=1&key[]=2&q1&q2="
+    assert data["method"] == "GET"
+    assert data["url"] == "https://httpbin.org/anything?key[]=1&key[]=2&q1&q2="
 
     # httpbin makes no-value query params into ''
-    assert resp["args"] == {
+    assert data["args"] == {
         "key[]": ["1", "2"],
         "q1": "",
         "q2": "",
     }
-    assert resp["data"] == '{"JSON":"body"}'
-    assert resp["json"] == {"JSON": "body"}
+    assert data["data"] == '{"JSON":"body"}'
+    assert data["json"] == {"JSON": "body"}
 
     request_headers = {
         "Content-Type": "application/json",
@@ -56,25 +62,44 @@ def test_simple_request(node_class):
         "Custom": "headeR",
         "Host": "httpbin.org",
     }
-    assert all(v == resp["headers"][k] for k, v in request_headers.items())
+    assert all(v == data["headers"][k] for k, v in request_headers.items())
 
     assert resp.headers["content-type"] == "application/json"
     assert resp.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
-@pytest.mark.parametrize("status", [200, 404])
-def test_head_request(node_class, status):
+def test_head_request_200(node_class):
     t = Transport("https://httpbin.org", node_class=node_class)
-    resp = t.perform_request(
+    resp, data = t.perform_request(
         "HEAD",
-        "/status/%d" % status,
+        "/status/200",
         headers={"Custom": "headeR"},
         params={"Query": "String"},
         body={"JSON": "body"},
     )
-    assert resp.status == status
-    assert bool(resp) is (status == 200)
+    assert resp.status == 200
+    assert data is None
+
+
+@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
+@pytest.mark.parametrize("status", [404, 500])
+def test_head_request_error(node_class, status):
+    t = Transport("https://httpbin.org", node_class=node_class)
+    with pytest.raises(ApiError) as e:
+        t.perform_request(
+            "HEAD",
+            f"/status/{status}",
+            headers={"Custom": "headeR"},
+            params={"Query": "String"},
+            body={"JSON": "body"},
+        )
+
+    assert e.value.status == status
+    if status == 404:
+        assert isinstance(e.value, NotFoundError)
+    else:
+        assert isinstance(e.value, InternalServerError)
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
@@ -91,5 +116,3 @@ def test_get_404_request(node_class):
 
     resp = e.value
     assert resp.status == 404
-    assert resp.headers["content-type"] == "text/html; charset=utf-8"
-    assert resp.headers["Content-Type"] == "text/html; charset=utf-8"

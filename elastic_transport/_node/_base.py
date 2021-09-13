@@ -18,16 +18,12 @@
 import gzip
 import io
 import logging
+from typing import Tuple
 
-from ..exceptions import HTTP_EXCEPTIONS, APIError
-from ..utils import DEFAULT, normalize_headers, to_str
+from .._models import HttpResponse
+from ..utils import DEFAULT, normalize_headers
 
-try:
-    import simplejson as json
-except ImportError:
-    import json
-
-logger = logging.getLogger("elastic_transport.nodes")
+logger = logging.getLogger("elastic_transport.node")
 
 
 class BaseNode:
@@ -35,8 +31,6 @@ class BaseNode:
     Class responsible for maintaining a connection to an Enterprise Search node. It
     holds persistent node pool to it and it's main interface
     (``perform_request``) is thread-safe.
-
-    Also responsible for logging.
 
     :arg host: hostname of the node (default: localhost)
     :arg port: port to use (integer, default: 9200)
@@ -49,7 +43,7 @@ class BaseNode:
     :arg user_agent: 'User-Agent' HTTP header for the given service.
     """
 
-    HTTP_CLIENT_META = None
+    _ELASTIC_CLIENT_META = None
 
     def __init__(
         self,
@@ -126,7 +120,7 @@ class BaseNode:
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ):  # pragma: nocover
+    ) -> Tuple[HttpResponse, bytes]:
         raise NotImplementedError()
 
     def log_request_success(self, method, url, body, status, response, duration):
@@ -178,18 +172,6 @@ class BaseNode:
 
         if response is not None:
             logger.debug("< %s", response)
-
-    def _raise_error(self, status, headers, raw_data):
-        """Locate appropriate exception and raise it. Attempts
-        to decode the raw data as JSON for better usability.
-        """
-        try:
-            raw_data = json.loads(to_str(raw_data, "utf-8", errors="ignore"))
-        except Exception:
-            pass
-        raise HTTP_EXCEPTIONS.get(status, APIError)(
-            message=raw_data, status=status, headers=headers
-        )
 
     def _gzip_compress(self, body):
         buf = io.BytesIO()

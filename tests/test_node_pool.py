@@ -40,7 +40,7 @@ def test_default_round_robin():
 
     connections = set()
     for _ in range(100):
-        connections.add(pool.get_node())
+        connections.add(pool.get())
     assert connections == set(range(100))
 
 
@@ -49,7 +49,7 @@ def test_disable_shuffling():
 
     connections = []
     for _ in range(100):
-        connections.append(pool.get_node())
+        connections.append(pool.get())
     assert connections == list(range(100))
 
 
@@ -66,7 +66,7 @@ def test_selectors_have_access_to_connection_opts():
 
     connections = []
     for _ in range(100):
-        connections.append(pool.get_node())
+        connections.append(pool.get())
     assert connections == [x * x for x in range(100)]
 
 
@@ -85,9 +85,9 @@ def test_connection_is_skipped_when_dead():
     pool.mark_dead(0)
 
     assert [1, 1, 1] == [
-        pool.get_node(),
-        pool.get_node(),
-        pool.get_node(),
+        pool.get(),
+        pool.get(),
+        pool.get(),
     ]
 
 
@@ -110,7 +110,7 @@ def test_connection_is_forcibly_resurrected_when_no_live_ones_are_availible():
     pool.mark_dead(1)  # failed the first time, first to be resurrected
 
     assert [] == pool.nodes
-    assert 1 == pool.get_node()
+    assert 1 == pool.get()
     assert [1] == pool.nodes
 
 
@@ -119,7 +119,7 @@ def test_connection_is_resurrected_after_its_timeout():
 
     now = time.time()
     pool.mark_dead(42, _now=now - 61)
-    pool.get_node()
+    pool.get()
     assert 42 == pool.nodes[-1]
     assert 100 == len(pool.nodes)
 
@@ -128,7 +128,7 @@ def test_force_resurrect_always_returns_a_connection():
     pool = NodePool([(0, {})])
 
     pool.nodes = []
-    assert 0 == pool.get_node()
+    assert 0 == pool.get()
     assert [] == pool.nodes
     assert pool.dead.empty()
 

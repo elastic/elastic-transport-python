@@ -17,12 +17,14 @@
 
 import time
 import warnings
+from typing import Tuple
 
 import urllib3
 
-from ..exceptions import ConnectionError, ConnectionTimeout
+from .._exceptions import ConnectionError, ConnectionTimeout
+from .._models import HttpHeaders, HttpResponse
 from ..utils import DEFAULT, client_meta_version, normalize_headers
-from .base import BaseNode
+from ._base import BaseNode
 
 try:
     import requests
@@ -54,7 +56,7 @@ class RequestsHttpNode(BaseNode):
         For tracing all requests made by this transport.
     """
 
-    HTTP_CLIENT_META = ("rq", _REQUESTS_META_VERSION)
+    _ELASTIC_CLIENT_META = ("rq", _REQUESTS_META_VERSION)
 
     def __init__(
         self,
@@ -133,11 +135,10 @@ class RequestsHttpNode(BaseNode):
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ):
+    ) -> Tuple[HttpResponse, bytes]:
         url = self.base_url + target
         headers = normalize_headers(headers)
 
-        orig_body = body
         if self.http_compress and body:
             body = self._gzip_compress(body)
             headers["content-encoding"] = "gzip"
@@ -157,49 +158,23 @@ class RequestsHttpNode(BaseNode):
         )
         try:
             response = self.session.send(prepared_request, **send_kwargs)
+            data = response.content
             duration = time.time() - start
-            raw_data = response.content.decode("utf-8", "surrogatepass")
+            response_headers = HttpHeaders(response.headers)
         except Exception as e:
-            self.log_request_fail(
-                method=method,
-                url=url,
-                body=orig_body,
-                duration=time.time() - start,
-                exception=e,
-            )
             if isinstance(e, requests.Timeout):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
             raise ConnectionError(str(e), errors=(e,))
 
-        # raise errors based on http status codes, let the client handle those if needed
-        if (
-            not (200 <= response.status_code < 300)
-            and response.status_code not in ignore_status
-        ):
-            self.log_request_fail(
-                method=method,
-                url=url,
-                body=orig_body,
-                duration=duration,
-                status=response.status_code,
-                response=raw_data,
-            )
-            self._raise_error(
-                status=response.status_code, headers=response.headers, raw_data=raw_data
-            )
-
-        self.log_request_success(
-            method=method,
-            url=url,
-            body=orig_body,
-            status=response.status_code,
-            response=raw_data,
+        response = HttpResponse(
             duration=duration,
+            version="1.1",
+            status=response.status_code,
+            headers=response_headers,
         )
-
-        return response.status_code, response.headers, raw_data
+        return response, data
 
     @property
     def headers(self):

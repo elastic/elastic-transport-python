@@ -20,6 +20,7 @@ import re
 from collections import namedtuple
 from platform import python_version
 from typing import Union
+from urllib.parse import quote as _quote
 
 from ._version import __version__
 
@@ -112,3 +113,15 @@ def to_bytes(value: Union[str, bytes], encoding="utf-8", errors="strict") -> byt
     if type(value) == str:
         return value.encode(encoding, errors)
     return value
+
+
+_QUOTE_ALWAYS_SAFE = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~"
+)
+
+
+def quote(string: str, safe: str = "/") -> str:
+    # Redefines 'urllib.parse.quote()' to always have the '~' character
+    # within the 'ALWAYS_SAFE' list. The character was added in Python 3.7
+    safe = "".join(_QUOTE_ALWAYS_SAFE.union(set(safe)))
+    return _quote(string, safe)

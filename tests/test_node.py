@@ -28,8 +28,6 @@ import urllib3
 from urllib3._collections import HTTPHeaderDict
 
 from elastic_transport import (
-    BadRequestError,
-    ConflictError,
     ConnectionError,
     ConnectionTimeout,
     InternalServerError,
@@ -223,7 +221,7 @@ class TestUrllib3Connection:
                     == str(w[0].message)
                 )
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_uncompressed_body_logged(self, logger):
         con = self._get_mock_connection(connection_params={"http_compress": True})
         con.perform_request("GET", "/", body=b'{"example": "body"}')
@@ -234,7 +232,7 @@ class TestUrllib3Connection:
         assert '> {"example": "body"}' == req[0][0] % req[0][1:]
         assert "< {}" == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_failed_request_logs(self, logger):
         conn = Urllib3HttpNode()
 
@@ -268,8 +266,8 @@ class TestUrllib3Connection:
     def test_surrogatepass_into_bytes(self):
         buf = b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
         con = self._get_mock_connection(response_body=buf)
-        status, headers, data = con.perform_request("GET", "/")
-        assert "你好\uda6a" == data
+        _, data = con.perform_request("GET", "/")
+        assert b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa" == data
 
 
 class TestRequestsConnection:
@@ -302,9 +300,10 @@ class TestRequestsConnection:
         if "body" in kwargs:
             kwargs["body"] = kwargs["body"].encode("utf-8")
 
-        status, headers, data = connection.perform_request(*args, **kwargs)
+        response, data = connection.perform_request(*args, **kwargs)
+        status = response.status
         assert 200 == status
-        assert "{}" == data
+        assert b"{}" == data
 
         timeout = kwargs.pop("request_timeout", connection.request_timeout)
         args, kwargs = connection.session.send.call_args
@@ -433,40 +432,25 @@ class TestRequestsConnection:
         con = self._get_mock_connection({"host": "elasticsearch.com", "port": 443})
         assert "<RequestsHttpNode: http://elasticsearch.com:443>" == repr(con)
 
-    def test_conflict_error_is_returned_on_409(self):
-        con = self._get_mock_connection(status_code=409)
-        with pytest.raises(ConflictError):
-            con.perform_request("GET", "/", {}, "")
-
-    def test_not_found_error_is_returned_on_404(self):
-        con = self._get_mock_connection(status_code=404)
-        with pytest.raises(NotFoundError):
-            con.perform_request("GET", "/", {}, "")
-
-    def test_request_error_is_returned_on_400(self):
-        con = self._get_mock_connection(status_code=400)
-        with pytest.raises(BadRequestError):
-            con.perform_request("GET", "/", {}, "")
-
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_head_with_404_doesnt_get_logged(self, logger):
         con = self._get_mock_connection(status_code=404)
         with pytest.raises(NotFoundError):
             con.perform_request("HEAD", "/", {}, "")
         assert 0 == logger.warning.call_count
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_failed_request_logs(self, logger):
         con = self._get_mock_connection(
             response_body=b'{"answer": 42}', status_code=500
         )
-        with pytest.raises(TransportError) as e:
-            con.perform_request(
-                "GET",
-                "/?param=42",
-                b"{}",
-            )
-        assert repr(e.value) == "InternalServerError({'answer': 42}, status=500)"
+        resp, data = con.perform_request(
+            "GET",
+            "/?param=42",
+            b"{}",
+        )
+        assert resp.status == 500
+        assert data == b'{"answer": 42}'
 
         # log url and duration
         assert 1 == logger.warning.call_count
@@ -479,7 +463,7 @@ class TestRequestsConnection:
         assert "> {}" == req[0][0] % req[0][1:]
         assert '< {"answer": 42}' == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_failed_request_not_json(self, logger):
         con = self._get_mock_connection(
             response_body=b"this is a plaintext error",
@@ -510,7 +494,7 @@ class TestRequestsConnection:
         assert "> {}" == req[0][0] % req[0][1:]
         assert "< this is a plaintext error" == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_exception_request_logs(self, logger):
         con = self._get_mock_connection(
             exception=requests.ConnectionError("connection error!")
@@ -536,7 +520,7 @@ class TestRequestsConnection:
         (req,) = logger.debug.call_args_list
         assert "> {}" == req[0][0] % req[0][1:]
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_timeout_exception_request_logs(self, logger):
         con = self._get_mock_connection(exception=requests.Timeout("timeout error!"))
         with pytest.raises(ConnectionTimeout) as e:
@@ -561,7 +545,7 @@ class TestRequestsConnection:
         (req,) = logger.debug.call_args_list
         assert "> {}" == req[0][0] % req[0][1:]
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_success_logs(self, logger):
         con = self._get_mock_connection(response_body=b"""{"answer": "that's it!"}""")
         con.perform_request(
@@ -582,7 +566,7 @@ class TestRequestsConnection:
         assert '> {"question": "what\'s that?"}' == req[0][0] % req[0][1:]
         assert '< {"answer": "that\'s it!"}' == resp[0][0] % resp[0][1:]
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_uncompressed_body_logged(self, logger):
         con = self._get_mock_connection(connection_params={"http_compress": True})
         con.perform_request("GET", "/", body=b'{"example": "body"}')
@@ -623,7 +607,7 @@ class TestRequestsConnection:
         assert "GET" == request.method
         assert b'{"answer": 42}' == request.body
 
-    @patch("elastic_transport.nodes.base.logger")
+    @patch("elastic_transport._node._base.logger")
     def test_url_prefix(self, logger):
         con = self._get_mock_connection({"url_prefix": "/some-prefix/", "port": 3002})
         request = self._get_request(
@@ -643,8 +627,8 @@ class TestRequestsConnection:
     def test_surrogatepass_into_bytes(self):
         buf = b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
         con = self._get_mock_connection(response_body=buf)
-        status, headers, data = con.perform_request("GET", "/")
-        assert "你好\uda6a" == data
+        _, data = con.perform_request("GET", "/")
+        assert b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa" == data
 
     def test_client_cert_is_used_as_session_cert(self):
         conn = RequestsHttpNode(client_cert="/client/cert", client_key="/client/key")

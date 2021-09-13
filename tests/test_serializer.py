@@ -27,7 +27,7 @@ from elastic_transport import (
     SerializationError,
     TextSerializer,
 )
-from elastic_transport.serializer import DEFAULT_SERIALIZERS
+from elastic_transport._serializer import DEFAULT_SERIALIZERS
 
 deserializer = Deserializer(DEFAULT_SERIALIZERS)
 

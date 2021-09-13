@@ -44,7 +44,7 @@ class CustomHttpNode(Urllib3HttpNode):
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ): ... # Custom HTTP behavior
+    ): ...  # Custom HTTP behavior
 
 
 # Create the Client with 'node_class' defined

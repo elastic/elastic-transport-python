@@ -15,14 +15,14 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from elastic_transport import BaseNode
+from elastic_transport import BaseNode, HttpHeaders, HttpResponse
 
 
 class DummyNode(BaseNode):
     def __init__(self, **kwargs):
         self.exception = kwargs.pop("exception", None)
         self.status = kwargs.pop("status", 200)
-        self.body = kwargs.pop("body", "{}")
+        self.body = kwargs.pop("body", b"{}")
         self.calls = []
         super().__init__(**kwargs)
         self.headers = kwargs.pop("headers", {})
@@ -31,4 +31,10 @@ class DummyNode(BaseNode):
         self.calls.append((args, kwargs))
         if self.exception:
             raise self.exception
-        return self.status, self.headers, self.body
+        response = HttpResponse(
+            duration=0.0,
+            version="1.1",
+            status=self.status,
+            headers=HttpHeaders(self.headers),
+        )
+        return response, self.body

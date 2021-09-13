@@ -16,9 +16,7 @@
 #  under the License.
 
 import elastic_transport
-import elastic_transport.nodes
 
 
 def test__all__sorted():
     assert elastic_transport.__all__ == sorted(elastic_transport.__all__)
-    assert elastic_transport.nodes.__all__ == sorted(elastic_transport.nodes.__all__)
