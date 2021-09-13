@@ -221,23 +221,6 @@ class Transport:
             # pass the hosts dicts to the node pool to optionally extract parameters from
             self.node_pool = self.node_pool_class(nodes, **self.kwargs)
 
-    def get_node(self):
-        """
-        Retrieve a :class:`~elastic_transport.BaseNode` instance from the
-        :class:`~elastic_transport.NodePool` instance.
-        """
-        return self.node_pool.get()
-
-    def mark_dead(self, node):
-        """
-        Mark a node as dead (failed) in the node pool. If sniffing
-        on failure is enabled this will initiate the sniffing process.
-
-        :arg node: instance of :class:`~elastic_transport.BaseNode` that failed
-        """
-        # mark as dead even when sniffing to avoid hitting this host during the sniff process
-        self.node_pool.mark_dead(node)
-
     def perform_request(
         self,
         method,
@@ -274,17 +257,20 @@ class Transport:
         if isinstance(ignore_status, int):
             ignore_status = (ignore_status,)
 
-        if body is not None:
-            body = self.serializer.dumps(body)
+        request_headers = normalize_headers(headers)
 
+        # Serialize the request body to bytes based on the given mimetype.
         if body is not None:
-            try:
-                body = body.encode("utf-8", "surrogatepass")
-            except (UnicodeError, AttributeError):
-                # bytes/str - no need to re-encode
-                pass
+            # The body is already encoded to bytes
+            # so we forward the request body along.
+            if isinstance(body, bytes):
+                request_data = body
+            else:
+                mimetype = request_headers.get("content-type", "").partition(";")[0] or None
+                request_data = self.deserializer.dumps(body, mimetype=mimetype)
+        else:
+            request_data = None
 
-        headers = normalize_headers(headers)
         if params is not None and not isinstance(params, QueryParams):
             params = QueryParams(params)
 
@@ -298,14 +284,14 @@ class Transport:
         errors = []
 
         for attempt in range(self.max_retries + 1):
-            node = self.get_node()
+            node = self.node_pool.get()
 
             try:
                 response, raw_data = node.perform_request(
                     method,
                     target,
-                    body,
-                    headers=headers,
+                    body=request_data,
+                    headers=request_headers,
                     ignore_status=ignore_status,
                     request_timeout=request_timeout,
                 )
@@ -333,7 +319,7 @@ class Transport:
                 if retry:
                     try:
                         # only mark as dead if we are retrying
-                        self.mark_dead(node)
+                        self.node_pool.mark_dead(node)
                     except TransportError:
                         # If sniffing on failure, it could fail too. Catch the
                         # exception not to interrupt the retries.

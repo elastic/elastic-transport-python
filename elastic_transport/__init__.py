@@ -48,7 +48,7 @@ from ._node_pool import (
     RoundRobinSelector,
     SingleNodePool,
 )
-from ._serializer import Deserializer, JSONSerializer, Serializer, TextSerializer
+from ._serializer import Deserializer, JsonSerializer, Serializer, TextSerializer
 from ._transport import Transport
 from ._version import __version__ as __version__  # noqa
 
@@ -67,7 +67,7 @@ __all__ = [
     "HttpHeaders",
     "HttpResponse",
     "InternalServerError",
-    "JSONSerializer",
+    "JsonSerializer",
     "MethodNotImplementedError",
     "NodePool",
     "NodeSelector",

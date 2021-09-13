@@ -15,6 +15,8 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+from typing import Optional
+
 
 class TransportError(Exception):
     """Generic exception for the 'elastic-transport' package.
@@ -27,7 +29,7 @@ class TransportError(Exception):
     they are stored under 'headers'.
     """
 
-    status = None
+    status: Optional[int] = None
 
     def __init__(self, message, errors=(), status=None):
         super().__init__(message)

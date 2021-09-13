@@ -19,7 +19,7 @@ import sys
 from dataclasses import dataclass
 from typing import Optional
 
-from ._compat import Mapping
+from ._compat import MutableMapping, Mapping
 
 if sys.version_info >= (3, 7):  # dict is insert ordered on Python 3.7+
     ordered_dict = dict
@@ -119,7 +119,7 @@ class QueryParams:
     __str__ = __repr__
 
 
-class HttpHeaders(Mapping[str, str]):
+class HttpHeaders(MutableMapping[str, str]):
     """HTTP headers"""
 
     def __init__(self, initial=None):
@@ -133,6 +133,9 @@ class HttpHeaders(Mapping[str, str]):
 
     def __getitem__(self, item):
         return self._internal[self._normalize_key(item)][1]
+
+    def __delitem__(self, key):
+        del self._internal[self._normalize_key(key)]
 
     def __eq__(self, other):
         if isinstance(other, Mapping):

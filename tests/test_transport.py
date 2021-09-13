@@ -56,69 +56,77 @@ def test_request_timeout_extracted_from_params_and_passed():
     t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", request_timeout=42)
-    assert 1 == len(t.get_node().calls)
-    assert ("GET", "/", None) == t.get_node().calls[0][0]
+    assert 1 == len(t.node_pool.get().calls)
+    assert ("GET", "/") == t.node_pool.get().calls[0][0]
     assert {
+        "body": None,
         "request_timeout": 42,
         "ignore_status": (),
         "headers": {},
-    } == t.get_node().calls[0][1]
+    } == t.node_pool.get().calls[0][1]
 
 
 def test_opaque_id():
     t = Transport([{}], opaque_id="app-1", node_class=DummyNode)
 
     t.perform_request("GET", "/")
-    assert 1 == len(t.get_node().calls)
-    assert ("GET", "/", None) == t.get_node().calls[0][0]
+    assert 1 == len(t.node_pool.get().calls)
+    assert ("GET", "/") == t.node_pool.get().calls[0][0]
     assert {
+        "body": None,
         "request_timeout": DEFAULT,
         "ignore_status": (),
         "headers": {},
-    } == t.get_node().calls[0][1]
+    } == t.node_pool.get().calls[0][1]
 
     # Now try with an 'x-opaque-id' set on perform_request().
     t.perform_request("GET", "/", headers={"x-opaque-id": "request-1"})
-    assert 2 == len(t.get_node().calls)
-    assert ("GET", "/", None) == t.get_node().calls[1][0]
+    assert 2 == len(t.node_pool.get().calls)
+    assert ("GET", "/") == t.node_pool.get().calls[1][0]
     assert {
+        "body": None,
         "request_timeout": DEFAULT,
         "ignore_status": (),
         "headers": {"x-opaque-id": "request-1"},
-    } == t.get_node().calls[1][1]
+    } == t.node_pool.get().calls[1][1]
 
 
 def test_ignore_status_as_int():
     t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", ignore_status=500)
-    assert 1 == len(t.get_node().calls)
-    assert ("GET", "/", None) == t.get_node().calls[0][0]
+    assert 1 == len(t.node_pool.get().calls)
+    assert ("GET", "/") == t.node_pool.get().calls[0][0]
     assert {
+        "body": None,
         "request_timeout": DEFAULT,
         "ignore_status": (500,),
         "headers": {},
-    } == t.get_node().calls[0][1]
+    } == t.node_pool.get().calls[0][1]
 
 
 def test_request_with_custom_user_agent_header():
     t = Transport([{}], node_class=DummyNode)
 
     t.perform_request("GET", "/", headers={"user-agent": "my-custom-value/1.2.3"})
-    assert 1 == len(t.get_node().calls)
+    assert 1 == len(t.node_pool.get().calls)
     assert {
+        "body": None,
         "request_timeout": DEFAULT,
         "ignore_status": (),
         "headers": {"user-agent": "my-custom-value/1.2.3"},
-    } == t.get_node().calls[0][1]
+    } == t.node_pool.get().calls[0][1]
 
 
 def test_body_gets_encoded_into_bytes():
     t = Transport([{}], node_class=DummyNode)
 
-    t.perform_request("GET", "/", body="你好")
-    assert 1 == len(t.get_node().calls)
-    assert ("GET", "/", b"\xe4\xbd\xa0\xe5\xa5\xbd") == t.get_node().calls[0][0]
+    t.perform_request("GET", "/", body={"key": "你好"})
+    calls = t.node_pool.get().calls
+    assert 1 == len(calls)
+    args, kwargs = calls[0]
+    assert ("GET", "/") == args
+    assert kwargs["body"] == b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd"}'
 
 
 def test_body_bytes_get_passed_untouched():
@@ -126,18 +134,11 @@ def test_body_bytes_get_passed_untouched():
 
     body = b"\xe4\xbd\xa0\xe5\xa5\xbd"
     t.perform_request("GET", "/", body=body)
-    assert 1 == len(t.get_node().calls)
-    assert ("GET", "/", body) == t.get_node().calls[0][0]
-
-
-def test_body_surrogates_replaced_encoded_into_bytes():
-    t = Transport([{}], node_class=DummyNode)
-
-    t.perform_request("GET", "/", body="你好\uda6a")
-    assert 1 == len(t.get_node().calls)
-    assert ("GET", "/", b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa",) == t.get_node().calls[
-        0
-    ][0]
+    calls = t.node_pool.get().calls
+    assert 1 == len(calls)
+    args, kwargs = calls[0]
+    assert ("GET", "/") == args
+    assert kwargs["body"] == b"\xe4\xbd\xa0\xe5\xa5\xbd"
 
 
 def test_kwargs_passed_on_to_connections():
@@ -182,7 +183,7 @@ def test_request_will_fail_after_X_retries():
 
     with pytest.raises(ConnectionError) as e:
         t.perform_request("GET", "/")
-    assert 4 == len(t.get_node().calls)
+    assert 4 == len(t.node_pool.get().calls)
     assert len(e.value.errors) == 3
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
@@ -268,7 +269,7 @@ def test_mark_dead_error_doesnt_raise():
         randomize_nodes=False,
     )
     bad_conn = t.node_pool.nodes[0]
-    with mock.patch.object(t, "mark_dead") as mark_dead:
+    with mock.patch.object(t.node_pool, "mark_dead") as mark_dead:
         mark_dead.side_effect = TransportError("sniffing error!")
         t.perform_request("GET", "/")
     mark_dead.assert_called_with(bad_conn)
@@ -433,8 +434,9 @@ def test_transport_default_params_encoder(params, expected):
     t = Transport(node_class=DummyNode)
     t.perform_request("GET", "/", params=params)
 
-    assert 1 == len(t.get_node().calls)
-    assert ("GET", "/" + expected, None) == t.get_node().calls[0][0]
+    calls = t.node_pool.get().calls
+    assert 1 == len(calls)
+    assert ("GET", "/" + expected) == calls[0][0]
 
 
 @pytest.mark.parametrize("param", [True, False, [], (), {}, object()])
