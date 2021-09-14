@@ -19,7 +19,7 @@ import sys
 from dataclasses import dataclass
 from typing import Optional
 
-from ._compat import MutableMapping, Mapping
+from ._compat import Mapping, MutableMapping
 
 if sys.version_info >= (3, 7):  # dict is insert ordered on Python 3.7+
     ordered_dict = dict

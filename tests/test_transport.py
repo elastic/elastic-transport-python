@@ -286,7 +286,7 @@ def test_node_class_as_string():
         Transport(node_class="huh?")
     assert str(e.value) == (
         "Unknown option for node_class: 'huh?'. "
-        "Available options are: 'requests', 'urllib3'"
+        "Available options are: 'aiohttp', 'requests', 'urllib3'"
     )
 
 

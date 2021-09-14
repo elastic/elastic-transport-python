@@ -15,16 +15,17 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import ssl
 import time
 import warnings
 from typing import Tuple
 
 import urllib3
 
-from .._exceptions import ConnectionError, ConnectionTimeout
+from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import HttpHeaders, HttpResponse
 from ..utils import DEFAULT, client_meta_version, normalize_headers
-from ._base import BaseNode
+from ._base import RERAISE_EXCEPTIONS, BaseNode
 
 try:
     import requests
@@ -115,7 +116,9 @@ class RequestsHttpNode(BaseNode):
 
         if self.use_ssl and not verify_certs and ssl_show_warn:
             warnings.warn(
-                f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure"
+                f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure",
+                stacklevel=2,
+                category=SecurityWarning,
             )
 
         # Create and mount custom adapter for constraining number of connections
@@ -161,11 +164,16 @@ class RequestsHttpNode(BaseNode):
             data = response.content
             duration = time.time() - start
             response_headers = HttpHeaders(response.headers)
+
+        except RERAISE_EXCEPTIONS:
+            raise
         except Exception as e:
             if isinstance(e, requests.Timeout):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
+            elif isinstance(e, (ssl.SSLError, requests.exceptions.SSLError)):
+                raise TlsError(str(e), errors=(e,))
             raise ConnectionError(str(e), errors=(e,))
 
         response = HttpResponse(

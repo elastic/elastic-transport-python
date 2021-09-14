@@ -15,15 +15,32 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import asyncio
+import sys
 from urllib.parse import quote as _quote
 from urllib.parse import urlencode, urlparse
 
 string_types = (str, bytes)
 
+if sys.version_info >= (3, 7):  # dict is insert ordered on Python 3.7+
+    ordered_dict = dict
+else:
+    from collections import OrderedDict as ordered_dict
+
 try:
     from typing import Mapping, MutableMapping
 except ImportError:
     from collections import Mapping, MutableMapping
+
+try:
+    from asyncio import get_running_loop
+except ImportError:
+
+    def get_running_loop():
+        loop = asyncio.get_event_loop()
+        if not loop.is_running():
+            raise RuntimeError("no running event loop")
+        return loop
 
 
 _QUOTE_ALWAYS_SAFE = frozenset(
@@ -40,6 +57,8 @@ def quote(string, safe="/"):
 
 
 __all__ = [
+    "get_running_loop",
+    "ordered_dict",
     "quote",
     "urlparse",
     "urlencode",

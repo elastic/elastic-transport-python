@@ -15,6 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import ssl
 import time
 import warnings
 from typing import Tuple
@@ -23,19 +24,10 @@ import urllib3
 from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
 from urllib3.util.retry import Retry
 
-from .._exceptions import ConnectionError, ConnectionTimeout
+from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import HttpHeaders, HttpResponse
 from ..utils import DEFAULT, client_meta_version, normalize_headers, to_str
-from ._base import BaseNode
-
-CA_CERTS = None
-
-try:
-    import certifi
-
-    CA_CERTS = certifi.where()
-except ImportError:  # pragma: nocover
-    pass
+from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS, BaseNode
 
 
 class Urllib3HttpNode(BaseNode):
@@ -147,7 +139,7 @@ class Urllib3HttpNode(BaseNode):
             if ssl_show_warn is DEFAULT:
                 ssl_show_warn = True
 
-            ca_certs = CA_CERTS if ca_certs is None else ca_certs
+            ca_certs = DEFAULT_CA_CERTS if ca_certs is None else ca_certs
             if verify_certs:
                 if not ca_certs:
                     raise ValueError(
@@ -168,7 +160,9 @@ class Urllib3HttpNode(BaseNode):
                 kw["cert_reqs"] = "CERT_NONE"
                 if ssl_show_warn:
                     warnings.warn(
-                        f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure"
+                        f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure",
+                        stacklevel=2,
+                        category=SecurityWarning,
                     )
                 else:
                     urllib3.disable_warnings()
@@ -220,11 +214,16 @@ class Urllib3HttpNode(BaseNode):
             data = response.data
             duration = time.time() - start
             response_headers = HttpHeaders(response.headers)
+
+        except RERAISE_EXCEPTIONS:
+            raise
         except Exception as e:
             if isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
+            elif isinstance(e, (ssl.SSLError, urllib3.exceptions.SSLError)):
+                raise TlsError(str(e), errors=(e,))
             raise ConnectionError(str(e), errors=(e,))
 
         response = HttpResponse(

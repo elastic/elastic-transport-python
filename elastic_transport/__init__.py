@@ -31,15 +31,18 @@ from ._exceptions import (
     NotFoundError,
     PayloadTooLargeError,
     PaymentRequiredError,
+    SecurityWarning,
     SerializationError,
     ServiceUnavailableError,
+    TlsError,
     TooManyRequestsError,
     TransportError,
+    TransportWarning,
     UnauthorizedError,
     UnprocessableEntityError,
 )
 from ._models import HttpHeaders, HttpResponse, QueryParams
-from ._node import BaseNode, RequestsHttpNode, Urllib3HttpNode
+from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import (
     EmptyNodePool,
     NodePool,
@@ -53,6 +56,7 @@ from ._transport import Transport
 from ._version import __version__ as __version__  # noqa
 
 __all__ = [
+    "AiohttpHttpNode",
     "ApiError",
     "BadGatewayError",
     "BadRequestError",
@@ -78,14 +82,17 @@ __all__ = [
     "RandomSelector",
     "RequestsHttpNode",
     "RoundRobinSelector",
+    "SecurityWarning",
     "SerializationError",
     "Serializer",
     "ServiceUnavailableError",
     "SingleNodePool",
     "TextSerializer",
+    "TlsError",
     "TooManyRequestsError",
     "Transport",
     "TransportError",
+    "TransportWarning",
     "UnauthorizedError",
     "UnprocessableEntityError",
     "Urllib3HttpNode",

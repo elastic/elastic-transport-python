@@ -14,23 +14,3 @@
 #  KIND, either express or implied.  See the License for the
 #  specific language governing permissions and limitations
 #  under the License.
-
-from elastic_transport import ApiError, TransportError
-
-
-def test_exception_repr_and_str():
-    e = TransportError({"errors": [{"status": 500}]})
-    assert repr(e) == "TransportError({'errors': [{'status': 500}]})"
-    assert str(e) == "{'errors': [{'status': 500}]}"
-
-    e = TransportError("error", errors=(ValueError("value error"),))
-    assert repr(e) == "TransportError('error', errors={!r})".format(
-        e.errors,
-    )
-    assert str(e) == "error"
-
-
-def test_api_error_status_repr():
-    e = ApiError({"errors": [{"status": 500}]}, status=500)
-    assert repr(e) == "ApiError({'errors': [{'status': 500}]}, status=500)"
-    assert str(e) == "{'errors': [{'status': 500}]}"

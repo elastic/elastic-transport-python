@@ -15,22 +15,26 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from elastic_transport import ApiError, TransportError
+from typing import Tuple
+
+from .._models import HttpResponse
+from ..utils import DEFAULT
+from ._base import BaseNode
 
 
-def test_exception_repr_and_str():
-    e = TransportError({"errors": [{"status": 500}]})
-    assert repr(e) == "TransportError({'errors': [{'status': 500}]})"
-    assert str(e) == "{'errors': [{'status': 500}]}"
+class BaseAsyncNode(BaseNode):
+    """Base class for Async HTTP node implementations"""
 
-    e = TransportError("error", errors=(ValueError("value error"),))
-    assert repr(e) == "TransportError('error', errors={!r})".format(
-        e.errors,
-    )
-    assert str(e) == "error"
+    async def perform_request(
+        self,
+        method,
+        target,
+        body=None,
+        request_timeout=DEFAULT,
+        ignore_status=(),
+        headers=None,
+    ) -> Tuple[HttpResponse, bytes]:  # pragma: nocover
+        raise NotImplementedError()
 
-
-def test_api_error_status_repr():
-    e = ApiError({"errors": [{"status": 500}]}, status=500)
-    assert repr(e) == "ApiError({'errors': [{'status': 500}]}, status=500)"
-    assert str(e) == "{'errors': [{'status': 500}]}"
+    async def close(self):  # pragma: nocover
+        raise NotImplementedError()

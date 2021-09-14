@@ -26,7 +26,7 @@ from ._exceptions import (
     TransportError,
 )
 from ._models import QueryParams
-from ._node import RequestsHttpNode, Urllib3HttpNode
+from ._node import AiohttpHttpNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import EmptyNodePool, NodePool, SingleNodePool
 from ._serializer import DEFAULT_SERIALIZERS, Deserializer
 from ._version import __version__
@@ -36,6 +36,7 @@ from .utils import DEFAULT, client_meta_version, normalize_headers
 _NODE_CLASS_NAMES = {
     "urllib3": Urllib3HttpNode,
     "requests": RequestsHttpNode,
+    "aiohttp": AiohttpHttpNode,
 }
 
 
@@ -266,7 +267,9 @@ class Transport:
             if isinstance(body, bytes):
                 request_data = body
             else:
-                mimetype = request_headers.get("content-type", "").partition(";")[0] or None
+                mimetype = (
+                    request_headers.get("content-type", "").partition(";")[0] or None
+                )
                 request_data = self.deserializer.dumps(body, mimetype=mimetype)
         else:
             request_data = None

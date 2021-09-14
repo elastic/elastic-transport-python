@@ -39,7 +39,7 @@ def test_simple_request(node_class):
     resp, data = t.perform_request(
         "GET",
         "/anything",
-        headers={"Custom": "headeR"},
+        headers={"Custom": "headeR", "content-type": "application/json"},
         params=params,
         body={"JSON": "body"},
     )
@@ -63,9 +63,6 @@ def test_simple_request(node_class):
         "Host": "httpbin.org",
     }
     assert all(v == data["headers"][k] for k, v in request_headers.items())
-
-    assert resp.headers["content-type"] == "application/json"
-    assert resp.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
