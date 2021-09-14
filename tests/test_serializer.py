@@ -68,8 +68,13 @@ def test_raises_serialization_error_on_load_error():
 
 def test_unicode_is_handled():
     j = JsonSerializer()
-    assert j.dumps({"你好": "你好"}) == b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}'
-    assert j.loads(b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}') == {"你好": "你好"}
+    assert (
+        j.dumps({"你好": "你好"})
+        == b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}'
+    )
+    assert j.loads(b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}') == {
+        "你好": "你好"
+    }
 
     t = TextSerializer()
     assert t.dumps("你好") == b"\xe4\xbd\xa0\xe5\xa5\xbd"
@@ -78,8 +83,13 @@ def test_unicode_is_handled():
 
 def test_unicode_surrogates_handled():
     j = JsonSerializer()
-    assert j.dumps({"key": "你好\uda6a"}) == b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}'
-    assert j.loads(b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}') == {'key': '你好\uda6a'}
+    assert (
+        j.dumps({"key": "你好\uda6a"})
+        == b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}'
+    )
+    assert j.loads(b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}') == {
+        "key": "你好\uda6a"
+    }
 
     t = TextSerializer()
     assert t.dumps("你好\uda6a") == b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"

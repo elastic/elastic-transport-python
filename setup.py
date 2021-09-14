@@ -54,7 +54,15 @@ setup(
     ],
     python_requires=">=3.6",
     extras_require={
-        "develop": ["pytest", "pytest-cov", "pytest-mock", "mock", "requests"],
+        "develop": [
+            "pytest",
+            "pytest-cov",
+            "pytest-mock",
+            "pytest-asyncio",
+            "mock",
+            "requests",
+            "aiohttp",
+        ],
     },
     classifiers=[
         "Development Status :: 5 - Production/Stable",

@@ -15,8 +15,8 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import asyncio
 import gzip
-import io
 import logging
 from typing import Tuple
 
@@ -24,6 +24,16 @@ from .._models import HttpResponse
 from ..utils import DEFAULT, normalize_headers
 
 logger = logging.getLogger("elastic_transport.node")
+
+DEFAULT_CA_CERTS = None
+RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError)
+
+try:
+    import certifi
+
+    DEFAULT_CA_CERTS = certifi.where()
+except ImportError:  # pragma: nocover
+    pass
 
 
 class BaseNode:
@@ -69,11 +79,10 @@ class BaseNode:
         if user_agent:
             self.headers.setdefault("user-agent", user_agent)
 
-        self.headers.setdefault("content-type", "application/json")
         if http_compress:
             self.headers["accept-encoding"] = "gzip"
 
-        scheme = kwargs.get("scheme", "http")
+        scheme = kwargs.pop("scheme", "http")
         if use_ssl or scheme == "https":
             scheme = "https"
             use_ssl = True
@@ -87,6 +96,13 @@ class BaseNode:
             url_prefix = "/" + url_prefix.strip("/")
         self.url_prefix = url_prefix
         self.request_timeout = request_timeout
+
+        # If there are any parameters left over we should raise an error
+        # to avoid typos being dropped on the floor.
+        if kwargs:
+            raise TypeError(
+                "Unknown parameter(s): '%s'" % ("', '".join(sorted(kwargs.keys())))
+            )
 
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.base_url}>"
@@ -120,8 +136,11 @@ class BaseNode:
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ) -> Tuple[HttpResponse, bytes]:
+    ) -> Tuple[HttpResponse, bytes]:  # pragma: nocover
         raise NotImplementedError()
+
+    def close(self) -> None:  # pragma: nocover
+        pass
 
     def log_request_success(self, method, url, body, status, response, duration):
         """Log a successful API call"""
@@ -173,8 +192,5 @@ class BaseNode:
         if response is not None:
             logger.debug("< %s", response)
 
-    def _gzip_compress(self, body):
-        buf = io.BytesIO()
-        with gzip.GzipFile(fileobj=buf, mode="wb") as f:
-            f.write(body)
-        return buf.getvalue()
+    def _gzip_compress(self, body: bytes) -> bytes:
+        return gzip.compress(body)

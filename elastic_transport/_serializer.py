@@ -19,7 +19,7 @@ import json
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Any, Optional, ClassVar
+from typing import Any, ClassVar, Optional
 
 from ._exceptions import SerializationError
 
@@ -47,7 +47,9 @@ class TextSerializer(Serializer):
         try:
             return data.encode("utf-8", "surrogatepass")
         except (AttributeError, UnicodeError, TypeError) as e:
-            raise SerializationError(f"Unable to serialize to text: {data!r}", errors=(e,))
+            raise SerializationError(
+                f"Unable to serialize to text: {data!r}", errors=(e,)
+            )
 
 
 class JsonSerializer(Serializer):
@@ -68,7 +70,9 @@ class JsonSerializer(Serializer):
         try:
             return json.loads(data)
         except (ValueError, TypeError) as e:
-            raise SerializationError(message=f"Unable to deserialize as JSON: {data!r}", errors=(e,))
+            raise SerializationError(
+                message=f"Unable to deserialize as JSON: {data!r}", errors=(e,)
+            )
 
     def dumps(self, data: Any) -> bytes:
         try:
@@ -102,10 +106,10 @@ class Deserializer:
             ) from None
         self.serializers = serializers
 
-    def dumps(self, data: Any, mimetype: Optional[str]=None) -> bytes:
+    def dumps(self, data: Any, mimetype: Optional[str] = None) -> bytes:
         return self._serializer_for_mimetype(mimetype).dumps(data)
 
-    def loads(self, data: bytes, mimetype: Optional[str]=None) -> Any:
+    def loads(self, data: bytes, mimetype: Optional[str] = None) -> Any:
         return self._serializer_for_mimetype(mimetype).loads(data)
 
     def _serializer_for_mimetype(self, mimetype: Optional[str]) -> Serializer:

@@ -28,6 +28,7 @@ import urllib3
 from urllib3._collections import HTTPHeaderDict
 
 from elastic_transport import (
+    AiohttpHttpNode,
     ConnectionError,
     ConnectionTimeout,
     InternalServerError,
@@ -41,6 +42,21 @@ from elastic_transport import (
 def gzip_decompress(data):
     buf = gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb")
     return buf.read()
+
+
+@pytest.mark.parametrize(
+    "node_cls", [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode]
+)
+def test_unknown_parameter(node_cls):
+    with pytest.raises(TypeError) as e:
+        node_cls(unknown_option=1)
+    assert str(e.value) == "Unknown parameter(s): 'unknown_option'"
+
+    with pytest.raises(TypeError) as e:
+        node_cls(unknown_option=1, unknown_other_option=2)
+    assert (
+        str(e.value) == "Unknown parameter(s): 'unknown_option', 'unknown_other_option'"
+    )
 
 
 class TestUrllib3Connection:
@@ -168,7 +184,6 @@ class TestUrllib3Connection:
         con = Urllib3HttpNode()
         assert {
             "connection": "keep-alive",
-            "content-type": "application/json",
         } == con.headers
 
     def test_uses_https_if_verify_certs_is_off(self):
@@ -412,7 +427,7 @@ class TestRequestsConnection:
     def test_default_headers(self):
         con = self._get_mock_connection()
         req = self._get_request(con, "GET", "/")
-        assert req.headers["content-type"] == "application/json"
+        assert req.headers == {"Connection": "keep-alive"}
 
     def test_custom_headers(self):
         con = self._get_mock_connection()
@@ -425,8 +440,11 @@ class TestRequestsConnection:
                 "user-agent": "custom-agent/1.2.3",
             },
         )
-        assert req.headers["content-type"] == "application/x-ndjson"
-        assert req.headers["user-agent"] == "custom-agent/1.2.3"
+        assert req.headers == {
+            "Connection": "keep-alive",
+            "content-type": "application/x-ndjson",
+            "user-agent": "custom-agent/1.2.3",
+        }
 
     def test_repr(self):
         con = self._get_mock_connection({"host": "elasticsearch.com", "port": 443})

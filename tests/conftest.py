@@ -15,6 +15,12 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import hashlib
+import socket
+import ssl
+
+import pytest
+
 from elastic_transport import BaseNode, HttpHeaders, HttpResponse
 
 
@@ -38,3 +44,17 @@ class DummyNode(BaseNode):
             headers=HttpHeaders(self.headers),
         )
         return response, self.body
+
+
+@pytest.fixture(scope="session")
+def httpbin_cert_fingerprint() -> bytes:
+    """Gets the SHA256 fingerprint of the certificate for 'httpbin.org'"""
+    sock = socket.create_connection(("httpbin.org", 443))
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    sock = ctx.wrap_socket(sock)
+    digest = hashlib.sha256(sock.getpeercert(binary_form=True)).hexdigest()
+    assert len(digest) == 64
+    sock.close()
+    return digest

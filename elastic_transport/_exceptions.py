@@ -18,6 +18,14 @@
 from typing import Optional
 
 
+class TransportWarning(Warning):
+    """Generic warning for the 'elastic-transport' package."""
+
+
+class SecurityWarning(TransportWarning):
+    """Warning for potentially insecure configurations."""
+
+
 class TransportError(Exception):
     """Generic exception for the 'elastic-transport' package.
 
@@ -59,6 +67,10 @@ class ConnectionError(TransportError):
     """Error raised by the HTTP connection"""
 
 
+class TlsError(ConnectionError):
+    """Error raised by during the TLS handshake"""
+
+
 class ConnectionTimeout(TransportError):
     """Connection timed out during an operation"""
 
@@ -66,9 +78,11 @@ class ConnectionTimeout(TransportError):
 class ApiError(TransportError):
     """Error that is raised by the service or API"""
 
-    def __init__(self, message, errors=(), status=None):
+    def __init__(self, message, errors=(), status=None, headers=None, body=None):
         if status is None:
             status = getattr(self, "status", None)
+        self.headers = headers
+        self.body = body
         super().__init__(message=message, errors=errors, status=status)
 
 
