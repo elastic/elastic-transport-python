@@ -19,9 +19,11 @@ import logging
 import random
 import threading
 import time
+from collections import defaultdict
 from queue import Empty, PriorityQueue
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union, overload
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Type, Union, overload
 
+from ._compat import Lock, ordered_dict
 from ._models import NodeConfig
 from ._node import BaseNode
 
@@ -33,63 +35,53 @@ class NodeSelector:
     Simple class used to select a node from a list of currently live
     node instances. In init time it is passed a dictionary containing all
     the nodes options which it can then use during the selection
-    process. When the `select` method is called it is given a list of
+    process. When the ``select()`` method is called it is given a list of
     *currently* live nodes to choose from.
 
-    The options dictionary is the one that has been passed to
-    :class:`~elastic_transport.Transport` as `hosts` param and the same that is
-    used to construct the Connection object itself. When the Connection was
-    created from information retrieved from the cluster via the sniffing
-    process it will be the dictionary returned by the `host_info_callback`.
+    The selector is initialized with the list of seed nodes that the
+    NodePool was initialized with. This list of seed nodes can be used
+    to make decisions within ``select()``
 
     Example of where this would be useful is a zone-aware selector that would
     only select connections from it's own zones and only fall back to other
     connections where there would be none in its zones.
     """
 
-    def __init__(self, node_configs):
+    def __init__(self, node_configs: List[NodeConfig]):
         """
-        :arg node_configs: dictionary of connection instances and their options
+        :arg node_configs: List of NodeConfig instances
         """
         self.node_configs = node_configs
 
-    def select(
-        self, node_configs: Sequence[NodeConfig]
-    ) -> NodeConfig:  # pragma: nocover
+    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:  # pragma: nocover
         """
-        Select a connection from the given list.
+        Select a nodes from the given list.
 
-        :arg nodes: list of live connections to choose from
+        :arg nodes: list of live nodes to choose from
         """
         raise NotImplementedError()
 
 
 class RandomSelector(NodeSelector):
-    """
-    Select a connection at random
-    """
+    """Randomly select a node"""
 
-    def select(self, node_configs: Sequence[NodeConfig]) -> NodeConfig:
-        return random.choice(node_configs)
+    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
+        return random.choice(nodes)
 
 
 class RoundRobinSelector(NodeSelector):
-    """
-    Selector using round-robin.
-    """
+    """Select a node using round-robin"""
 
-    def __init__(self, node_configs):
+    def __init__(self, node_configs: List[NodeConfig]):
         super().__init__(node_configs)
         self._thread_local = threading.local()
 
-    def select(self, node_configs: Sequence[NodeConfig]) -> NodeConfig:
-        self._thread_local.rr = (getattr(self._thread_local, "rr", -1) + 1) % len(
-            node_configs
-        )
-        return node_configs[self._thread_local.rr]
+    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
+        self._thread_local.rr = (getattr(self._thread_local, "rr", -1) + 1) % len(nodes)
+        return nodes[self._thread_local.rr]
 
 
-SELECTOR_CLASS_NAMES: Dict[str, Type[NodeSelector]] = {
+_SELECTOR_CLASS_NAMES: Dict[str, Type[NodeSelector]] = {
     "round_robin": RoundRobinSelector,
     "random": RandomSelector,
 }
@@ -104,7 +96,7 @@ class NodePool:
     It's only interactions are with the :class:`~elastic_transport.Transport` class
     that drives all the actions within ``NodePool``.
 
-    Initially connections are stored on the class as a list and, along with the
+    Initially nodes are stored on the class as a list and, along with the
     connection options, get passed to the ``NodeSelector`` instance for
     future reference.
 
@@ -122,85 +114,108 @@ class NodePool:
         self,
         node_configs: List[NodeConfig],
         node_class: Type[BaseNode],
-        dead_timeout: float = 60,
-        timeout_cutoff: float = 5,
+        dead_backoff_factor: float = 5.0,
+        max_dead_backoff: float = 60.0,
         selector_class: Union[str, Type[NodeSelector]] = RoundRobinSelector,
         randomize_nodes: bool = True,
     ):
         """
         :arg node_configs: List of initial NodeConfigs to use
         :arg node_class: Type to use when creating nodes
-        :arg dead_timeout: number of seconds a connection should be retired for
-            after a failure, increases on consecutive failures
-        :arg timeout_cutoff: number of consecutive failures after which the
-            timeout doesn't increase
+        :arg dead_backoff_factor: Number of seconds used as a factor in
+            calculating the amount of "backoff" time we should give a node
+            after an unsuccessful request. The formula is calculated as
+            follows where N is the number of consecutive failures:
+            ``min(dead_backoff_factor * (2 ** (N - 1)), max_dead_backoff)``
+        :arg max_dead_backoff: Maximum number of seconds to wait
+            when calculating the "backoff" time for a dead node.
         :arg selector_class: :class:`~elastic_transport.NodeSelector`
             subclass to use if more than one connection is live
-        :arg randomize_nodes: shuffle the list of nodes upon arrival to
-            avoid dog piling effect across processes
+        :arg randomize_nodes: shuffle the list of nodes upon instantiation
+            to avoid dog-piling effect across processes
         """
         if not node_configs:
-            raise ValueError("Must specify at least one node instance")
+            raise ValueError("Must specify at least one NodeConfig")
+        node_configs = list(
+            node_configs
+        )  # Make a copy so we don't have side-effects outside.
 
         if isinstance(selector_class, str):
-            if selector_class not in SELECTOR_CLASS_NAMES:
+            if selector_class not in _SELECTOR_CLASS_NAMES:
                 raise ValueError(
                     "Unknown option for selector_class: '%s'. "
                     "Available options are: '%s'"
                     % (
                         selector_class,
-                        "', '".join(sorted(SELECTOR_CLASS_NAMES.keys())),
+                        "', '".join(sorted(_SELECTOR_CLASS_NAMES.keys())),
                     )
                 )
-            selector_class = SELECTOR_CLASS_NAMES[selector_class]
-
-        self.node_configs = node_configs
-        self.node_class = node_class
-        self.nodes = []
-
-        # Remember the original set of 'NodeConfig' for use with .resurrect(force=True)
-        self.seed_nodes: Tuple[NodeConfig, ...] = tuple(self.node_configs)
-
-        # PriorityQueue for thread safety and ease of timeout management
-        self.dead = PriorityQueue()
-        self.dead_count = {}
+            selector_class = _SELECTOR_CLASS_NAMES[selector_class]
 
         if randomize_nodes:
             # randomize the list of nodes to avoid hammering the same node
             # if a large set of clients are created all at once.
-            random.shuffle(self.node_configs)
+            random.shuffle(node_configs)
+
+        # Initial set of nodes that the NodePool was initialized with.
+        # This set of nodes can never be removed.
+        self.seed_nodes: Tuple[NodeConfig, ...] = tuple(set(node_configs))
+        if len(self.seed_nodes) != len(node_configs):
+            raise ValueError("Cannot use duplicate NodeConfigs within a NodePool")
+
+        self.node_class = node_class
+        self.selector = selector_class(node_configs)
+
+        # Remember the original set of 'NodeConfig' for use with .resurrect(force=True)
+        self.all_nodes: Dict[NodeConfig, BaseNode] = {
+            node_config: self.node_class(node_config) for node_config in node_configs
+        }
+
+        # Lock that is used to protect writing to 'all_nodes'
+        self._all_nodes_write_lock = Lock()
+        # Flag which tells NodePool.get() that there's only one node
+        # which allows for optimizations. Setting this flag is also
+        # protected by the above write lock.
+        self._all_nodes_len_1 = len(self.all_nodes) == 1
+
+        # Collection of currently-alive nodes. This is an ordered
+        # dict so round-robin actually works.
+        self.alive_nodes: Dict[NodeConfig, BaseNode] = ordered_dict(self.all_nodes)
+
+        # PriorityQueue for thread safety and ease of timeout management
+        self.dead_nodes: PriorityQueue[Tuple[float, BaseNode]] = PriorityQueue()
+        self.dead_consecutive_failures: Dict[NodeConfig, int] = defaultdict(lambda: 0)
+
+        # Nodes that have been marked as 'removed' to be thread-safe.
+        self.removed_nodes: Set[NodeConfig] = set()
 
         # default timeout after which to try resurrecting a connection
-        self.dead_timeout = dead_timeout
-        self.timeout_cutoff = timeout_cutoff
-
-        self.selector = selector_class(self.node_configs)
+        self.dead_backoff_factor = dead_backoff_factor
+        self.max_dead_backoff = max_dead_backoff
 
     def mark_dead(self, node: BaseNode, _now: Optional[float] = None) -> None:
         """
         Mark the node as dead (failed). Remove it from the live pool and put it on a timeout.
 
-        :arg node: the failed instance
+        :arg node: The failed node.
         """
         now: float = _now if _now is not None else time.time()
         try:
-            self.node_configs.remove(node.config)
-        except ValueError:
-            logger.info(
-                "Attempted to remove %r, but it does not exist in the node pool",
-                node,
-            )
-            # node not alive or another thread marked it already, ignore
+            del self.alive_nodes[node.config]
+        except KeyError:
             return
         else:
-            dead_count = self.dead_count.get(node, 0) + 1
-            self.dead_count[node] = dead_count
-            timeout = self.dead_timeout * 2 ** min(dead_count - 1, self.timeout_cutoff)
-            self.dead.put((now + timeout, node))
+            consecutive_failures = self.dead_consecutive_failures[node.config] + 1
+            self.dead_consecutive_failures[node.config] = consecutive_failures
+            timeout = min(
+                self.dead_backoff_factor * 2 ** (consecutive_failures - 1),
+                self.max_dead_backoff,
+            )
+            self.dead_nodes.put((now + timeout, node))
             logger.warning(
                 "Node %r has failed for %i times in a row, putting on %i second timeout",
                 node,
-                dead_count,
+                consecutive_failures,
                 timeout,
             )
 
@@ -208,10 +223,10 @@ class NodePool:
         """
         Mark node as healthy after a resurrection. Resets the fail counter for the node.
 
-        :arg node: The ``BaseNode`` instance to remark as alive
+        :arg node: The ``BaseNode`` instance to mark as alive.
         """
         try:
-            del self.dead_count[node.config]
+            del self.dead_consecutive_failures[node.config]
         except KeyError:
             # race condition, safe to ignore
             pass
@@ -222,44 +237,62 @@ class NodePool:
 
     def resurrect(self, force: bool = False) -> Optional[BaseNode]:
         """
-        Attempt to resurrect a connection from the dead pool. It will try to
+        Attempt to resurrect a node from the dead queue. It will try to
         locate one (not all) eligible (it's timeout is over) node to
         return to the live pool. Any resurrected node is also returned.
 
-        :arg force: resurrect a connection even if there is none eligible (used
-            when we have no live connections). If force is 'True'' resurrect
-            always returns a connection.
+        :arg force: resurrect a node even if there is none eligible (used
+            when we have no live nodes). If force is 'True'' resurrect
+            always returns a node.
         """
-        # no dead connections
-        if self.dead.empty():
-            # we are forced to return a connection, take one from the original
-            # list. This is to avoid a race condition where get_connection can
-            # see no live connections but when it calls resurrect self.dead is
-            # also empty. We assume that other threat has resurrected all
-            # available connections so we can safely return one at random.
-            if force:
-                return self.new(random.choice(self.seed_nodes))
-            return None
-
         try:
-            # retrieve a connection to check
-            timeout, node_config = self.dead.get(block=False)
-        except Empty:
-            # other thread has been faster and the queue is now empty. If we
-            # are forced, return a connection at random again.
+            # Try to resurrect a dead node if any.
+            mark_node_alive_after, node = self.dead_nodes.get(block=False)
+        except Empty:  # No dead nodes.
             if force:
-                return self.new(random.choice(self.seed_nodes))
+                # If we're being forced to return a node we randomly
+                # pick between alive and dead nodes.
+                return random.choice(list(self.all_nodes.values()))
             return None
 
-        if not force and timeout > time.time():
+        if not force and mark_node_alive_after > time.time():
             # return it back if not eligible and not forced
-            self.dead.put((timeout, node_config))
+            self.dead_nodes.put((mark_node_alive_after, node))
             return None
 
-        # either we were forced or the connection is eligible to be retried
-        self.node_configs.append(node_config)
-        logger.info("Resurrecting node %r (force=%s)", node_config, force)
-        return self.new(node_config)
+        # either we were forced or the node is eligible to be retried
+        self.alive_nodes[node.config] = node
+        logger.info("Resurrected node %r (force=%s)", node, force)
+        return node
+
+    def add(self, node_config: NodeConfig) -> None:
+        try:  # If the node was previously removed we mark it as "in the pool"
+            self.removed_nodes.remove(node_config)
+        except KeyError:
+            pass
+
+        with self._all_nodes_write_lock:
+            # We don't error when trying to add a duplicate node
+            # to the pool because threading+sniffing can call
+            # .add() on the same NodeConfig.
+            if node_config not in self.all_nodes:
+                node = self.node_class(node_config)
+                self.all_nodes[node.config] = node
+
+                # Update the flag to disable optimizations. Also ensures that
+                # .resurrect() starts getting called so our added node makes
+                # it way into the alive nodes.
+                self._all_nodes_len_1 = False
+
+                # Start the node as dead because 'dead_nodes' is thread-safe.
+                # The node will be resurrected on the next call to .get()
+                self.dead_consecutive_failures[node.config] = 0
+                self.dead_nodes.put((0.0, node))
+
+    def remove(self, node_config: NodeConfig) -> None:
+        # Can't mark a seed node as removed.
+        if node_config not in self.seed_nodes:
+            self.removed_nodes.add(node_config)
 
     def get(self) -> BaseNode:
         """
@@ -268,72 +301,30 @@ class NodePool:
         It tries to resurrect eligible nodes, forces a resurrection when
         no nodes are available and passes the list of live nodes to
         the selector instance to choose from.
-
-        Returns a node instance and it's current fail count.
         """
-        self.resurrect()
-        node_configs = self.node_configs[:]
+        # Flag that short-circuits the extra logic if we have only one node.
+        # The only way this flag can be set to 'True' is if there were only
+        # one node defined within 'seed_nodes' so we know this good to do.
+        if self._all_nodes_len_1:
+            return self.all_nodes[self.seed_nodes[0]]
 
-        # no live nodes, resurrect one by force and return it
-        if not node_configs:
+        self.resurrect()
+
+        # Filter nodes in 'alive_nodes' to ones not marked as removed.
+        nodes = [
+            node
+            for node_config, node in self.alive_nodes.items()
+            if node_config not in self.removed_nodes
+        ]
+
+        # No live nodes, resurrect one by force and return it
+        if not nodes:
             return self.resurrect(force=True)
 
-        # only call selector if we have a selection
-        if len(node_configs) > 1:
-            return self.new(self.selector.select(node_configs))
-
-        # only one connection, no need for a selector
-        return self.new(node_configs[0])
-
-    def new(self, node_config: NodeConfig) -> BaseNode:
-        return self.node_class(node_config)
-
-    def close(self) -> None:
-        """
-        Explicitly closes nodes
-        """
-        for node in self.nodes:
-            node.close()
+        # Only call selector if we have a choice to make
+        if len(nodes) > 1:
+            return self.selector.select(nodes)
+        return nodes[0]
 
     def __repr__(self) -> str:
-        return f"<{type(self).__name__}: {self.nodes!r}>"
-
-
-class SingleNodePool(NodePool):
-    def __init__(self, node_configs, **_):
-        if len(node_configs) != 1:
-            raise ValueError("SingleNodePool needs exactly one node defined.")
-
-        # we need connection opts for sniffing logic
-        self.node_configs = node_configs
-        self.nodes: Tuple[BaseNode] = (self.new(node_configs[0]),)
-
-    def get(self) -> BaseNode:
-        return self.nodes[0]
-
-    def close(self) -> None:
-        """
-        Explicitly closes connections
-        """
-        self.nodes[0].close()
-
-    def _noop(self, *args: Any, **kwargs: Any) -> Any:
-        pass
-
-    mark_dead = mark_live = resurrect = _noop
-
-
-class EmptyNodePool(NodePool):
-    """A node pool that is empty. Errors out if used."""
-
-    def __init__(self, *_, **__):
-        self.nodes = []
-        self.node_configs = []
-
-    def get(self) -> BaseNode:
-        raise ValueError("No nodes were configured")
-
-    def _noop(self, *args, **kwargs):
-        pass
-
-    close = mark_dead = mark_live = resurrect = _noop
+        return "<NodePool>"

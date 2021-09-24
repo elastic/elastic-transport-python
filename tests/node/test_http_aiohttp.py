@@ -337,7 +337,7 @@ async def test_custom_user_agent():
 
 def test_repr():
     node = AiohttpHttpNode(NodeConfig(scheme="https", host="localhost", port=443))
-    assert "<AiohttpHttpNode: https://localhost:443>" == repr(node)
+    assert "<AiohttpHttpNode(https://localhost:443)>" == repr(node)
 
 
 async def test_head():

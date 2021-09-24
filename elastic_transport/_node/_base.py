@@ -90,15 +90,20 @@ class BaseNode:
         return self._path_prefix
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.base_url}>"
+        return f"<{self.__class__.__name__}({self.base_url})>"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, BaseNode):
-            raise TypeError(f"Unsupported equality check for {self} and {other}")
+            return NotImplemented
         return self.__hash__() == other.__hash__()
 
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, BaseNode):
+            return NotImplemented
+        return not self == other
+
     def __hash__(self) -> int:
-        return hash(id(self))
+        return hash((str(type(self).__name__), self.config))
 
     @property
     def base_url(self) -> str:

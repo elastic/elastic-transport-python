@@ -43,14 +43,7 @@ from ._exceptions import (
 )
 from ._models import HttpHeaders, HttpResponse, NodeConfig, QueryParams, RequestOptions
 from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
-from ._node_pool import (
-    EmptyNodePool,
-    NodePool,
-    NodeSelector,
-    RandomSelector,
-    RoundRobinSelector,
-    SingleNodePool,
-)
+from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
 from ._serializer import Deserializer, JsonSerializer, Serializer, TextSerializer
 from ._transport import Transport
 from ._version import __version__ as __version__  # noqa
@@ -65,7 +58,6 @@ __all__ = [
     "ConnectionError",
     "ConnectionTimeout",
     "Deserializer",
-    "EmptyNodePool",
     "ForbiddenError",
     "GatewayTimeoutError",
     "HttpHeaders",
@@ -88,7 +80,6 @@ __all__ = [
     "SerializationError",
     "Serializer",
     "ServiceUnavailableError",
-    "SingleNodePool",
     "TextSerializer",
     "TlsError",
     "TooManyRequestsError",
