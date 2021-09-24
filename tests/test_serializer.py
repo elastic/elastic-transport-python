@@ -116,7 +116,10 @@ def test_raises_serialization_error_on_unknown_mimetype():
 def test_raises_improperly_configured_when_default_mimetype_cannot_be_deserialized():
     with pytest.raises(ValueError) as e:
         Deserializer({})
-    assert str(e.value) == "Cannot find default serializer (application/json)"
+    assert (
+        str(e.value)
+        == "Must configure a serializer for the default mimetype 'application/json'"
+    )
 
 
 def test_text_asterisk_works_for_all_text_types():

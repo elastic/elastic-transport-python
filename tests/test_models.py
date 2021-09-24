@@ -15,9 +15,11 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import dataclasses
+
 import pytest
 
-from elastic_transport import QueryParams
+from elastic_transport import HttpHeaders, NodeConfig, QueryParams
 
 
 @pytest.mark.parametrize(
@@ -214,3 +216,57 @@ def test_query_params_keys_must_be_string():
     with pytest.raises(TypeError) as e:
         QueryParams({(): "value"})
     assert str(e.value) == "Keys in 'params' must be type str not tuple"
+
+
+def test_empty_node_config():
+    config = NodeConfig(scheme="https", host="localhost", port=9200)
+
+    assert dataclasses.asdict(config) == {
+        "ca_certs": None,
+        "client_cert": None,
+        "client_key": None,
+        "connections_per_node": 10,
+        "headers": {},
+        "host": "localhost",
+        "http_compress": False,
+        "path_prefix": "",
+        "port": 9200,
+        "request_timeout": 10,
+        "scheme": "https",
+        "ssl_assert_fingerprint": None,
+        "ssl_assert_hostname": None,
+        "ssl_context": None,
+        "ssl_show_warn": True,
+        "ssl_version": None,
+        "verify_certs": True,
+        "_extras": {},
+    }
+
+    # Default HttpHeaders should be empty and frozen
+    assert len(config.headers) == 0
+    assert config.headers.frozen
+
+
+def test_headers_frozen():
+    headers = HttpHeaders()
+    assert headers.frozen is False
+
+    headers["key"] = "value"
+    headers.pop("Key")
+
+    headers["key"] = "value"
+    assert headers.freeze() is headers
+    assert headers.frozen is True
+
+    with pytest.raises(ValueError) as e:
+        headers["key"] = "value"
+    assert str(e.value) == "Can't modify headers that have been frozen"
+
+    with pytest.raises(ValueError) as e:
+        headers.pop("key")
+    assert str(e.value) == "Can't modify headers that have been frozen"
+    assert len(headers) == 1
+    assert headers == {"key": "value"}
+
+    assert headers.copy() is not headers
+    assert headers.copy().frozen is False

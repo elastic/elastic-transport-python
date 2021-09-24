@@ -15,17 +15,23 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import json
+
 import pytest
 
 from elastic_transport import (
     ApiError,
     InternalServerError,
+    NodeConfig,
     NotFoundError,
     QueryParams,
     Transport,
 )
+from elastic_transport._node._base import DEFAULT_USER_AGENT
+from elastic_transport._transport import _NODE_CLASS_NAMES
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
 def test_simple_request(node_class):
     t = Transport("https://httpbin.org", node_class=node_class)
@@ -65,6 +71,7 @@ def test_simple_request(node_class):
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
 def test_head_request_200(node_class):
     t = Transport("https://httpbin.org", node_class=node_class)
@@ -79,6 +86,7 @@ def test_head_request_200(node_class):
     assert data is None
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
 @pytest.mark.parametrize("status", [404, 500])
 def test_head_request_error(node_class, status):
@@ -99,6 +107,7 @@ def test_head_request_error(node_class, status):
         assert isinstance(e.value, InternalServerError)
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
 def test_get_404_request(node_class):
     t = Transport("https://httpbin.org", node_class=node_class)
@@ -113,3 +122,88 @@ def test_get_404_request(node_class):
 
     resp = e.value
     assert resp.status == 404
+
+
+@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
+def test_node(node_class):
+    def new_node(**kwargs):
+        return _NODE_CLASS_NAMES[node_class](
+            NodeConfig("https", "httpbin.org", 443, **kwargs)
+        )
+
+    node = new_node()
+    resp, data = node.perform_request("GET", "/anything")
+    assert resp.status == 200
+    parsed = parse_httpbin(data)
+    assert parsed == {
+        "headers": {
+            "Accept-Encoding": "identity",
+            "Host": "httpbin.org",
+            "User-Agent": DEFAULT_USER_AGENT,
+        },
+        "method": "GET",
+        "url": "https://httpbin.org/anything",
+    }
+
+    node = new_node(http_compress=True)
+    resp, data = node.perform_request("GET", "/anything")
+    assert resp.status == 200
+    parsed = parse_httpbin(data)
+    assert parsed == {
+        "headers": {
+            "Accept-Encoding": "gzip",
+            "Host": "httpbin.org",
+            "User-Agent": DEFAULT_USER_AGENT,
+        },
+        "method": "GET",
+        "url": "https://httpbin.org/anything",
+    }
+
+    resp, data = node.perform_request("GET", "/anything", body=b"hello, world!")
+    assert resp.status == 200
+    parsed = parse_httpbin(data)
+    assert parsed == {
+        "headers": {
+            "Accept-Encoding": "gzip",
+            "Content-Encoding": "gzip",
+            "Content-Length": "33",
+            "Host": "httpbin.org",
+            "User-Agent": DEFAULT_USER_AGENT,
+        },
+        "method": "GET",
+        "url": "https://httpbin.org/anything",
+    }
+
+    resp, data = node.perform_request(
+        "POST",
+        "/anything",
+        body=json.dumps({"key": "value"}).encode("utf-8"),
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status == 200
+    parsed = parse_httpbin(data)
+    assert parsed == {
+        "headers": {
+            "Accept-Encoding": "gzip",
+            "Content-Encoding": "gzip",
+            "Content-Length": "36",
+            "Content-Type": "application/json",
+            "Host": "httpbin.org",
+            "User-Agent": DEFAULT_USER_AGENT,
+        },
+        "method": "POST",
+        "url": "https://httpbin.org/anything",
+    }
+
+
+def parse_httpbin(value):
+    """Parses a response from httpbin.org/anything by stripping all the variable things"""
+    if isinstance(value, bytes):
+        value = json.loads(value)
+    else:
+        value = value.copy()
+    value.pop("origin", None)
+    value.pop("data", None)
+    value["headers"].pop("X-Amzn-Trace-Id", None)
+    value = {k: v for k, v in value.items() if v}
+    return value

@@ -48,7 +48,7 @@ setup(
     },
     packages=packages,
     install_requires=[
-        "urllib3>=1.21.1, <2",
+        "urllib3>=1.26.2, <2",
         "certifi",
         "dataclasses; python_version<'3.7'",
     ],

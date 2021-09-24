@@ -31,7 +31,7 @@ class DummyNode(BaseNode):
         self.body = kwargs.pop("body", b"{}")
         self.calls = []
         super().__init__(**kwargs)
-        self.headers = kwargs.pop("headers", {})
+        self._headers = kwargs.pop("headers", {})
 
     def perform_request(self, *args, **kwargs):
         self.calls.append((args, kwargs))
@@ -41,13 +41,13 @@ class DummyNode(BaseNode):
             duration=0.0,
             version="1.1",
             status=self.status,
-            headers=HttpHeaders(self.headers),
+            headers=HttpHeaders(self._headers),
         )
         return response, self.body
 
 
-@pytest.fixture(scope="session")
-def httpbin_cert_fingerprint() -> bytes:
+@pytest.fixture(scope="session", params=[True, False])
+def httpbin_cert_fingerprint(request) -> str:
     """Gets the SHA256 fingerprint of the certificate for 'httpbin.org'"""
     sock = socket.create_connection(("httpbin.org", 443))
     ctx = ssl.create_default_context()
@@ -57,4 +57,7 @@ def httpbin_cert_fingerprint() -> bytes:
     digest = hashlib.sha256(sock.getpeercert(binary_form=True)).hexdigest()
     assert len(digest) == 64
     sock.close()
-    return digest
+    if request.param:
+        return digest
+    else:
+        return ":".join([digest[i : i + 2] for i in range(0, len(digest), 2)])

@@ -41,7 +41,7 @@ def lint(session):
     session.install("flake8", "black", "isort")
     session.run("black", "--check", "--target-version=py36", *SOURCE_FILES)
     session.run("isort", "--check", *SOURCE_FILES)
-    session.run("flake8", "--ignore=E501,W503", *SOURCE_FILES)
+    session.run("flake8", "--ignore=E501,W503,E203", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "check", *SOURCE_FILES)
 
 

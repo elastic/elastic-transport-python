@@ -20,8 +20,9 @@ import random
 import threading
 import time
 from queue import Empty, PriorityQueue
-from typing import Any, Dict, Optional, Sequence, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union, overload
 
+from ._models import NodeConfig
 from ._node import BaseNode
 
 logger = logging.getLogger("elastic_transport.node_pool")
@@ -46,13 +47,15 @@ class NodeSelector:
     connections where there would be none in its zones.
     """
 
-    def __init__(self, opts):
+    def __init__(self, node_configs):
         """
-        :arg opts: dictionary of connection instances and their options
+        :arg node_configs: dictionary of connection instances and their options
         """
-        self.node_options = opts
+        self.node_configs = node_configs
 
-    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:  # pragma: nocover
+    def select(
+        self, node_configs: Sequence[NodeConfig]
+    ) -> NodeConfig:  # pragma: nocover
         """
         Select a connection from the given list.
 
@@ -66,8 +69,8 @@ class RandomSelector(NodeSelector):
     Select a connection at random
     """
 
-    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
-        return random.choice(nodes)
+    def select(self, node_configs: Sequence[NodeConfig]) -> NodeConfig:
+        return random.choice(node_configs)
 
 
 class RoundRobinSelector(NodeSelector):
@@ -75,13 +78,15 @@ class RoundRobinSelector(NodeSelector):
     Selector using round-robin.
     """
 
-    def __init__(self, opts):
-        super().__init__(opts)
-        self.data = threading.local()
+    def __init__(self, node_configs):
+        super().__init__(node_configs)
+        self._thread_local = threading.local()
 
-    def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
-        self.data.rr = (getattr(self.data, "rr", -1) + 1) % len(nodes)
-        return nodes[self.data.rr]
+    def select(self, node_configs: Sequence[NodeConfig]) -> NodeConfig:
+        self._thread_local.rr = (getattr(self._thread_local, "rr", -1) + 1) % len(
+            node_configs
+        )
+        return node_configs[self._thread_local.rr]
 
 
 SELECTOR_CLASS_NAMES: Dict[str, Type[NodeSelector]] = {
@@ -115,15 +120,16 @@ class NodePool:
 
     def __init__(
         self,
-        nodes,
+        node_configs: List[NodeConfig],
+        node_class: Type[BaseNode],
         dead_timeout: float = 60,
         timeout_cutoff: float = 5,
         selector_class: Union[str, Type[NodeSelector]] = RoundRobinSelector,
         randomize_nodes: bool = True,
     ):
         """
-        :arg nodes: list of tuples containing the
-            :class:`~elasticsearch.Connection` instance and it's options
+        :arg node_configs: List of initial NodeConfigs to use
+        :arg node_class: Type to use when creating nodes
         :arg dead_timeout: number of seconds a connection should be retired for
             after a failure, increases on consecutive failures
         :arg timeout_cutoff: number of consecutive failures after which the
@@ -133,10 +139,9 @@ class NodePool:
         :arg randomize_nodes: shuffle the list of nodes upon arrival to
             avoid dog piling effect across processes
         """
-        if not nodes:
-            raise ValueError(
-                "No defined connections, you need to specify at least one host"
-            )
+        if not node_configs:
+            raise ValueError("Must specify at least one node instance")
+
         if isinstance(selector_class, str):
             if selector_class not in SELECTOR_CLASS_NAMES:
                 raise ValueError(
@@ -149,24 +154,27 @@ class NodePool:
                 )
             selector_class = SELECTOR_CLASS_NAMES[selector_class]
 
-        self.node_options = nodes
-        self.nodes = [kv[0] for kv in nodes]
-        # remember original connection list for resurrect(force=True)
-        self.orig_connections = tuple(self.nodes)
+        self.node_configs = node_configs
+        self.node_class = node_class
+        self.nodes = []
+
+        # Remember the original set of 'NodeConfig' for use with .resurrect(force=True)
+        self.seed_nodes: Tuple[NodeConfig, ...] = tuple(self.node_configs)
+
         # PriorityQueue for thread safety and ease of timeout management
-        self.dead = PriorityQueue(len(self.nodes))
+        self.dead = PriorityQueue()
         self.dead_count = {}
 
         if randomize_nodes:
-            # randomize the connection list to avoid all clients hitting same node
-            # after startup/restart
-            random.shuffle(self.nodes)
+            # randomize the list of nodes to avoid hammering the same node
+            # if a large set of clients are created all at once.
+            random.shuffle(self.node_configs)
 
         # default timeout after which to try resurrecting a connection
         self.dead_timeout = dead_timeout
         self.timeout_cutoff = timeout_cutoff
 
-        self.selector = selector_class(dict(nodes))
+        self.selector = selector_class(self.node_configs)
 
     def mark_dead(self, node: BaseNode, _now: Optional[float] = None) -> None:
         """
@@ -176,7 +184,7 @@ class NodePool:
         """
         now: float = _now if _now is not None else time.time()
         try:
-            self.nodes.remove(node)
+            self.node_configs.remove(node.config)
         except ValueError:
             logger.info(
                 "Attempted to remove %r, but it does not exist in the node pool",
@@ -203,7 +211,7 @@ class NodePool:
         :arg node: The ``BaseNode`` instance to remark as alive
         """
         try:
-            del self.dead_count[node]
+            del self.dead_count[node.config]
         except KeyError:
             # race condition, safe to ignore
             pass
@@ -230,30 +238,30 @@ class NodePool:
             # also empty. We assume that other threat has resurrected all
             # available connections so we can safely return one at random.
             if force:
-                return random.choice(self.orig_connections)
+                return self.new(random.choice(self.seed_nodes))
             return None
 
         try:
             # retrieve a connection to check
-            timeout, connection = self.dead.get(block=False)
+            timeout, node_config = self.dead.get(block=False)
         except Empty:
             # other thread has been faster and the queue is now empty. If we
             # are forced, return a connection at random again.
             if force:
-                return random.choice(self.orig_connections)
+                return self.new(random.choice(self.seed_nodes))
             return None
 
         if not force and timeout > time.time():
             # return it back if not eligible and not forced
-            self.dead.put((timeout, connection))
+            self.dead.put((timeout, node_config))
             return None
 
-        # either we were forced or the connection is elligible to be retried
-        self.nodes.append(connection)
-        logger.info("Resurrecting connection %r (force=%s)", connection, force)
-        return connection
+        # either we were forced or the connection is eligible to be retried
+        self.node_configs.append(node_config)
+        logger.info("Resurrecting node %r (force=%s)", node_config, force)
+        return self.new(node_config)
 
-    def get(self):
+    def get(self) -> BaseNode:
         """
         Return a node from the pool using the ``NodeSelector`` instance.
 
@@ -264,38 +272,41 @@ class NodePool:
         Returns a node instance and it's current fail count.
         """
         self.resurrect()
-        nodes = self.nodes[:]
+        node_configs = self.node_configs[:]
 
         # no live nodes, resurrect one by force and return it
-        if not nodes:
+        if not node_configs:
             return self.resurrect(force=True)
 
         # only call selector if we have a selection
-        if len(nodes) > 1:
-            return self.selector.select(nodes)
+        if len(node_configs) > 1:
+            return self.new(self.selector.select(node_configs))
 
         # only one connection, no need for a selector
-        return nodes[0]
+        return self.new(node_configs[0])
+
+    def new(self, node_config: NodeConfig) -> BaseNode:
+        return self.node_class(node_config)
 
     def close(self) -> None:
         """
         Explicitly closes nodes
         """
-        for conn in self.nodes:
-            conn.close()
+        for node in self.nodes:
+            node.close()
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.nodes!r}>"
 
 
 class SingleNodePool(NodePool):
-    def __init__(self, nodes, **_):
-        if len(nodes) != 1:
+    def __init__(self, node_configs, **_):
+        if len(node_configs) != 1:
             raise ValueError("SingleNodePool needs exactly one node defined.")
 
         # we need connection opts for sniffing logic
-        self.node_options = nodes
-        self.nodes: Tuple[BaseNode] = (nodes[0][0],)
+        self.node_configs = node_configs
+        self.nodes: Tuple[BaseNode] = (self.new(node_configs[0]),)
 
     def get(self) -> BaseNode:
         return self.nodes[0]
@@ -317,7 +328,7 @@ class EmptyNodePool(NodePool):
 
     def __init__(self, *_, **__):
         self.nodes = []
-        self.node_options = []
+        self.node_configs = []
 
     def get(self) -> BaseNode:
         raise ValueError("No nodes were configured")

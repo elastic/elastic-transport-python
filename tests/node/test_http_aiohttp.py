@@ -23,14 +23,15 @@ import aiohttp
 import pytest
 from multidict import CIMultiDict
 
-from elastic_transport import AiohttpHttpNode
+from elastic_transport import AiohttpHttpNode, NodeConfig
+from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 pytestmark = pytest.mark.asyncio
 
 
 class TestAiohttpHttpNode:
-    async def _get_mock_node(self, connection_params={}, response_body=b"{}"):
-        node = AiohttpHttpNode(**connection_params)
+    async def _get_mock_node(self, node_config, response_body=b"{}"):
+        node = AiohttpHttpNode(node_config)
         node._create_aiohttp_session()
 
         def _dummy_request(*args, **kwargs):
@@ -54,7 +55,9 @@ class TestAiohttpHttpNode:
         return node
 
     async def test_aiohttp_options(self):
-        node = await self._get_mock_node()
+        node = await self._get_mock_node(
+            NodeConfig(scheme="http", host="localhost", port=80)
+        )
         await node.perform_request(
             "GET",
             "/index",
@@ -63,10 +66,14 @@ class TestAiohttpHttpNode:
         )
 
         args, kwargs = node.session.request.call_args
-        assert args == ("GET", "http://localhost/index")
+        assert args == ("GET", "http://localhost:80/index")
         assert kwargs == {
             "data": b"hello, world!",
-            "headers": {"connection": "keep-alive", "key": "value"},
+            "headers": {
+                "connection": "keep-alive",
+                "key": "value",
+                "user-agent": DEFAULT_USER_AGENT,
+            },
             "timeout": aiohttp.ClientTimeout(
                 total=10,
                 connect=None,
@@ -77,7 +84,12 @@ class TestAiohttpHttpNode:
 
     async def test_aiohttp_options_fingerprint(self):
         node = await self._get_mock_node(
-            connection_params={"ssl_assert_fingerprint": ("00:" * 32).strip(":")}
+            NodeConfig(
+                scheme="https",
+                host="localhost",
+                port=443,
+                ssl_assert_fingerprint=("00:" * 32).strip(":"),
+            )
         )
         await node.perform_request(
             "GET",
@@ -85,7 +97,7 @@ class TestAiohttpHttpNode:
         )
 
         args, kwargs = node.session.request.call_args
-        assert args == ("GET", "http://localhost/")
+        assert args == ("GET", "https://localhost:443/")
 
         # aiohttp.Fingerprint() doesn't define equality
         fingerprint: aiohttp.Fingerprint = kwargs.pop("ssl")
@@ -93,7 +105,7 @@ class TestAiohttpHttpNode:
 
         assert kwargs == {
             "data": None,
-            "headers": {"connection": "keep-alive"},
+            "headers": {"connection": "keep-alive", "user-agent": DEFAULT_USER_AGENT},
             "timeout": aiohttp.ClientTimeout(
                 total=10,
                 connect=None,
@@ -110,11 +122,18 @@ class TestAiohttpHttpNode:
         if len(options) == 3:
             constructor_timeout, request_timeout, aiohttp_timeout = options
             node = await self._get_mock_node(
-                connection_params={"request_timeout": constructor_timeout}
+                NodeConfig(
+                    scheme="http",
+                    host="localhost",
+                    port=80,
+                    request_timeout=constructor_timeout,
+                )
             )
         else:
             request_timeout, aiohttp_timeout = options
-            node = await self._get_mock_node()
+            node = await self._get_mock_node(
+                NodeConfig(scheme="http", host="localhost", port=80)
+            )
 
         await node.perform_request(
             "GET",
@@ -123,10 +142,10 @@ class TestAiohttpHttpNode:
         )
 
         args, kwargs = node.session.request.call_args
-        assert args == ("GET", "http://localhost/")
+        assert args == ("GET", "http://localhost:80/")
         assert kwargs == {
             "data": None,
-            "headers": {"connection": "keep-alive"},
+            "headers": {"connection": "keep-alive", "user-agent": DEFAULT_USER_AGENT},
             "timeout": aiohttp.ClientTimeout(
                 total=aiohttp_timeout,
                 connect=None,
@@ -137,10 +156,8 @@ class TestAiohttpHttpNode:
 
     async def test_http_compression(self):
         node = await self._get_mock_node(
-            {"http_compress": True},
+            NodeConfig(scheme="http", host="localhost", port=80, http_compress=True)
         )
-
-        assert node.http_compress
 
         # 'content-encoding' shouldn't be set at a session level.
         # Should be applied only if the request is sent with a body.
@@ -153,14 +170,18 @@ class TestAiohttpHttpNode:
             "accept-encoding": "gzip",
             "connection": "keep-alive",
             "content-encoding": "gzip",
+            "user-agent": DEFAULT_USER_AGENT,
         }
         assert gzip.decompress(kwargs["data"]) == b"{}"
 
     @pytest.mark.parametrize("http_compress", [None, False])
     async def test_no_http_compression(self, http_compress):
-        node = await self._get_mock_node({"http_compress": http_compress})
+        node = await self._get_mock_node(
+            NodeConfig(
+                scheme="http", host="localhost", port=80, http_compress=http_compress
+            )
+        )
 
-        assert node.http_compress is False
         assert "content-encoding" not in node.session.headers
 
         await node.perform_request("GET", "/", body=b"{}")
@@ -168,30 +189,39 @@ class TestAiohttpHttpNode:
         args, kwargs = node.session.request.call_args
         assert kwargs["headers"] == {
             "connection": "keep-alive",
+            "user-agent": DEFAULT_USER_AGENT,
         }
         assert kwargs["data"] == b"{}"
 
-    async def test_uses_https_if_verify_certs_is_off(self):
+    @pytest.mark.parametrize("path_prefix", ["url", "/url"])
+    async def test_uses_https_if_verify_certs_is_off(self, path_prefix):
         with warnings.catch_warnings(record=True) as w:
             await self._get_mock_node(
-                {"use_ssl": True, "url_prefix": "url", "verify_certs": False}
+                NodeConfig(
+                    scheme="https",
+                    host="localhost",
+                    port=443,
+                    path_prefix=path_prefix,
+                    verify_certs=False,
+                )
             )
 
         assert 1 == len(w)
         assert (
-            "Connecting to 'https://localhost/url' using SSL with verify_certs=False is insecure"
+            "Connecting to 'https://localhost:443/url' using TLS with verify_certs=False is insecure"
             == str(w[0].message)
         )
 
     async def test_uses_https_if_verify_certs_is_off_no_show_warning(self):
         with warnings.catch_warnings(record=True) as w:
             node = await self._get_mock_node(
-                {
-                    "use_ssl": True,
-                    "url_prefix": "url",
-                    "verify_certs": False,
-                    "ssl_show_warn": False,
-                }
+                NodeConfig(
+                    scheme="https",
+                    host="localhost",
+                    port=443,
+                    path_prefix="url",
+                    ssl_show_warn=False,
+                )
             )
             await node.perform_request("GET", "/")
 
@@ -199,29 +229,37 @@ class TestAiohttpHttpNode:
 
     async def test_merge_headers(self):
         node = await self._get_mock_node(
-            connection_params={"headers": {"h1": "v1", "h2": "v2"}}
+            NodeConfig(
+                scheme="https",
+                host="localhost",
+                port=443,
+                headers={"h1": "v1", "h2": "v2"},
+            )
         )
         resp, _ = await node.perform_request(
             "GET", "/", headers={"H2": "v2p", "H3": "v3"}
         )
 
         args, kwargs = node.session.request.call_args
-        assert args == ("GET", "http://localhost/")
+        assert args == ("GET", "https://localhost:443/")
         assert kwargs["headers"] == {
             "connection": "keep-alive",
             "h1": "v1",
             "h2": "v2p",
             "h3": "v3",
+            "user-agent": DEFAULT_USER_AGENT,
         }
 
 
 async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
     with warnings.catch_warnings(record=True) as w:
         node = AiohttpHttpNode(
-            host="httpbin.org",
-            use_ssl=True,
-            port=443,
-            ssl_assert_fingerprint=httpbin_cert_fingerprint,
+            NodeConfig(
+                scheme="https",
+                host="httpbin.org",
+                port=443,
+                ssl_assert_fingerprint=httpbin_cert_fingerprint,
+            )
         )
         resp, _ = await node.perform_request("GET", "/")
 
@@ -230,27 +268,23 @@ async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
 
 
 async def test_default_headers():
-    node = AiohttpHttpNode(
-        host="httpbin.org",
-        use_ssl=True,
-        port=443,
-    )
+    node = AiohttpHttpNode(NodeConfig(scheme="https", host="httpbin.org", port=443))
     resp, data = await node.perform_request("GET", "/anything")
 
     assert resp.status == 200
     headers = json.loads(data)["headers"]
     headers.pop("X-Amzn-Trace-Id", None)
-    assert headers == {
-        "Host": "httpbin.org",
-    }
+    assert headers == {"Host": "httpbin.org", "User-Agent": DEFAULT_USER_AGENT}
 
 
 async def test_custom_headers():
     node = AiohttpHttpNode(
-        host="httpbin.org",
-        use_ssl=True,
-        port=443,
-        headers={"accept-encoding": "gzip", "Content-Type": "application/json"},
+        NodeConfig(
+            scheme="https",
+            host="httpbin.org",
+            port=443,
+            headers={"accept-encoding": "gzip", "Content-Type": "application/json"},
+        )
     )
     resp, data = await node.perform_request(
         "GET",
@@ -272,17 +306,43 @@ async def test_custom_headers():
     }
 
 
+async def test_custom_user_agent():
+    node = AiohttpHttpNode(
+        NodeConfig(
+            scheme="https",
+            host="httpbin.org",
+            port=443,
+            headers={
+                "accept-encoding": "gzip",
+                "Content-Type": "application/json",
+                "user-agent": "custom-agent/1.2.3",
+            },
+        )
+    )
+    resp, data = await node.perform_request(
+        "GET",
+        "/anything",
+    )
+
+    assert resp.status == 200
+    headers = json.loads(data)["headers"]
+    headers.pop("X-Amzn-Trace-Id", None)
+    assert headers == {
+        "Accept-Encoding": "gzip",
+        "Content-Type": "application/json",
+        "Host": "httpbin.org",
+        "User-Agent": "custom-agent/1.2.3",
+    }
+
+
 def test_repr():
-    node = AiohttpHttpNode(host="elasticsearch.com", port=443)
-    assert "<AiohttpHttpNode: http://elasticsearch.com:443>" == repr(node)
+    node = AiohttpHttpNode(NodeConfig(scheme="https", host="localhost", port=443))
+    assert "<AiohttpHttpNode: https://localhost:443>" == repr(node)
 
 
 async def test_head():
     node = AiohttpHttpNode(
-        host="httpbin.org",
-        use_ssl=True,
-        port=443,
-        http_compress=True,
+        NodeConfig(scheme="https", host="httpbin.org", port=443, http_compress=True)
     )
     resp, data = await node.perform_request("HEAD", "/anything")
 

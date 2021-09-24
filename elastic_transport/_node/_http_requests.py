@@ -15,16 +15,17 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import gzip
 import ssl
 import time
 import warnings
-from typing import Tuple
+from typing import Optional, Tuple
 
 import urllib3
 
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
-from .._models import HttpHeaders, HttpResponse
-from ..utils import DEFAULT, client_meta_version, normalize_headers
+from .._models import HttpHeaders, HttpResponse, NodeConfig
+from ..client_utils import DEFAULT, client_meta_version
 from ._base import RERAISE_EXCEPTIONS, BaseNode
 
 try:
@@ -59,72 +60,52 @@ class RequestsHttpNode(BaseNode):
 
     _ELASTIC_CLIENT_META = ("rq", _REQUESTS_META_VERSION)
 
-    def __init__(
-        self,
-        host="localhost",
-        port=None,
-        use_ssl=False,
-        verify_certs=True,
-        ssl_show_warn=True,
-        ca_certs=None,
-        client_cert=None,
-        client_key=None,
-        connections_per_node=10,
-        headers=None,
-        http_compress=None,
-        opaque_id=None,
-        **kwargs,
-    ):
+    def __init__(self, config: NodeConfig):
         if not _REQUESTS_AVAILABLE:  # pragma: nocover
             raise ValueError(
-                "You must have 'requests' installed to use RequestsHttpConnection"
+                "You must have 'requests' installed to use RequestsHttpNode"
             )
+
+        super().__init__(config)
 
         # Initialize Session so .headers works before calling super().__init__().
         self.session = requests.Session()
-        # Empty out all the default session headers except 'Connection: keep-alive'
-        for key in list(self.session.headers):
-            if key.lower() == "connection":
-                continue
-            self.session.headers.pop(key)
+        self.session.headers.clear()  # Empty out all the default session headers
+        self.session.verify = config.verify_certs
 
-        super().__init__(
-            host=host,
-            port=port,
-            use_ssl=use_ssl,
-            headers=headers,
-            http_compress=http_compress,
-            opaque_id=opaque_id,
-            **kwargs,
-        )
+        # Client certificates
+        if config.client_cert:
+            if config.client_key:
+                self.session.cert = (config.client_cert, config.client_key)
+            else:
+                self.session.cert = config.client_cert
 
-        self.session.verify = verify_certs
-        if not client_key:
-            self.session.cert = client_cert
-        elif client_cert:
-            # cert is a tuple of (certfile, keyfile)
-            self.session.cert = (client_cert, client_key)
-        if ca_certs:
-            if not verify_certs:
+        if config.ca_certs:
+            if not config.verify_certs:
                 raise ValueError(
                     "You cannot pass CA certificates when verify_ssl=False."
                 )
-            self.session.verify = ca_certs
+            self.session.verify = config.ca_certs
 
-        if not ssl_show_warn:
+        if not config.ssl_show_warn:
             urllib3.disable_warnings()
 
-        if self.use_ssl and not verify_certs and ssl_show_warn:
+        if (
+            config.scheme == "https"
+            and not config.verify_certs
+            and config.ssl_show_warn
+        ):
             warnings.warn(
-                f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure",
+                f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
                 stacklevel=2,
                 category=SecurityWarning,
             )
 
         # Create and mount custom adapter for constraining number of connections
-        adapter = HTTPAdapter(
-            pool_connections=connections_per_node,
-            pool_maxsize=connections_per_node,
+        adapter = _ElasticHTTPAdapter(
+            node_config=config,
+            pool_connections=config.connections_per_node,
+            pool_maxsize=config.connections_per_node,
             pool_block=True,
         )
         for prefix in ("http://", "https://"):
@@ -132,27 +113,35 @@ class RequestsHttpNode(BaseNode):
 
     def perform_request(
         self,
-        method,
-        target,
-        body=None,
+        method: str,
+        target: str,
+        body: Optional[bytes] = None,
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
     ) -> Tuple[HttpResponse, bytes]:
         url = self.base_url + target
-        headers = normalize_headers(headers)
+        headers = HttpHeaders(headers or ())
 
-        if self.http_compress and body:
-            body = self._gzip_compress(body)
+        if not body:  # Filter out empty bytes
+            body = None
+        if self._http_compress and body:
+            body = gzip.compress(body)
             headers["content-encoding"] = "gzip"
 
+        request_headers = self.headers.copy()
+        if headers:
+            request_headers.update(headers)
+
         start = time.time()
-        request = requests.Request(method=method, headers=headers, url=url, data=body)
+        request = requests.Request(
+            method=method, headers=request_headers, url=url, data=body
+        )
         prepared_request = self.session.prepare_request(request)
         send_kwargs = {
             "timeout": request_timeout
             if request_timeout is not DEFAULT
-            else self.request_timeout
+            else self.config.request_timeout
         }
         send_kwargs.update(
             self.session.merge_environment_settings(
@@ -184,12 +173,27 @@ class RequestsHttpNode(BaseNode):
         )
         return response, data
 
-    @property
-    def headers(self):
-        return self.session.headers
-
-    def close(self):
+    def close(self) -> None:
         """
         Explicitly closes connections
         """
         self.session.close()
+
+
+class _ElasticHTTPAdapter(HTTPAdapter):
+    def __init__(self, node_config: NodeConfig, **kwargs):
+        self._node_config = node_config
+        super().__init__(**kwargs)
+
+    def init_poolmanager(
+        self, connections, maxsize, block=False, **pool_kwargs
+    ) -> urllib3.PoolManager:
+        if self._node_config.ssl_context:
+            pool_kwargs.setdefault("ssl_context", self._node_config.ssl_context)
+        if self._node_config.ssl_assert_fingerprint:
+            pool_kwargs.setdefault(
+                "ssl_assert_fingerprint", self._node_config.ssl_assert_fingerprint
+            )
+        return super().init_poolmanager(
+            connections, maxsize, block=block, **pool_kwargs
+        )

@@ -19,7 +19,7 @@ import json
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar, Mapping, Optional
 
 from ._exceptions import SerializationError
 
@@ -95,16 +95,20 @@ DEFAULT_SERIALIZERS = {
 
 
 class Deserializer:
-    def __init__(self, serializers=None, default_mimetype="application/json"):
+    def __init__(
+        self,
+        serializers: Optional[Mapping[str, Serializer]] = None,
+        default_mimetype: str = "application/json",
+    ):
         if serializers is None:
             serializers = DEFAULT_SERIALIZERS
         try:
             self.default = serializers[default_mimetype]
         except KeyError:
             raise ValueError(
-                "Cannot find default serializer (%s)" % default_mimetype
+                f"Must configure a serializer for the default mimetype {default_mimetype!r}"
             ) from None
-        self.serializers = serializers
+        self.serializers = dict(serializers)
 
     def dumps(self, data: Any, mimetype: Optional[str] = None) -> bytes:
         return self._serializer_for_mimetype(mimetype).dumps(data)

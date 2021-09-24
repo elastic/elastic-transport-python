@@ -30,7 +30,7 @@ from ._node import AiohttpHttpNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import EmptyNodePool, NodePool, SingleNodePool
 from ._serializer import DEFAULT_SERIALIZERS, Deserializer
 from ._version import __version__
-from .utils import DEFAULT, client_meta_version, normalize_headers
+from .client_utils import DEFAULT, client_meta_version, normalize_headers
 
 # Allows for using a node_class by name rather than import.
 _NODE_CLASS_NAMES = {

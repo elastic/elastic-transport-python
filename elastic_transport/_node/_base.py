@@ -16,16 +16,17 @@
 #  under the License.
 
 import asyncio
-import gzip
 import logging
 from typing import Tuple
 
-from .._models import HttpResponse
-from ..utils import DEFAULT, normalize_headers
+from .._models import HttpHeaders, HttpResponse, NodeConfig
+from .._version import __version__
+from ..client_utils import DEFAULT
 
 logger = logging.getLogger("elastic_transport.node")
 
 DEFAULT_CA_CERTS = None
+DEFAULT_USER_AGENT = f"elastic-transport-python/{__version__}"
 RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError)
 
 try:
@@ -38,85 +39,69 @@ except ImportError:  # pragma: nocover
 
 class BaseNode:
     """
-    Class responsible for maintaining a connection to an Enterprise Search node. It
+    Class responsible for maintaining a connection to a node. It
     holds persistent node pool to it and it's main interface
     (``perform_request``) is thread-safe.
 
-    :arg host: hostname of the node (default: localhost)
-    :arg port: port to use (integer, default: 9200)
-    :arg use_ssl: use ssl for the connection if `True`
-    :arg path_prefix: optional url prefix for Enterprise Search
-    :arg timeout: default timeout in seconds (float, default: 10)
-    :arg http_compress: Use gzip compression
-    :arg opaque_id: Send this value in the 'X-Opaque-Id' HTTP header
-        For tracing all requests made by this transport.
-    :arg user_agent: 'User-Agent' HTTP header for the given service.
+    :arg config: :class:`~elastic_transport.NodeConfig` instance
     """
 
     _ELASTIC_CLIENT_META = None
 
-    def __init__(
-        self,
-        host="localhost",
-        port=None,
-        use_ssl=False,
-        url_prefix="",
-        request_timeout=10,
-        headers=None,
-        http_compress=None,
-        opaque_id=None,
-        user_agent=None,
-        **kwargs,
-    ):
-        # Work-around if the implementing class doesn't
-        # define the headers property before calling super().__init__()
-        if not hasattr(self, "headers"):
-            self.headers = {}
+    def __init__(self, config: NodeConfig):
+        self._config = config
+        self._headers = self.config.headers.copy()
+        self.headers.setdefault("connection", "keep-alive")
+        self.headers.setdefault("user-agent", DEFAULT_USER_AGENT)
 
-        self.headers.update(normalize_headers(headers))
-        if opaque_id:
-            self.headers["x-opaque-id"] = opaque_id
-        if user_agent:
-            self.headers.setdefault("user-agent", user_agent)
-
-        if http_compress:
+        self._http_compress = bool(config.http_compress or False)
+        if config.http_compress:
             self.headers["accept-encoding"] = "gzip"
 
-        scheme = kwargs.pop("scheme", "http")
-        if use_ssl or scheme == "https":
-            scheme = "https"
-            use_ssl = True
-        self.use_ssl = use_ssl
-        self.http_compress = http_compress or False
+        self._scheme = config.scheme
+        self._host = config.host
+        self._port = config.port
+        self._path_prefix = (
+            ("/" + config.path_prefix.strip("/")) if config.path_prefix else ""
+        )
 
-        self.scheme = scheme
-        self.port = port
-        self.host = host
-        if url_prefix:
-            url_prefix = "/" + url_prefix.strip("/")
-        self.url_prefix = url_prefix
-        self.request_timeout = request_timeout
+    @property
+    def config(self) -> NodeConfig:
+        return self._config
 
-        # If there are any parameters left over we should raise an error
-        # to avoid typos being dropped on the floor.
-        if kwargs:
-            raise TypeError(
-                "Unknown parameter(s): '%s'" % ("', '".join(sorted(kwargs.keys())))
-            )
+    @property
+    def headers(self) -> HttpHeaders:
+        return self._headers
 
-    def __repr__(self):
+    @property
+    def scheme(self) -> str:
+        return self._scheme
+
+    @property
+    def host(self) -> str:
+        return self._host
+
+    @property
+    def port(self) -> int:
+        return self._port
+
+    @property
+    def path_prefix(self) -> str:
+        return self._path_prefix
+
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {self.base_url}>"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, BaseNode):
             raise TypeError(f"Unsupported equality check for {self} and {other}")
         return self.__hash__() == other.__hash__()
 
-    def __hash__(self):
-        return id(self)
+    def __hash__(self) -> int:
+        return hash(id(self))
 
     @property
-    def base_url(self):
+    def base_url(self) -> str:
         return "".join(
             [
                 self.scheme,
@@ -124,7 +109,7 @@ class BaseNode:
                 # IPv6 must be wrapped by [...]
                 "[%s]" % self.host if ":" in self.host else self.host,
                 ":%s" % self.port if self.port is not None else "",
-                self.url_prefix,
+                self.path_prefix,
             ]
         )
 
@@ -191,6 +176,3 @@ class BaseNode:
 
         if response is not None:
             logger.debug("< %s", response)
-
-    def _gzip_compress(self, body: bytes) -> bytes:
-        return gzip.compress(body)

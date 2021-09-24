@@ -41,7 +41,7 @@ from ._exceptions import (
     UnauthorizedError,
     UnprocessableEntityError,
 )
-from ._models import HttpHeaders, HttpResponse, QueryParams
+from ._models import HttpHeaders, HttpResponse, NodeConfig, QueryParams, RequestOptions
 from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import (
     EmptyNodePool,
@@ -73,6 +73,7 @@ __all__ = [
     "InternalServerError",
     "JsonSerializer",
     "MethodNotImplementedError",
+    "NodeConfig",
     "NodePool",
     "NodeSelector",
     "NotFoundError",
@@ -80,6 +81,7 @@ __all__ = [
     "PaymentRequiredError",
     "QueryParams",
     "RandomSelector",
+    "RequestOptions",
     "RequestsHttpNode",
     "RoundRobinSelector",
     "SecurityWarning",

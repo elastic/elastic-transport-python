@@ -18,6 +18,7 @@
 import asyncio
 import base64
 import functools
+import gzip
 import os
 import ssl
 import warnings
@@ -25,8 +26,8 @@ from typing import Tuple
 
 from .._compat import get_running_loop
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
-from .._models import HttpHeaders, HttpResponse
-from ..utils import DEFAULT, client_meta_version, normalize_headers
+from .._models import HttpHeaders, HttpResponse, NodeConfig
+from ..client_utils import client_meta_version, normalize_headers
 from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS
 from ._base_async import BaseAsyncNode
 
@@ -44,75 +45,28 @@ except ImportError:  # pragma: nocover
 class AiohttpHttpNode(BaseAsyncNode):
     _ELASTIC_CLIENT_META = ("ai", _AIOHTTP_META_VERSION)
 
-    def __init__(
-        self,
-        host="localhost",
-        port=None,
-        use_ssl=False,
-        verify_certs=DEFAULT,
-        ssl_show_warn=DEFAULT,
-        ca_certs=None,
-        client_cert=None,
-        client_key=None,
-        ssl_version=None,
-        ssl_assert_hostname=None,
-        ssl_assert_fingerprint=None,
-        connections_per_node=10,
-        headers=None,
-        ssl_context=None,
-        http_compress=None,
-        opaque_id=None,
-        loop=None,
-        **kwargs,
-    ):
-        self.headers = {}
+    def __init__(self, config: NodeConfig):
+        if not _AIOHTTP_AVAILABLE:  # pragma: nocover
+            raise ValueError("You must have 'aiohttp' installed to use AiohttpHttpNode")
 
-        super().__init__(
-            host=host,
-            port=port,
-            use_ssl=use_ssl,
-            headers=headers,
-            http_compress=http_compress,
-            opaque_id=opaque_id,
-            **kwargs,
-        )
+        super().__init__(config)
 
-        # if providing an SSL context, raise error if any other SSL related flag is used
-        if ssl_context and (
-            (verify_certs is not DEFAULT)
-            or (ssl_show_warn is not DEFAULT)
-            or ca_certs
-            or client_cert
-            or client_key
-            or ssl_version
-        ):
-            warnings.warn(
-                "When using `ssl_context`, all other SSL related kwargs are ignored"
-            )
-
-        self.ssl_assert_fingerprint = ssl_assert_fingerprint
-        if self.use_ssl and ssl_context is None:
-            if ssl_version is None:
+        self._ssl_assert_fingerprint = config.ssl_assert_fingerprint
+        if config.scheme == "https" and config.ssl_context is None:
+            if config.ssl_version is None:
                 ssl_context = ssl.create_default_context()
             else:
-                ssl_context = ssl.SSLContext(ssl_version)
+                ssl_context = ssl.SSLContext(config.ssl_version)
 
-            # Convert all sentinel values to their actual default
-            # values if not using an SSLContext.
-            if verify_certs is DEFAULT:
-                verify_certs = True
-            if ssl_show_warn is DEFAULT:
-                ssl_show_warn = True
-
-            if verify_certs:
+            if config.verify_certs:
                 ssl_context.verify_mode = ssl.CERT_REQUIRED
                 ssl_context.check_hostname = True
             else:
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
 
-            ca_certs = DEFAULT_CA_CERTS if ca_certs is None else ca_certs
-            if verify_certs:
+            ca_certs = DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
+            if config.verify_certs:
                 if not ca_certs:
                     raise ValueError(
                         "Root certificates are missing for certificate "
@@ -120,9 +74,9 @@ class AiohttpHttpNode(BaseAsyncNode):
                         "install certifi to use it automatically."
                     )
             else:
-                if ssl_show_warn:
+                if config.ssl_show_warn:
                     warnings.warn(
-                        f"Connecting to {self.base_url!r} using SSL with verify_certs=False is insecure",
+                        f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
                         stacklevel=2,
                         category=SecurityWarning,
                     )
@@ -135,22 +89,21 @@ class AiohttpHttpNode(BaseAsyncNode):
                 raise ValueError("ca_certs parameter is not a path")
 
             # Use client_cert and client_key variables for SSL certificate configuration.
-            if client_cert and not os.path.isfile(client_cert):
+            if config.client_cert and not os.path.isfile(config.client_cert):
                 raise ValueError("client_cert is not a path to a file")
-            if client_key and not os.path.isfile(client_key):
+            if config.client_key and not os.path.isfile(config.client_key):
                 raise ValueError("client_key is not a path to a file")
-            if client_cert and client_key:
-                ssl_context.load_cert_chain(client_cert, client_key)
-            elif client_cert:
-                ssl_context.load_cert_chain(client_cert)
+            if config.client_cert and config.client_key:
+                ssl_context.load_cert_chain(config.client_cert, config.client_key)
+            elif config.client_cert:
+                ssl_context.load_cert_chain(config.client_cert)
 
-        self.headers.setdefault("connection", "keep-alive")
-        self.loop = loop
+        self._loop = None
         self.session = None
 
         # Parameters for creating an aiohttp.ClientSession later.
-        self._limit = connections_per_node
-        self._ssl_context = ssl_context
+        self._connections_per_node = config.connections_per_node
+        self._ssl_context = config.ssl_context
 
     async def perform_request(
         self,
@@ -165,7 +118,6 @@ class AiohttpHttpNode(BaseAsyncNode):
             self._create_aiohttp_session()
         assert self.session is not None
 
-        target = self.url_prefix + target
         url = self.base_url + target
 
         # There is a bug in aiohttp that disables the re-use
@@ -176,8 +128,11 @@ class AiohttpHttpNode(BaseAsyncNode):
             method = "GET"
             is_head = True
 
+        # total=0 means no timeout for aiohttp
         request_timeout = (
-            request_timeout if request_timeout is not None else self.request_timeout
+            request_timeout
+            if request_timeout is not None
+            else self.config.request_timeout
         )
         aiohttp_timeout = aiohttp.ClientTimeout(
             total=request_timeout if request_timeout is not None else 0
@@ -187,16 +142,18 @@ class AiohttpHttpNode(BaseAsyncNode):
         if headers:
             request_headers.update(normalize_headers(headers))
 
-        if self.http_compress and body:
-            body = self._gzip_compress(body)
+        if not body:  # Filter out empty bytes
+            body = None
+        if self._http_compress and body:
+            body = gzip.compress(body)
             request_headers["content-encoding"] = "gzip"
 
-        start = self.loop.time()
-        try:
-            kwargs = {}
-            if self.ssl_assert_fingerprint:
-                kwargs["ssl"] = aiohttp_fingerprint(self.ssl_assert_fingerprint)
+        kwargs = {}
+        if self._ssl_assert_fingerprint:
+            kwargs["ssl"] = aiohttp_fingerprint(self._ssl_assert_fingerprint)
 
+        try:
+            start = self._loop.time()
             async with self.session.request(
                 method,
                 url,
@@ -210,7 +167,7 @@ class AiohttpHttpNode(BaseAsyncNode):
                     raw_data = b""
                 else:
                     raw_data = await response.read()
-                duration = self.loop.time() - start
+                duration = self._loop.time() - start
 
         # We want to reraise a cancellation or recursion error.
         except RERAISE_EXCEPTIONS:
@@ -236,21 +193,23 @@ class AiohttpHttpNode(BaseAsyncNode):
             raw_data,
         )
 
-    def _create_aiohttp_session(self):
+    def _create_aiohttp_session(self) -> None:
         """Creates an aiohttp.ClientSession(). This is delayed until
         the first call to perform_request() so that AsyncTransport has
         a chance to set AiohttpHttpNode.loop
         """
-        if self.loop is None:
-            self.loop = get_running_loop()
+        if self._loop is None:
+            self._loop = get_running_loop()
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             skip_auto_headers=("accept", "accept-encoding", "user-agent"),
             auto_decompress=True,
-            loop=self.loop,
+            loop=self._loop,
             cookie_jar=aiohttp.DummyCookieJar(),
             connector=aiohttp.TCPConnector(
-                limit=self._limit, use_dns_cache=True, ssl=self._ssl_context
+                limit=self._connections_per_node,
+                use_dns_cache=True,
+                ssl=self._ssl_context,
             ),
         )
 

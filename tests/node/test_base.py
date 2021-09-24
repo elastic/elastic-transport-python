@@ -15,26 +15,14 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from typing import Tuple
+import pytest
 
-from .._models import HttpResponse
-from ..client_utils import DEFAULT
-from ._base import BaseNode
+from elastic_transport import AiohttpHttpNode, RequestsHttpNode, Urllib3HttpNode
 
 
-class BaseAsyncNode(BaseNode):
-    """Base class for Async HTTP node implementations"""
-
-    async def perform_request(
-        self,
-        method,
-        target,
-        body=None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
-        headers=None,
-    ) -> Tuple[HttpResponse, bytes]:  # pragma: nocover
-        raise NotImplementedError()
-
-    async def close(self):  # pragma: nocover
-        raise NotImplementedError()
+@pytest.mark.parametrize(
+    "node_cls", [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode]
+)
+def test_unknown_parameter(node_cls):
+    with pytest.raises(TypeError):
+        node_cls(unknown_option=1)

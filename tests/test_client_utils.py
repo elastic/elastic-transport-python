@@ -20,7 +20,7 @@ from platform import python_version
 import pytest
 
 from elastic_transport import __version__
-from elastic_transport.utils import (
+from elastic_transport.client_utils import (
     client_meta_version,
     create_user_agent,
     parse_cloud_id,
@@ -51,7 +51,8 @@ def test_client_meta_version(version, meta_version):
 
 def test_parse_cloud_id():
     cloud_id = parse_cloud_id(
-        "cluster:dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyQ0ZmE4ODIxZTc1NjM0MDMyYmVkMWNmMjIxMTBlMmY5NyQ0ZmE4ODIxZTc1NjM0MDMyYmVkMWNmMjIxMTBlMmY5Ng=="
+        "cluster:dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyQ0ZmE4ODIxZTc1NjM0MDMyYmVk"
+        "MWNmMjIxMTBlMmY5NyQ0ZmE4ODIxZTc1NjM0MDMyYmVkMWNmMjIxMTBlMmY5Ng=="
     )
     assert cloud_id.cluster_name == "cluster"
     assert cloud_id.es_host == "4fa8821e75634032bed1cf22110e2f97.us-east-1.aws.found.io"
@@ -67,11 +68,13 @@ def test_parse_cloud_id():
     ["cloud_id", "port"],
     [
         (
-            ":dXMtZWFzdC0xLmF3cy5mb3VuZC5pbzo5MjQzJDRmYTg4MjFlNzU2MzQwMzJiZWQxY2YyMjExMGUyZjk3JDRmYTg4MjFlNzU2MzQwMzJiZWQxY2YyMjExMGUyZjk2",
+            ":dXMtZWFzdC0xLmF3cy5mb3VuZC5pbzo5MjQzJDRmYTg4MjFlNzU2MzQwMzJiZ"
+            "WQxY2YyMjExMGUyZjk3JDRmYTg4MjFlNzU2MzQwMzJiZWQxY2YyMjExMGUyZjk2",
             9243,
         ),
         (
-            ":dXMtZWFzdC0xLmF3cy5mb3VuZC5pbzo0NDMkNGZhODgyMWU3NTYzNDAzMmJlZDFjZjIyMTEwZTJmOTckNGZhODgyMWU3NTYzNDAzMmJlZDFjZjIyMTEwZTJmOTY=",
+            ":dXMtZWFzdC0xLmF3cy5mb3VuZC5pbzo0NDMkNGZhODgyMWU3NTYzNDAzMmJlZD"
+            "FjZjIyMTEwZTJmOTckNGZhODgyMWU3NTYzNDAzMmJlZDFjZjIyMTEwZTJmOTY=",
             None,
         ),
     ],
