@@ -55,13 +55,14 @@ def test_parse_cloud_id():
         "MWNmMjIxMTBlMmY5NyQ0ZmE4ODIxZTc1NjM0MDMyYmVkMWNmMjIxMTBlMmY5Ng=="
     )
     assert cloud_id.cluster_name == "cluster"
-    assert cloud_id.es_host == "4fa8821e75634032bed1cf22110e2f97.us-east-1.aws.found.io"
-    assert cloud_id.es_port is None
-    assert (
-        cloud_id.kibana_host
-        == "4fa8821e75634032bed1cf22110e2f96.us-east-1.aws.found.io"
+    assert cloud_id.es_address == (
+        "4fa8821e75634032bed1cf22110e2f97.us-east-1.aws.found.io",
+        443,
     )
-    assert cloud_id.kibana_port is None
+    assert cloud_id.kibana_address == (
+        "4fa8821e75634032bed1cf22110e2f96.us-east-1.aws.found.io",
+        443,
+    )
 
 
 @pytest.mark.parametrize(
@@ -75,20 +76,21 @@ def test_parse_cloud_id():
         (
             ":dXMtZWFzdC0xLmF3cy5mb3VuZC5pbzo0NDMkNGZhODgyMWU3NTYzNDAzMmJlZD"
             "FjZjIyMTEwZTJmOTckNGZhODgyMWU3NTYzNDAzMmJlZDFjZjIyMTEwZTJmOTY=",
-            None,
+            443,
         ),
     ],
 )
 def test_parse_cloud_id_ports(cloud_id, port):
     cloud_id = parse_cloud_id(cloud_id)
     assert cloud_id.cluster_name == ""
-    assert cloud_id.es_host == "4fa8821e75634032bed1cf22110e2f97.us-east-1.aws.found.io"
-    assert cloud_id.es_port == port
-    assert (
-        cloud_id.kibana_host
-        == "4fa8821e75634032bed1cf22110e2f96.us-east-1.aws.found.io"
+    assert cloud_id.es_address == (
+        "4fa8821e75634032bed1cf22110e2f97.us-east-1.aws.found.io",
+        port,
     )
-    assert cloud_id.kibana_port == port
+    assert cloud_id.kibana_address == (
+        "4fa8821e75634032bed1cf22110e2f96.us-east-1.aws.found.io",
+        port,
+    )
 
 
 @pytest.mark.parametrize(
@@ -101,10 +103,11 @@ def test_parse_cloud_id_ports(cloud_id, port):
 def test_parse_cloud_id_no_kibana(cloud_id):
     cloud_id = parse_cloud_id(cloud_id)
     assert cloud_id.cluster_name == "cluster"
-    assert cloud_id.es_host == "4fa8821e75634032bed1cf22110e2f97.us-east-1.aws.found.io"
-    assert cloud_id.es_port is None
-    assert cloud_id.kibana_host is None
-    assert cloud_id.kibana_port is None
+    assert cloud_id.es_address == (
+        "4fa8821e75634032bed1cf22110e2f97.us-east-1.aws.found.io",
+        443,
+    )
+    assert cloud_id.kibana_address is None
 
 
 @pytest.mark.parametrize(
@@ -117,10 +120,8 @@ def test_parse_cloud_id_no_kibana(cloud_id):
 def test_parse_cloud_id_no_es(cloud_id):
     cloud_id = parse_cloud_id(cloud_id)
     assert cloud_id.cluster_name == "cluster"
-    assert cloud_id.es_host is None
-    assert cloud_id.es_port is None
-    assert cloud_id.kibana_host is None
-    assert cloud_id.kibana_port is None
+    assert cloud_id.es_address is None
+    assert cloud_id.kibana_address is None
 
 
 @pytest.mark.parametrize(
