@@ -16,8 +16,9 @@
 #  under the License.
 
 from platform import python_version
+from typing import Dict, List, Type, Union
 
-from ._compat import quote, string_types, urlparse
+from ._compat import string_types, urlparse
 from ._exceptions import (
     HTTP_STATUS_TO_ERROR,
     ApiError,
@@ -25,52 +26,24 @@ from ._exceptions import (
     ConnectionTimeout,
     TransportError,
 )
-from ._models import QueryParams
-from ._node import AiohttpHttpNode, RequestsHttpNode, Urllib3HttpNode
-from ._node_pool import EmptyNodePool, NodePool, SingleNodePool
+from ._models import NodeConfig
+from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
+from ._node_pool import NodePool
 from ._serializer import DEFAULT_SERIALIZERS, Deserializer
 from ._version import __version__
 from .client_utils import DEFAULT, client_meta_version, normalize_headers
 
 # Allows for using a node_class by name rather than import.
-_NODE_CLASS_NAMES = {
+_NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
     "urllib3": Urllib3HttpNode,
     "requests": RequestsHttpNode,
     "aiohttp": AiohttpHttpNode,
 }
-
-
-def _default_params_encoder(params):
-    # type: (QueryParams) -> str
-    """Default encoder of QueryParams objects for Transport"""
-    to_encode = []
-    for key, val in params.items():
-        if val is not None and (
-            not isinstance(val, (bytes, str, int, float) + (str,))
-            or isinstance(
-                val, bool
-            )  # bool subclasses int, but we don't want to support bool.
-        ):
-            raise TypeError(
-                "Default Transport.params_encoder supports "
-                "bytes, str, int, float values or 'None'"
-            )
-
-        # Don't send 'None' through quote()
-        if val is not None:
-            # If a non-stringlike type then convert to str first
-            if isinstance(val, (int, float)):
-                val = str(val)
-            elif not isinstance(val, (str, bytes)) and hasattr(val, "encode"):
-                val = val.encode("utf-8")
-
-            # safe="" to quote slashes '/'
-            val = quote(val, safe="")
-
-        to_encode.append((quote(key, safe=""), val))
-
-    # If there's a None value then leave off the '='
-    return "&".join(f"{k}={v}" if v is not None else k for k, v in to_encode)
+# These are HTTP status errors that shouldn't be considered
+# 'errors' for marking a node as dead. These errors typically
+# mean everything is fine server-wise and instead the API call
+# in question responded successfully.
+_NOT_DEAD_NODE_HTTP_STATUSES = {400, 401, 403, 404}
 
 
 class Transport:
@@ -83,28 +56,24 @@ class Transport:
 
     def __init__(
         self,
-        hosts=None,
-        node_class=Urllib3HttpNode,
-        node_pool_class=NodePool,
+        node_configs: List[NodeConfig],
+        node_class: Union[str, Type[BaseNode]] = Urllib3HttpNode,
+        node_pool_class: Type[NodePool] = NodePool,
         serializers=None,
         default_mimetype="application/json",
         default_hosts=None,
-        params_encoder=_default_params_encoder,
         max_retries=3,
         retry_on_status=(502, 503, 504),
         retry_on_timeout=False,
         **kwargs,
     ):
         """
-        :arg hosts: list of dictionaries, each containing keyword arguments to
-            create a `node_class` instance
+        :arg node_configs: List of 'NodeConfig' instances to create initial set of nodes.
         :arg node_class: subclass of :class:`~elastic_transport.BaseNode` to use
             or the name of the Connection (ie 'urllib3', 'requests')
         :arg node_pool_class: subclass of :class:`~elastic_transport.NodePool` to use
         :arg serializers: optional dict of serializer instances that will be
             used for deserializing data coming from the server. (key is the mimetype)
-        :arg params_encoder: Callable which takes query params and
-            returns a string of encoded query params
         :arg default_mimetype: when no mimetype is specified by the server
             response assume this mimetype, defaults to `'application/json'`
         :arg default_hosts: Default hosts config to use if none is given.
@@ -118,8 +87,6 @@ class Transport:
         when creating and instance unless overridden by that node's
         options provided as part of the hosts parameter.
         """
-        hosts = _normalize_hosts(hosts, default_hosts)
-
         if isinstance(node_class, str):
             if node_class not in _NODE_CLASS_NAMES:
                 options = "', '".join(sorted(_NODE_CLASS_NAMES.keys()))
@@ -154,80 +121,14 @@ class Transport:
         self.retry_on_timeout = retry_on_timeout
         self.retry_on_status = retry_on_status
 
-        # data serializer
-        self.serializer = _serializers[default_mimetype]
-
-        # query params encoder
-        self.params_encoder = params_encoder
-
         # store all strategies...
-        self.node_pool_class = node_pool_class
-        self.node_class = node_class
-
-        # ...save kwargs to be passed to the nodes
-        self.kwargs = kwargs
-        self.hosts = hosts
-
-        # Start with an empty pool specifically for `AsyncTransport`.
-        # It should never be used, will be replaced on first call to
-        # .set_nodes()
-        self.node_pool = EmptyNodePool()
-
-        if hosts:
-            # ...and instantiate them
-            self.set_nodes(hosts)
-            # retain the original node instances for sniffing
-            self.seed_nodes = list(self.node_pool.nodes[:])
-        else:
-            self.seed_nodes = []
-
-    def add_node(self, host):
-        """
-        Create a new :class:`~elastic_enterprise_search.BaseNode` instance and add it to the pool.
-
-        :arg host: kwargs that will be used to create the instance
-        """
-        self.hosts.append(host)
-        self.set_nodes(self.hosts)
-
-    def set_nodes(self, hosts):
-        """
-        Instantiate all the nodes and create new node pool to hold them.
-        Tries to identify unchanged hosts and re-use existing
-        :class:`~elastic_transport.BaseNode` instances.
-
-        :arg hosts: same as `__init__`
-        """
-        # construct the nodes
-        def _create_node(host):
-            # if this is not the initial setup look at the existing node
-            # options and identify nodes that haven't changed and can be
-            # kept around.
-            if hasattr(self, "node_pool"):
-                for (node, old_host) in self.node_pool.node_options:
-                    if old_host == host:
-                        return node
-
-            # previously unseen params, create new node
-            kwargs = self.kwargs.copy()
-            kwargs.update(host)
-            return self.node_class(**kwargs)
-
-        nodes = map(_create_node, hosts)
-
-        nodes = list(zip(nodes, hosts))
-        if len(nodes) == 1:
-            self.node_pool = SingleNodePool(nodes)
-        else:
-            # pass the hosts dicts to the node pool to optionally extract parameters from
-            self.node_pool = self.node_pool_class(nodes, **self.kwargs)
+        self.node_pool = node_pool_class(node_configs, node_class=node_class)
 
     def perform_request(
         self,
         method,
-        path,
+        target,
         headers=None,
-        params=None,
         body=None,
         request_timeout=DEFAULT,
         ignore_status=(),
@@ -244,19 +145,17 @@ class Transport:
         marked as dead, mark it as live, resetting it's failure count.
 
         :arg method: HTTP method to use
-        :arg path: relative URL to target
+        :arg target: HTTP request target
         :arg headers: dictionary of headers, will be handed over to the
             underlying :class:`~elastic_transport.BaseNode` class
-        :arg params: dictionary of query parameters, will be handed over to the
-            underlying :class:`~elastic_transport.BaseNode` class for serialization
         :arg body: body of the request, will be serialized using serializer and
             passed to the node
         :arg request_timeout: Timeout to be passed to the HTTP client for the request
         :arg ignore_status: Collection of HTTP status codes to not raise an error for.
-        :returns: Deserialized Response
+        :returns: Tuple of the HttpResponse with the deserialized response.
         """
         if isinstance(ignore_status, int):
-            ignore_status = (ignore_status,)
+            ignore_status = {ignore_status}
 
         request_headers = normalize_headers(headers)
 
@@ -273,15 +172,6 @@ class Transport:
                 request_data = self.deserializer.dumps(body, mimetype=mimetype)
         else:
             request_data = None
-
-        if params is not None and not isinstance(params, QueryParams):
-            params = QueryParams(params)
-
-        # Add path and optionally 'params' to make
-        # the request target.
-        target = path
-        if params:
-            target += "?" + self.params_encoder(params)
 
         # Errors are stored from (oldest->newest)
         errors = []
@@ -342,11 +232,12 @@ class Transport:
                 self.node_pool.mark_live(node)
                 return response, data
 
-    def close(self):
+    def close(self) -> None:
         """
-        Explicitly closes nodes
+        Explicitly closes all nodes in the transport's pool
         """
-        self.node_pool.close()
+        for node in self.node_pool.all():
+            node.close()
 
 
 def _normalize_hosts(hosts, default_hosts):

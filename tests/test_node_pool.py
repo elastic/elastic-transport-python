@@ -16,151 +16,176 @@
 #  under the License.
 
 
+import random
+import threading
 import time
 
 import pytest
 
-from elastic_transport import BaseNode, NodePool, RoundRobinSelector, SingleNodePool
-
-pytestmark = pytest.mark.xfail
+from elastic_transport import NodeConfig, NodePool, Urllib3HttpNode
 
 
-def test_dummy_cp_raises_exception_on_more_connections():
-    with pytest.raises(ValueError):
-        SingleNodePool([])
-    with pytest.raises(ValueError):
-        SingleNodePool([object(), object()])
+def test_node_pool_repr():
+    node_configs = [NodeConfig("http", "localhost", x) for x in range(5)]
+    random.shuffle(node_configs)
+    pool = NodePool(node_configs, node_class=Urllib3HttpNode)
+    assert repr(pool) == "<NodePool>"
 
 
-def test_raises_exception_when_no_connections_defined():
-    with pytest.raises(ValueError):
-        NodePool([])
+def test_node_pool_empty_error():
+    with pytest.raises(ValueError) as e:
+        NodePool([], node_class=Urllib3HttpNode)
+    assert str(e.value) == "Must specify at least one NodeConfig"
 
 
-def test_default_round_robin():
-    pool = NodePool([(x, {}) for x in range(100)])
-
-    connections = set()
-    for _ in range(100):
-        connections.add(pool.get())
-    assert connections == set(range(100))
+def test_node_pool_duplicate_node_configs():
+    node_config = NodeConfig("http", "localhost", 80)
+    with pytest.raises(ValueError) as e:
+        NodePool([node_config, node_config], node_class=Urllib3HttpNode)
+    assert str(e.value) == "Cannot use duplicate NodeConfigs within a NodePool"
 
 
-def test_disable_shuffling():
-    pool = NodePool([(x, {}) for x in range(100)], randomize_nodes=False)
-
-    connections = []
-    for _ in range(100):
-        connections.append(pool.get())
-    assert connections == list(range(100))
+def test_node_pool_get():
+    node_config = NodeConfig("http", "localhost", 80)
+    pool = NodePool([node_config], node_class=Urllib3HttpNode)
+    assert pool.get().config is node_config
 
 
-def test_selectors_have_access_to_connection_opts():
-    class MySelector(RoundRobinSelector):
-        def select(self, nodes):
-            return self.node_options[super().select(nodes)]["actual"]
+def test_node_pool_remove_seed_node():
+    node_config = NodeConfig("http", "localhost", 80)
+    pool = NodePool([node_config], node_class=Urllib3HttpNode)
 
+    pool.remove(node_config)  # Calling .remove() on a seed node is a no-op
+    assert len(pool.removed_nodes) == 0
+
+
+def test_node_pool_add_and_remove_non_seed_node():
+    node_config1 = NodeConfig("http", "localhost", 80)
+    node_config2 = NodeConfig("http", "localhost", 81)
+    pool = NodePool([node_config1], node_class=Urllib3HttpNode)
+
+    pool.add(node_config2)
+    assert any(pool.get().config is node_config2 for _ in range(10))
+
+    pool.remove(node_config2)
+    assert len(pool.removed_nodes) == 1
+
+    # We never return a 'removed' node
+    assert all(pool.get().config is node_config1 for _ in range(10))
+
+    # We add it back, now we should .get() the node again.
+    pool.add(node_config2)
+    assert any(pool.get().config is node_config2 for _ in range(10))
+
+
+def test_added_node_is_used_first():
+    node_config1 = NodeConfig("http", "localhost", 80)
+    node_config2 = NodeConfig("http", "localhost", 81)
+    pool = NodePool([node_config1], node_class=Urllib3HttpNode)
+
+    node1 = pool.get()
+    pool.mark_dead(node1)
+
+    pool.add(node_config2)
+    assert pool.get().config is node_config2
+
+
+def test_round_robin_selector():
+    node_configs = [NodeConfig("http", "localhost", x) for x in range(5)]
+    random.shuffle(node_configs)
     pool = NodePool(
-        [(x, {"actual": x * x}) for x in range(100)],
-        selector_class=MySelector,
-        randomize_nodes=False,
+        node_configs, node_class=Urllib3HttpNode, selector_class="round_robin"
     )
 
-    connections = []
-    for _ in range(100):
-        connections.append(pool.get())
-    assert connections == [x * x for x in range(100)]
+    get_node_configs = [pool.get() for _ in node_configs]
+    for node_config in get_node_configs:
+        assert pool.get() is node_config
 
 
-def test_dead_nodes_are_removed_from_active_nodes():
-    pool = NodePool([(x, {}) for x in range(100)])
+@pytest.mark.parametrize(
+    "node_configs",
+    [
+        [NodeConfig("http", "localhost", 80)],
+        [NodeConfig("http", "localhost", 80), NodeConfig("http", "localhost", 81)],
+    ],
+)
+def test_all_dead_nodes_still_gets_node(node_configs):
+    pool = NodePool(node_configs, node_class=Urllib3HttpNode)
 
-    now = time.time()
-    pool.mark_dead(42, _now=now)
-    assert 99 == len(pool.nodes)
-    assert 1 == pool.dead.qsize()
-    assert (now + 60, 42) == pool.dead.get()
+    for _ in node_configs:
+        pool.mark_dead(pool.get())
+    assert len(pool.alive_nodes) == 0
 
-
-def test_connection_is_skipped_when_dead():
-    pool = NodePool([(x, {}) for x in range(2)])
-    pool.mark_dead(0)
-
-    assert [1, 1, 1] == [
-        pool.get(),
-        pool.get(),
-        pool.get(),
-    ]
+    node = pool.get()
+    assert node.config in node_configs
+    assert len(pool.alive_nodes) < 2
 
 
-def test_new_connection_is_not_marked_dead():
-    # Create 10 connections
-    pool = NodePool([(BaseNode(), {}) for _ in range(10)])
-
-    # Pass in a new connection that is not in the pool to mark as dead
-    new_connection = BaseNode()
-    pool.mark_dead(new_connection)
-
-    # Nothing should be marked dead
-    assert 0 == len(pool.dead_count)
-
-
-def test_connection_is_forcibly_resurrected_when_no_live_ones_are_availible():
-    pool = NodePool([(x, {}) for x in range(2)])
-    pool.dead_count[0] = 1
-    pool.mark_dead(0)  # failed twice, longer timeout
-    pool.mark_dead(1)  # failed the first time, first to be resurrected
-
-    assert [] == pool.nodes
-    assert 1 == pool.get()
-    assert [1] == pool.nodes
+def test_unknown_selector_class():
+    with pytest.raises(ValueError) as e:
+        NodePool(
+            [NodeConfig("http", "localhost", 80)],
+            node_class=Urllib3HttpNode,
+            selector_class="unknown",
+        )
+    assert str(e.value) == (
+        "Unknown option for selector_class: 'unknown'. "
+        "Available options are: 'random', 'round_robin'"
+    )
 
 
-def test_connection_is_resurrected_after_its_timeout():
-    pool = NodePool([(x, {}) for x in range(100)])
+def test_disable_randomize_nodes():
+    node_configs = [NodeConfig("http", "localhost", x) for x in range(100)]
+    pool = NodePool(node_configs, node_class=Urllib3HttpNode, randomize_nodes=False)
 
-    now = time.time()
-    pool.mark_dead(42, _now=now - 61)
-    pool.get()
-    assert 42 == pool.nodes[-1]
-    assert 100 == len(pool.nodes)
+    assert [pool.get().config for _ in node_configs] == node_configs
 
 
-def test_force_resurrect_always_returns_a_connection():
-    pool = NodePool([(0, {})])
+def test_nodes_randomized_by_default():
+    node_configs = [NodeConfig("http", "localhost", x) for x in range(100)]
+    pool = NodePool(node_configs, node_class=Urllib3HttpNode)
 
-    pool.nodes = []
-    assert 0 == pool.get()
-    assert [] == pool.nodes
-    assert pool.dead.empty()
+    assert [pool.get().config for _ in node_configs] != node_configs
 
 
-def test_already_failed_connection_has_longer_timeout():
-    pool = NodePool([(x, {}) for x in range(100)])
-    now = time.time()
-    pool.dead_count[42] = 2
-    pool.mark_dead(42, _now=now)
+def test_dead_nodes_are_skipped():
+    node_configs = [NodeConfig("http", "localhost", x) for x in range(2)]
+    pool = NodePool(node_configs, node_class=Urllib3HttpNode)
+    dead_node = pool.get()
+    pool.mark_dead(dead_node)
 
-    assert 3 == pool.dead_count[42]
-    assert (now + 4 * 60, 42) == pool.dead.get()
+    alive_node = pool.get()
+    assert dead_node.config != alive_node.config
 
-
-def test_timeout_for_failed_connections_is_limitted():
-    pool = NodePool([(x, {}) for x in range(100)])
-    now = time.time()
-    pool.dead_count[42] = 245
-    pool.mark_dead(42, _now=now)
-
-    assert 246 == pool.dead_count[42]
-    assert (now + 32 * 60, 42) == pool.dead.get()
+    assert all([pool.get().config == alive_node.config for _ in range(10)])
 
 
-def test_dead_count_is_wiped_clean_for_connection_if_marked_live():
-    pool = NodePool([(x, {}) for x in range(100)])
-    now = time.time()
-    pool.dead_count[42] = 2
-    pool.mark_dead(42, _now=now)
+@pytest.mark.parametrize("pool_size", [1, 8])
+def test_threading_test(pool_size):
+    pool = NodePool(
+        [NodeConfig("http", "localhost", x) for x in range(pool_size)],
+        node_class=Urllib3HttpNode,
+    )
+    start = time.time()
 
-    assert 3 == pool.dead_count[42]
-    pool.mark_live(42)
-    assert 42 not in pool.dead_count
+    class ThreadTest(threading.Thread):
+        def __init__(self):
+            super().__init__()
+            self.nodes_gotten = 0
+
+        def run(self) -> None:
+            nonlocal pool
+
+            while time.time() < start + 2:
+                node = pool.get()
+                self.nodes_gotten += 1
+                if random.random() > 0.9:
+                    pool.mark_dead(node)
+                else:
+                    pool.mark_live(node)
+
+    threads = [ThreadTest() for _ in range(16)]
+    [thread.start() for thread in threads]
+    [thread.join() for thread in threads]
+
+    assert sum(thread.nodes_gotten for thread in threads) >= 10000

@@ -56,6 +56,18 @@ def quote(string, safe="/"):
     return _quote(string, safe)
 
 
+try:
+    from threading import Lock
+except ImportError:
+
+    class Lock:
+        def __enter__(self) -> None:
+            pass
+
+        def __exit__(self, *_) -> None:
+            pass
+
+
 __all__ = [
     "get_running_loop",
     "ordered_dict",
@@ -65,4 +77,5 @@ __all__ = [
     "string_types",
     "Mapping",
     "MutableMapping",
+    "Lock",
 ]

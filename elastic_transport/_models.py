@@ -331,6 +331,31 @@ class NodeConfig:
                     "The 'ssl_context' option can't be combined with other TLS options"
                 )
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, NodeConfig):
+            return NotImplemented
+        return (
+            self.scheme == other.scheme
+            and self.host == other.host
+            and self.port == other.port
+            and self.path_prefix == other.path_prefix
+        )
+
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, NodeConfig):
+            return NotImplemented
+        return not self == other
+
+    def __hash__(self) -> int:
+        return hash(
+            (
+                self.scheme,
+                self.host,
+                self.port,
+                self.path_prefix,
+            )
+        )
+
 
 @dataclass(frozen=True, repr=True)
 class RequestOptions:

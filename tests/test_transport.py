@@ -28,7 +28,6 @@ from elastic_transport import (
     NotFoundError,
     PaymentRequiredError,
     RequestsHttpNode,
-    SingleNodePool,
     Transport,
     TransportError,
     Urllib3HttpNode,
@@ -44,14 +43,6 @@ def test_transport_close_node_pool():
     with mock.patch.object(t.node_pool, "close") as node_pool_close:
         t.close()
         node_pool_close.assert_called_with()
-
-
-def test_single_connection_uses_dummy_node_pool():
-    t = Transport([{}])
-    assert isinstance(t.node_pool, SingleNodePool)
-
-    t = Transport([{"host": "localhost"}])
-    assert isinstance(t.node_pool, SingleNodePool)
 
 
 def test_request_timeout_extracted_from_params_and_passed():
