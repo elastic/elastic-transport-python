@@ -19,11 +19,12 @@ from platform import python_version
 
 import pytest
 
-from elastic_transport import __version__
+from elastic_transport import Urllib3HttpNode, __version__
 from elastic_transport.client_utils import (
     client_meta_version,
     create_user_agent,
     parse_cloud_id,
+    url_to_node_config,
 )
 
 
@@ -136,3 +137,59 @@ def test_invalid_cloud_id(cloud_id):
     with pytest.raises(ValueError) as e:
         parse_cloud_id(cloud_id)
     assert str(e.value) == "Cloud ID is not properly formatted"
+
+
+@pytest.mark.parametrize(
+    ["url", "node_base_url", "path_prefix"],
+    [
+        ("http://localhost:3002", "http://localhost:3002", ""),
+        ("http://127.0.0.1:3002", "http://127.0.0.1:3002", ""),
+        ("http://127.0.0.1:3002/", "http://127.0.0.1:3002", ""),
+        (
+            "http://127.0.0.1:3002/path-prefix",
+            "http://127.0.0.1:3002/path-prefix",
+            "/path-prefix",
+        ),
+        (
+            "http://localhost:3002/url-prefix/",
+            "http://localhost:3002/url-prefix",
+            "/url-prefix",
+        ),
+        ("http://[::1]:3002/url-prefix", "http://[::1]:3002/url-prefix", "/url-prefix"),
+        ("https://[::1]:0/", "https://[::1]:0", ""),
+    ],
+)
+def test_url_to_node_config(url, node_base_url, path_prefix):
+    node_config = url_to_node_config(url)
+    assert Urllib3HttpNode(node_config).base_url == node_base_url
+
+    assert "[" not in node_config.host
+    assert isinstance(node_config.port, int)
+    assert node_config.path_prefix == path_prefix
+    assert url.lower().startswith(node_config.scheme)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "localhost:0",
+        "[::1]:3002/url-prefix",
+        "localhost",
+        "localhost/",
+        "localhost:3",
+        "[::1]/url-prefix/",
+        "[::1]",
+        "[::1]:3002",
+        "http://localhost",
+        "localhost/url-prefix/",
+        "localhost:3002/url-prefix",
+        "http://localhost/url-prefix",
+    ],
+)
+def test_url_to_node_config_error_missing_component(url):
+    with pytest.raises(ValueError) as e:
+        url_to_node_config(url)
+    assert (
+        str(e.value)
+        == "URL must include a 'scheme', 'host', and 'port' component (ie 'https://localhost:9200')"
+    )

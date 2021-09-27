@@ -45,6 +45,10 @@ class TextSerializer(Serializer):
             raise SerializationError(f"Unable to deserialize as text: {data!r}")
 
     def dumps(self, data: str) -> bytes:
+        # The body is already encoded to bytes
+        # so we forward the request body along.
+        if isinstance(data, bytes):
+            return data
         try:
             return data.encode("utf-8", "surrogatepass")
         except (AttributeError, UnicodeError, TypeError) as e:
@@ -84,6 +88,10 @@ class JsonSerializer(Serializer):
             )
 
     def dumps(self, data: Any) -> bytes:
+        # The body is already encoded to bytes
+        # so we forward the request body along.
+        if isinstance(data, bytes):
+            return data
         try:
             return self.json_dumps(data)
         # This should be captured by the .default()
@@ -112,6 +120,10 @@ class NdjsonSerializer(JsonSerializer):
         return ndjson
 
     def dumps(self, data: Any) -> bytes:
+        # The body is already encoded to bytes
+        # so we forward the request body along.
+        if isinstance(data, bytes):
+            return data
         buffer = bytearray()
         for line in data:
             try:
@@ -171,6 +183,6 @@ class Deserializer:
                     serializer = self.serializers[f"{mimetype_supertype}/*"]
                 except KeyError:
                     raise SerializationError(
-                        f"Unknown mimetype, unable to deserialize: {mimetype}"
+                        f"Unknown mimetype, not able to serialize or deserialize: {mimetype}"
                     ) from None
         return serializer

@@ -19,7 +19,7 @@ import asyncio
 import logging
 from typing import Tuple
 
-from .._models import HttpHeaders, HttpResponse, NodeConfig
+from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from .._version import __version__
 from ..client_utils import DEFAULT
 
@@ -126,7 +126,7 @@ class BaseNode:
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ) -> Tuple[HttpResponse, bytes]:  # pragma: nocover
+    ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
         raise NotImplementedError()
 
     def close(self) -> None:  # pragma: nocover

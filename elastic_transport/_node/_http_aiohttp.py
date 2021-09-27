@@ -26,8 +26,8 @@ from typing import Tuple
 
 from .._compat import get_running_loop
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
-from .._models import HttpHeaders, HttpResponse, NodeConfig
-from ..client_utils import client_meta_version, normalize_headers
+from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
+from ..client_utils import DEFAULT, client_meta_version, normalize_headers
 from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS
 from ._base_async import BaseAsyncNode
 
@@ -110,10 +110,10 @@ class AiohttpHttpNode(BaseAsyncNode):
         method,
         target,
         body=None,
-        request_timeout=None,
+        request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ) -> Tuple[HttpResponse, bytes]:
+    ) -> Tuple[ApiResponseMeta, bytes]:
         if self.session is None:
             self._create_aiohttp_session()
         assert self.session is not None
@@ -131,7 +131,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         # total=0 means no timeout for aiohttp
         request_timeout = (
             request_timeout
-            if request_timeout is not None
+            if (request_timeout is not DEFAULT)
             else self.config.request_timeout
         )
         aiohttp_timeout = aiohttp.ClientTimeout(
@@ -184,14 +184,20 @@ class AiohttpHttpNode(BaseAsyncNode):
             raise ConnectionError(str(e), errors=(e,))
 
         return (
-            HttpResponse(
+            ApiResponseMeta(
+                node=self.config,
                 duration=duration,
-                version="1.1",
+                http_version="1.1",
                 status=response.status,
                 headers=HttpHeaders(response.headers),
             ),
             raw_data,
         )
+
+    async def close(self) -> None:
+        if self.session:
+            await self.session.close()
+            self.session = None
 
     def _create_aiohttp_session(self) -> None:
         """Creates an aiohttp.ClientSession(). This is delayed until

@@ -116,7 +116,7 @@ class NodePool:
         node_class: Type[BaseNode],
         dead_backoff_factor: float = 5.0,
         max_dead_backoff: float = 60.0,
-        selector_class: Union[str, Type[NodeSelector]] = RoundRobinSelector,
+        node_selector_class: Union[str, Type[NodeSelector]] = RoundRobinSelector,
         randomize_nodes: bool = True,
     ):
         """
@@ -129,7 +129,7 @@ class NodePool:
             ``min(dead_backoff_factor * (2 ** (N - 1)), max_dead_backoff)``
         :arg max_dead_backoff: Maximum number of seconds to wait
             when calculating the "backoff" time for a dead node.
-        :arg selector_class: :class:`~elastic_transport.NodeSelector`
+        :arg node_selector_class: :class:`~elastic_transport.NodeSelector`
             subclass to use if more than one connection is live
         :arg randomize_nodes: shuffle the list of nodes upon instantiation
             to avoid dog-piling effect across processes
@@ -139,18 +139,20 @@ class NodePool:
         node_configs = list(
             node_configs
         )  # Make a copy so we don't have side-effects outside.
+        if any(not isinstance(node_config, NodeConfig) for node_config in node_configs):
+            raise TypeError("NodePool must be passed a list of NodeConfig instances")
 
-        if isinstance(selector_class, str):
-            if selector_class not in _SELECTOR_CLASS_NAMES:
+        if isinstance(node_selector_class, str):
+            if node_selector_class not in _SELECTOR_CLASS_NAMES:
                 raise ValueError(
                     "Unknown option for selector_class: '%s'. "
                     "Available options are: '%s'"
                     % (
-                        selector_class,
+                        node_selector_class,
                         "', '".join(sorted(_SELECTOR_CLASS_NAMES.keys())),
                     )
                 )
-            selector_class = _SELECTOR_CLASS_NAMES[selector_class]
+            node_selector_class = _SELECTOR_CLASS_NAMES[node_selector_class]
 
         if randomize_nodes:
             # randomize the list of nodes to avoid hammering the same node
@@ -164,12 +166,12 @@ class NodePool:
             raise ValueError("Cannot use duplicate NodeConfigs within a NodePool")
 
         self.node_class = node_class
-        self.selector = selector_class(node_configs)
+        self.selector = node_selector_class(node_configs)
 
-        # Remember the original set of 'NodeConfig' for use with .resurrect(force=True)
-        self.all_nodes: Dict[NodeConfig, BaseNode] = {
-            node_config: self.node_class(node_config) for node_config in node_configs
-        }
+        # Maintain insert order
+        self.all_nodes: Dict[NodeConfig, BaseNode] = ordered_dict()
+        for node_config in node_configs:
+            self.all_nodes[node_config] = self.node_class(node_config)
 
         # Lock that is used to protect writing to 'all_nodes'
         self._all_nodes_write_lock = Lock()
@@ -325,6 +327,9 @@ class NodePool:
         if len(nodes) > 1:
             return self.selector.select(nodes)
         return nodes[0]
+
+    def all(self) -> List[BaseNode]:
+        return list(self.all_nodes.values())
 
     def __repr__(self) -> str:
         return "<NodePool>"

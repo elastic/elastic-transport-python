@@ -23,6 +23,10 @@ from platform import python_version
 from typing import Optional, Tuple, Union
 from urllib.parse import quote as _quote
 
+from urllib3.exceptions import LocationParseError
+from urllib3.util import parse_url
+
+from ._models import NodeConfig
 from ._version import __version__
 
 __all__ = [
@@ -35,6 +39,7 @@ __all__ = [
     "to_str",
     "to_bytes",
     "percent_encode",
+    "url_to_node_config",
 ]
 
 #: Sentinel used as a default value when ``None`` has special meaning like timeouts.
@@ -146,3 +151,25 @@ def percent_encode(string: str, safe: str = "/") -> str:
     # within the 'ALWAYS_SAFE' list. The character was added in Python 3.7
     safe = "".join(_QUOTE_ALWAYS_SAFE.union(set(safe)))
     return _quote(string, safe)
+
+
+def url_to_node_config(url: str) -> NodeConfig:
+    """Constructs a :class:`elastic_transport.NodeConfig` instance from a URL"""
+    try:
+        parsed_url = parse_url(url)
+    except LocationParseError:
+        raise ValueError(f"Could not parse URL {url!r}") from None
+
+    if None in (parsed_url.scheme, parsed_url.host, parsed_url.port):
+        raise ValueError(
+            "URL must include a 'scheme', 'host', and 'port' component (ie 'https://localhost:9200')"
+        )
+
+    host = parsed_url.host.strip("[]")
+    path_prefix = "" if parsed_url.path in (None, "", "/") else parsed_url.path
+    return NodeConfig(
+        scheme=parsed_url.scheme,
+        host=host,
+        port=parsed_url.port,
+        path_prefix=path_prefix,
+    )

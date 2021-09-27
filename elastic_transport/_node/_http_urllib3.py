@@ -26,7 +26,7 @@ from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
 from urllib3.util.retry import Retry
 
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
-from .._models import HttpHeaders, HttpResponse, NodeConfig
+from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, client_meta_version
 from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS, BaseNode
 
@@ -110,7 +110,7 @@ class Urllib3HttpNode(BaseNode):
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ) -> Tuple[HttpResponse, bytes]:
+    ) -> Tuple[ApiResponseMeta, bytes]:
 
         start = time.time()
         try:
@@ -151,9 +151,10 @@ class Urllib3HttpNode(BaseNode):
                 raise TlsError(str(e), errors=(e,))
             raise ConnectionError(str(e), errors=(e,))
 
-        response = HttpResponse(
+        response = ApiResponseMeta(
+            node=self.config,
             duration=duration,
-            version="1.1",
+            http_version="1.1",
             status=response.status,
             headers=response_headers,
         )

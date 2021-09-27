@@ -14,27 +14,3 @@
 #  KIND, either express or implied.  See the License for the
 #  specific language governing permissions and limitations
 #  under the License.
-
-from typing import Tuple
-
-from .._models import ApiResponseMeta
-from ..client_utils import DEFAULT
-from ._base import BaseNode
-
-
-class BaseAsyncNode(BaseNode):
-    """Base class for Async HTTP node implementations"""
-
-    async def perform_request(
-        self,
-        method,
-        target,
-        body=None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
-        headers=None,
-    ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
-        raise NotImplementedError()
-
-    async def close(self):  # pragma: nocover
-        raise NotImplementedError()

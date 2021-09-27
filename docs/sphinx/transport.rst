@@ -5,3 +5,6 @@ Transport
 
 .. autoclass:: Transport
    :members:
+
+.. autoclass:: AsyncTransport
+   :members:

@@ -17,6 +17,7 @@
 
 """Transport classes and utilities shared among Python Elastic client libraries"""
 
+from ._async_transport import AsyncTransport
 from ._exceptions import (
     ApiError,
     BadGatewayError,
@@ -41,7 +42,13 @@ from ._exceptions import (
     UnauthorizedError,
     UnprocessableEntityError,
 )
-from ._models import HttpHeaders, HttpResponse, NodeConfig, QueryParams, RequestOptions
+from ._models import (
+    ApiResponseMeta,
+    HttpHeaders,
+    NodeConfig,
+    QueryParams,
+    RequestOptions,
+)
 from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
 from ._serializer import (
@@ -57,6 +64,8 @@ from ._version import __version__ as __version__  # noqa
 __all__ = [
     "AiohttpHttpNode",
     "ApiError",
+    "ApiResponseMeta",
+    "AsyncTransport",
     "BadGatewayError",
     "BadRequestError",
     "BaseNode",
@@ -67,7 +76,6 @@ __all__ = [
     "ForbiddenError",
     "GatewayTimeoutError",
     "HttpHeaders",
-    "HttpResponse",
     "InternalServerError",
     "JsonSerializer",
     "MethodNotImplementedError",

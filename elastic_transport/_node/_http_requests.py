@@ -24,7 +24,7 @@ from typing import Optional, Tuple
 import urllib3
 
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
-from .._models import HttpHeaders, HttpResponse, NodeConfig
+from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, client_meta_version
 from ._base import RERAISE_EXCEPTIONS, BaseNode
 
@@ -119,7 +119,7 @@ class RequestsHttpNode(BaseNode):
         request_timeout=DEFAULT,
         ignore_status=(),
         headers=None,
-    ) -> Tuple[HttpResponse, bytes]:
+    ) -> Tuple[ApiResponseMeta, bytes]:
         url = self.base_url + target
         headers = HttpHeaders(headers or ())
 
@@ -165,9 +165,10 @@ class RequestsHttpNode(BaseNode):
                 raise TlsError(str(e), errors=(e,))
             raise ConnectionError(str(e), errors=(e,))
 
-        response = HttpResponse(
+        response = ApiResponseMeta(
+            node=self.config,
             duration=duration,
-            version="1.1",
+            http_version="1.1",
             status=response.status_code,
             headers=response_headers,
         )
