@@ -11,3 +11,6 @@ Serializers
 
 .. autoclass:: TextSerializer
    :members:
+
+.. autoclass:: NdjsonSerializer
+   :members:
