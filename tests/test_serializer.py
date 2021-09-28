@@ -24,6 +24,7 @@ import pytest
 from elastic_transport import (
     Deserializer,
     JsonSerializer,
+    NdjsonSerializer,
     SerializationError,
     TextSerializer,
 )
@@ -125,3 +126,42 @@ def test_raises_improperly_configured_when_default_mimetype_cannot_be_deserializ
 def test_text_asterisk_works_for_all_text_types():
     assert deserializer.loads(b"{}", "text/html") == "{}"
     assert deserializer.dumps("{}", "text/html") == b"{}"
+
+
+@pytest.mark.parametrize("should_strip", [False, True])
+def test_ndjson_loads(should_strip):
+    serializer = NdjsonSerializer()
+    data = (
+        b'{"key":"value"}\n'
+        b'{"number":0.1,"one":1}\n'
+        b'{"list":[1,2,3]}\n'
+        b'{"unicode":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}\n'
+    )
+    if should_strip:
+        data = data.strip(b"\n")
+    data = serializer.loads(data)
+
+    assert data == [
+        {"key": "value"},
+        {"number": 0.1, "one": 1},
+        {"list": [1, 2, 3]},
+        {"unicode": "你好\uda6a"},
+    ]
+
+
+def test_ndjson_dumps():
+    serializer = NdjsonSerializer()
+    data = serializer.dumps(
+        [
+            {"key": "value"},
+            {"number": 0.1, "one": 1},
+            {"list": [1, 2, 3]},
+            {"unicode": "你好\uda6a"},
+        ]
+    )
+    assert data == (
+        b'{"key":"value"}\n'
+        b'{"number":0.1,"one":1}\n'
+        b'{"list":[1,2,3]}\n'
+        b'{"unicode":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}\n'
+    )
