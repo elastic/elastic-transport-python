@@ -15,7 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from typing import Optional
+from typing import ClassVar, Optional
 
 
 class TransportWarning(Warning):
@@ -37,7 +37,7 @@ class TransportError(Exception):
     they are stored under 'headers'.
     """
 
-    status: Optional[int] = None
+    status: ClassVar[Optional[int]] = None
 
     def __init__(self, message, errors=(), status=None):
         super().__init__(message)
@@ -77,6 +77,8 @@ class ConnectionTimeout(TransportError):
 
 class ApiError(TransportError):
     """Error that is raised by the service or API"""
+
+    status: ClassVar[int]
 
     def __init__(self, message, errors=(), status=None, headers=None, body=None):
         if status is None:

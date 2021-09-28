@@ -23,6 +23,7 @@ SOURCE_FILES = (
     "elastic_transport/",
     "utils/",
     "tests/",
+    "docs/sphinx/",
 )
 
 
@@ -55,3 +56,24 @@ def test(session):
         env={"PYTHONWARNINGS": "always::DeprecationWarning"},
     )
     session.run("coverage", "report", "-m")
+
+
+@nox.session(python=["3"])
+def docs(session):
+    session.install(".[develop]")
+    session.install("-rdocs/sphinx/requirements.txt")
+
+    session.chdir("docs/sphinx")
+    session.run(
+        "sphinx-build",
+        "-T",
+        "-E",
+        "-b",
+        "html",
+        "-d",
+        "_build/doctrees",
+        "-D",
+        "language=en",
+        ".",
+        "_build/html",
+    )

@@ -15,14 +15,12 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-"""Module of utilities for client implementations to use"""
-
 import binascii
 import dataclasses
 import re
 from collections import namedtuple
 from platform import python_version
-from typing import Union
+from typing import Optional, Tuple, Union
 from urllib.parse import quote as _quote
 
 from ._version import __version__
@@ -39,9 +37,8 @@ __all__ = [
     "percent_encode",
 ]
 
-# Sentinel value used to highlight default values
-# when 'None' has special meaning (like request_timeout)
-# The only supported operation on this value is identity ('is DEFAULT')
+#: Sentinel used as a default value when ``None`` has special meaning like timeouts.
+#: The only comparisons that are supported for this type are ``is``.
 DEFAULT = namedtuple("DEFAULT", ())()
 
 
@@ -52,14 +49,14 @@ def create_user_agent(name: str, version: str) -> str:
     )
 
 
-def client_meta_version(ver: str) -> str:
-    """Converts a Python package version to a meta version.
-    Meta version simply adds a 'p' suffix for all pre-releases
+def client_meta_version(version: str) -> str:
+    """Converts a Python version into a version string
+    compatible with the ``X-Elastic-Client-Meta`` HTTP header.
     """
-    ver, ver_is_pre = re.match(r"^([0-9][0-9.]*[0-9]|[0-9])(.*)$", ver).groups()
+    version, ver_is_pre = re.match(r"^([0-9][0-9.]*[0-9]|[0-9])(.*)$", version).groups()
     if ver_is_pre:
-        ver += "p"
-    return ver
+        version += "p"
+    return version
 
 
 def normalize_headers(headers):
@@ -76,15 +73,16 @@ def normalize_headers(headers):
 
 @dataclasses.dataclass(frozen=True, repr=True)
 class CloudId:
+    #: Name of the cluster in Elastic Cloud
     cluster_name: str
-    es_host: str
-    es_port: int
-    kibana_host: str
-    kibana_port: int
+    #: Host and port of the Elasticsearch instance
+    es_address: Optional[Tuple[str, int]]
+    #: Host and port of the Kibana instance
+    kibana_address: Optional[Tuple[str, int]]
 
 
 def parse_cloud_id(cloud_id: str) -> CloudId:
-    """Parses a Elastic Cloud ID into its components"""
+    """Parses an Elastic Cloud ID into its components"""
     try:
         cloud_id = to_str(cloud_id)
         cluster_name, _, cloud_id = cloud_id.partition(":")
@@ -102,11 +100,11 @@ def parse_cloud_id(cloud_id: str) -> CloudId:
             kibana_uuid = parts[2] or None
         except IndexError:
             kibana_uuid = None
-        port = None
         if ":" in parent_dn:
             parent_dn, _, parent_port = parent_dn.rpartition(":")
-            if parent_port != "443":
-                port = int(parent_port)
+            port = int(parent_port)
+        else:
+            port = 443
     except (ValueError, IndexError, UnicodeError):
         raise ValueError("Cloud ID is not properly formatted") from None
 
@@ -115,10 +113,8 @@ def parse_cloud_id(cloud_id: str) -> CloudId:
 
     return CloudId(
         cluster_name=cluster_name,
-        es_host=es_host,
-        es_port=port,
-        kibana_host=kibana_host,
-        kibana_port=port,
+        es_address=(es_host, port) if es_host else None,
+        kibana_address=(kibana_host, port) if kibana_host else None,
     )
 
 

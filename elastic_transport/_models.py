@@ -255,30 +255,66 @@ def _empty_frozen_http_headers() -> HttpHeaders:
 
 @dataclass(repr=True)
 class NodeConfig:
-    """Describes the recipe to create a Node instance."""
+    """Configuration options available for every node."""
 
-    # Options from a URL
+    #: Protocol in use to connect to the node
     scheme: str
+    #: IP address or hostname to connect to
     host: str
+    #: IP port to connect to
     port: int
+    #: Prefix to add to the path of every request
     path_prefix: str = ""
 
+    #: Default HTTP headers to add to every request
     headers: Union[HttpHeaders, Mapping[str, str]] = field(
         default_factory=_empty_frozen_http_headers
     )
+
+    #: Number of concurrent connections that are
+    #: able to be open at one time for this node.
+    #: Having multiple connections per node allows
+    #: for higher concurrency of requests.
     connections_per_node: int = 10
+
+    #: Number of seconds to wait before a request should timeout.
     request_timeout: Optional[int] = 10
+
+    #: Set to ``True`` to enable HTTP compression
+    #: of request and response bodies via gzip.
     http_compress: Optional[bool] = False
 
-    # TLS options, these must be 'None' when scheme != 'https'
+    #: Set to ``True`` to verify the node's TLS certificate against 'ca_certs'
+    #: Setting to ``False`` will disable verifying the node's certificate.
     verify_certs: Optional[bool] = True
+
+    #: Path to a CA bundle or directory containing bundles. By default
+    #: If the ``certifi`` package is installed and ``verify_certs`` is
+    #: set to ``True`` this value will be set to ``certifi.where()``.
     ca_certs: Optional[str] = None
+
+    #: Path to a client certificate for TLS client authentication.
     client_cert: Optional[str] = None
+    #: Path to a client private key for TLS client authentication.
     client_key: Optional[str] = None
+    #: Hostname or IP address to verify on the node's certificate.
+    #: This is useful if the certificate contains a different value
+    #: than the one supplied in ``host``. An example of this situation
+    #: is connecting to an IP address instead of a hostname.
+    #: Set to ``False`` to disable certificate hostname verification.
     ssl_assert_hostname: Optional[str] = None
+    #: SHA-256 fingerprint of the node's certificate. If this value is
+    #: given then root-of-trust verification isn't done and only the
+    #: node's certificate fingerprint is verified.
     ssl_assert_fingerprint: Optional[str] = None
+    #: Minimum TLS version to use to connect to the node.
     ssl_version: Optional[int] = None
+    #: Pre-configured :class:`ssl.SSLContext` object. If this value
+    #: is given then no other TLS options (besides ``ssl_assert_fingerprint``)
+    #: can be set on the :class:`elastic_transport.NodeConfig`.
     ssl_context: Optional[ssl.SSLContext] = field(default=None, hash=False)
+    #: Set to ``False`` to disable the :class:`elastic_transport.SecurityWarning`
+    #: issued when using ``verify_certs=False``.
     ssl_show_warn: bool = True
 
     # Extras that can be set to anything, typically used
