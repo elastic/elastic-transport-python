@@ -111,7 +111,10 @@ def test_deserializes_text_with_correct_ct():
 def test_raises_serialization_error_on_unknown_mimetype():
     with pytest.raises(SerializationError) as e:
         deserializer.loads(b"{}", "fake/type")
-    assert str(e.value) == "Unknown mimetype, unable to deserialize: fake/type"
+    assert (
+        str(e.value)
+        == "Unknown mimetype, not able to serialize or deserialize: fake/type"
+    )
 
 
 def test_raises_improperly_configured_when_default_mimetype_cannot_be_deserialized():

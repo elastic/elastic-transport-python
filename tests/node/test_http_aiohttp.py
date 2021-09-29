@@ -116,7 +116,7 @@ class TestAiohttpHttpNode:
 
     @pytest.mark.parametrize(
         "options",
-        [(5, 5, 5), (None, 5, 5), (5, None, 5), (None, None, 0), (5, 5), (None, 10)],
+        [(5, 5, 5), (None, 5, 5), (5, None, 0), (None, None, 0), (5, 5), (None, 0)],
     )
     async def test_aiohttp_options_timeout(self, options):
         if len(options) == 3:

@@ -20,16 +20,18 @@ import json
 
 import pytest
 
-from elastic_transport import Transport
+from elastic_transport import AiohttpHttpNode, AsyncTransport
 from elastic_transport._node._base import DEFAULT_USER_AGENT
-from elastic_transport._transport import NODE_CLASS_NAMES
+
+from ..test_httpbin import parse_httpbin
+
+pytestmark = pytest.mark.asyncio
 
 
-@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
-def test_simple_request(node_class, httpbin_node_config):
-    t = Transport([httpbin_node_config], node_class=node_class)
+async def test_simple_request(httpbin_node_config):
+    t = AsyncTransport([httpbin_node_config])
 
-    resp, data = t.perform_request(
+    resp, data = await t.perform_request(
         "GET",
         "/anything?key[]=1&key[]=2&q1&q2=",
         headers={"Custom": "headeR", "content-type": "application/json"},
@@ -57,20 +59,16 @@ def test_simple_request(node_class, httpbin_node_config):
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
-@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
-def test_node(node_class, httpbin_node_config):
+async def test_node(httpbin_node_config):
     def new_node(**kwargs):
-        return NODE_CLASS_NAMES[node_class](
-            dataclasses.replace(httpbin_node_config, **kwargs)
-        )
+        return AiohttpHttpNode(dataclasses.replace(httpbin_node_config, **kwargs))
 
     node = new_node()
-    resp, data = node.perform_request("GET", "/anything")
+    resp, data = await node.perform_request("GET", "/anything")
     assert resp.status == 200
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": {
-            "Accept-Encoding": "identity",
             "Host": "httpbin.org",
             "User-Agent": DEFAULT_USER_AGENT,
         },
@@ -79,7 +77,7 @@ def test_node(node_class, httpbin_node_config):
     }
 
     node = new_node(http_compress=True)
-    resp, data = node.perform_request("GET", "/anything")
+    resp, data = await node.perform_request("GET", "/anything")
     assert resp.status == 200
     parsed = parse_httpbin(data)
     assert parsed == {
@@ -92,13 +90,14 @@ def test_node(node_class, httpbin_node_config):
         "url": "https://httpbin.org/anything",
     }
 
-    resp, data = node.perform_request("GET", "/anything", body=b"hello, world!")
+    resp, data = await node.perform_request("GET", "/anything", body=b"hello, world!")
     assert resp.status == 200
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": {
             "Accept-Encoding": "gzip",
             "Content-Encoding": "gzip",
+            "Content-Type": "application/octet-stream",
             "Content-Length": "33",
             "Host": "httpbin.org",
             "User-Agent": DEFAULT_USER_AGENT,
@@ -107,7 +106,7 @@ def test_node(node_class, httpbin_node_config):
         "url": "https://httpbin.org/anything",
     }
 
-    resp, data = node.perform_request(
+    resp, data = await node.perform_request(
         "POST",
         "/anything",
         body=json.dumps({"key": "value"}).encode("utf-8"),
@@ -127,16 +126,3 @@ def test_node(node_class, httpbin_node_config):
         "method": "POST",
         "url": "https://httpbin.org/anything",
     }
-
-
-def parse_httpbin(value):
-    """Parses a response from httpbin.org/anything by stripping all the variable things"""
-    if isinstance(value, bytes):
-        value = json.loads(value)
-    else:
-        value = value.copy()
-    value.pop("origin", None)
-    value.pop("data", None)
-    value["headers"].pop("X-Amzn-Trace-Id", None)
-    value = {k: v for k, v in value.items() if v}
-    return value

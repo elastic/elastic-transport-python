@@ -15,22 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-#  Licensed to Elasticsearch B.V. under one or more contributor
-#  license agreements. See the NOTICE file distributed with
-#  this work for additional information regarding copyright
-#  ownership. Elasticsearch B.V. licenses this file to you under
-#  the Apache License, Version 2.0 (the "License"); you may
-#  not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-# 	http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing,
-#  software distributed under the License is distributed on an
-#  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-#  KIND, either express or implied.  See the License for the
-#  specific language governing permissions and limitations
-#  under the License.
 import ssl
 import sys
 from dataclasses import dataclass, field
@@ -223,14 +207,17 @@ class HttpHeaders(MutableMapping[str, str]):
 
 
 @dataclass
-class HttpResponse:
-    """Response from BaseNode.perform_request()"""
+class ApiResponseMeta:
+    """Metadata that is returned from Transport.perform_request()"""
+
+    #: Node which handled the request
+    node: "NodeConfig"
 
     #: Number of seconds from start of request to start of response
     duration: float
 
     #: HTTP version being used
-    version: str
+    http_version: str
 
     #: HTTP status code
     status: int
@@ -238,9 +225,13 @@ class HttpResponse:
     #: HTTP headers
     headers: HttpHeaders
 
+    #: Extras that can be set to anything, typically used by third-parties.
+    #: Third-party keys should start with an underscore and prefix.
+    _extras: Dict[str, Any] = field(default_factory=dict)
+
     @property
     def mimetype(self) -> Optional[str]:
-        """Mimetype to be used by the serializer to decode the raw response bytes"""
+        """Mimetype to be used by the serializer to decode the raw response bytes."""
         try:
             content_type = self.headers["content-type"]
             return content_type.partition(";")[0] or None
@@ -335,6 +326,10 @@ class NodeConfig:
             raise ValueError("'port' must be a positive integer")
         if self.connections_per_node <= 0:
             raise ValueError("'connections_per_node' must be a positive integer")
+        if self.path_prefix:
+            self.path_prefix = (
+                ("/" + self.path_prefix.strip("/")) if self.path_prefix else ""
+            )
 
         tls_options = [
             "ca_certs",

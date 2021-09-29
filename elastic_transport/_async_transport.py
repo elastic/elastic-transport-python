@@ -15,8 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from platform import python_version
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, List, Optional, Tuple, Type, Union
 
 from ._exceptions import (
     HTTP_STATUS_TO_ERROR,
@@ -26,26 +25,13 @@ from ._exceptions import (
     TransportError,
 )
 from ._models import ApiResponseMeta, NodeConfig
-from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
+from ._node import AiohttpHttpNode, BaseNode
 from ._node_pool import NodePool, NodeSelector
-from ._serializer import DEFAULT_SERIALIZERS, Deserializer
-from ._version import __version__
-from .client_utils import DEFAULT, client_meta_version, normalize_headers
-
-# Allows for using a node_class by name rather than import.
-NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
-    "urllib3": Urllib3HttpNode,
-    "requests": RequestsHttpNode,
-    "aiohttp": AiohttpHttpNode,
-}
-# These are HTTP status errors that shouldn't be considered
-# 'errors' for marking a node as dead. These errors typically
-# mean everything is fine server-wise and instead the API call
-# in question responded successfully.
-NOT_DEAD_NODE_HTTP_STATUSES = {400, 401, 403, 404}
+from ._transport import NOT_DEAD_NODE_HTTP_STATUSES, Transport
+from .client_utils import DEFAULT, normalize_headers
 
 
-class Transport:
+class AsyncTransport(Transport):
     """
     Encapsulation of transport-related to logic. Handles instantiation of the
     individual nodes as well as creating a node pool to hold them.
@@ -56,7 +42,7 @@ class Transport:
     def __init__(
         self,
         node_configs: List[NodeConfig],
-        node_class: Union[str, Type[BaseNode]] = Urllib3HttpNode,
+        node_class: Union[str, Type[BaseNode]] = AiohttpHttpNode,
         node_pool_class: Type[NodePool] = NodePool,
         randomize_nodes_in_pool: bool = True,
         node_selector_class: Optional[Union[str, Type[NodeSelector]]] = None,
@@ -93,56 +79,21 @@ class Transport:
         when creating and instance unless overridden by that node's
         options provided as part of the hosts parameter.
         """
-        if isinstance(node_class, str):
-            if node_class not in NODE_CLASS_NAMES:
-                options = "', '".join(sorted(NODE_CLASS_NAMES.keys()))
-                raise ValueError(
-                    f"Unknown option for node_class: '{node_class}'. "
-                    f"Available options are: '{options}'"
-                )
-            node_class = NODE_CLASS_NAMES[node_class]
-
-        # Create the default metadata for the x-elastic-client-meta
-        # HTTP header. Only requires adding the (service, service_version)
-        # tuple to the beginning of the client_meta
-        self._transport_client_meta = (
-            ("py", client_meta_version(python_version())),
-            ("t", client_meta_version(__version__)),
-        )
-
-        # Grab the 'HTTP_CLIENT_META' property from the node class
-        http_client_meta = getattr(node_class, "_ELASTIC_CLIENT_META", None)
-        if http_client_meta:
-            self._transport_client_meta += (http_client_meta,)
-
-        # serialization config
-        _serializers = DEFAULT_SERIALIZERS.copy()
-        # if custom serializers map has been supplied, override the defaults with it
-        if serializers:
-            _serializers.update(serializers)
-        # create a deserializer with our config
-        self.deserializer = Deserializer(_serializers)
-
-        self.max_retries = max_retries
-        self.retry_on_timeout = retry_on_timeout
-        self.retry_on_status = retry_on_status
-
-        # Build the NodePool from all the options
-        node_pool_kwargs = {}
-        if node_selector_class is not None:
-            node_pool_kwargs["node_selector_class"] = node_selector_class
-        if dead_backoff_factor is not None:
-            node_pool_kwargs["dead_backoff_factor"] = dead_backoff_factor
-        if max_dead_backoff is not None:
-            node_pool_kwargs["max_dead_backoff"] = max_dead_backoff
-        self.node_pool = node_pool_class(
-            node_configs,
+        super().__init__(
+            node_configs=node_configs,
             node_class=node_class,
-            randomize_nodes=randomize_nodes_in_pool,
-            **node_pool_kwargs,
+            node_pool_class=node_pool_class,
+            randomize_nodes_in_pool=randomize_nodes_in_pool,
+            node_selector_class=node_selector_class,
+            dead_backoff_factor=dead_backoff_factor,
+            max_dead_backoff=max_dead_backoff,
+            serializers=serializers,
+            max_retries=max_retries,
+            retry_on_status=retry_on_status,
+            retry_on_timeout=retry_on_timeout,
         )
 
-    def perform_request(
+    async def perform_request(
         self,
         method: str,
         target: str,
@@ -195,7 +146,7 @@ class Transport:
             node = self.node_pool.get()
 
             try:
-                response, raw_data = node.perform_request(
+                response, raw_data = await node.perform_request(
                     method,
                     target,
                     body=request_data,
@@ -224,12 +175,11 @@ class Transport:
                 elif e.status in self.retry_on_status:
                     retry = True
 
-                print(e, e.status, retry, self.retry_on_status)
                 if retry:
                     try:
                         # only mark as dead if we are retrying
                         if e.status not in NOT_DEAD_NODE_HTTP_STATUSES:
-                            self.mark_dead(node)
+                            await self.mark_dead(node)
                     except TransportError:
                         # If sniffing on failure, it could fail too. Catch the
                         # exception not to interrupt the retries.
@@ -249,13 +199,13 @@ class Transport:
                 self.node_pool.mark_live(node)
                 return response, data
 
-    def mark_dead(self, node: BaseNode) -> None:
+    async def mark_dead(self, node: BaseNode) -> None:
         """Marks a node as dead and optionally starts sniffing for additional nodes if enabled"""
         self.node_pool.mark_dead(node)
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """
         Explicitly closes all nodes in the transport's pool
         """
         for node in self.node_pool.all():
-            node.close()
+            await node.close()

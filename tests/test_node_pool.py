@@ -94,7 +94,7 @@ def test_round_robin_selector():
     node_configs = [NodeConfig("http", "localhost", x) for x in range(5)]
     random.shuffle(node_configs)
     pool = NodePool(
-        node_configs, node_class=Urllib3HttpNode, selector_class="round_robin"
+        node_configs, node_class=Urllib3HttpNode, node_selector_class="round_robin"
     )
 
     get_node_configs = [pool.get() for _ in node_configs]
@@ -126,7 +126,7 @@ def test_unknown_selector_class():
         NodePool(
             [NodeConfig("http", "localhost", 80)],
             node_class=Urllib3HttpNode,
-            selector_class="unknown",
+            node_selector_class="unknown",
         )
     assert str(e.value) == (
         "Unknown option for selector_class: 'unknown'. "

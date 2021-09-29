@@ -21,25 +21,41 @@ import ssl
 
 import pytest
 
-from elastic_transport import BaseNode, HttpHeaders, HttpResponse
+from elastic_transport import ApiResponseMeta, BaseNode, HttpHeaders, NodeConfig
 
 
 class DummyNode(BaseNode):
-    def __init__(self, **kwargs):
-        self.exception = kwargs.pop("exception", None)
-        self.status = kwargs.pop("status", 200)
-        self.body = kwargs.pop("body", b"{}")
+    def __init__(self, config: NodeConfig):
+        super().__init__(config)
+        self.exception = config._extras.pop("exception", None)
+        self.status = config._extras.pop("status", 200)
+        self.body = config._extras.pop("body", b"{}")
         self.calls = []
-        super().__init__(**kwargs)
-        self._headers = kwargs.pop("headers", {})
+        self._headers = config._extras.pop("headers", {})
 
     def perform_request(self, *args, **kwargs):
         self.calls.append((args, kwargs))
         if self.exception:
             raise self.exception
-        response = HttpResponse(
+        response = ApiResponseMeta(
+            node=self.config,
             duration=0.0,
-            version="1.1",
+            http_version="1.1",
+            status=self.status,
+            headers=HttpHeaders(self._headers),
+        )
+        return response, self.body
+
+
+class AsyncDummyNode(DummyNode):
+    async def perform_request(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        if self.exception:
+            raise self.exception
+        response = ApiResponseMeta(
+            node=self.config,
+            duration=0.0,
+            http_version="1.1",
             status=self.status,
             headers=HttpHeaders(self._headers),
         )
@@ -47,6 +63,7 @@ class DummyNode(BaseNode):
 
 
 @pytest.fixture(scope="session", params=[True, False])
+@pytest.mark.usefixtures("httpbin_node_config")
 def httpbin_cert_fingerprint(request) -> str:
     """Gets the SHA256 fingerprint of the certificate for 'httpbin.org'"""
     sock = socket.create_connection(("httpbin.org", 443))
@@ -61,3 +78,15 @@ def httpbin_cert_fingerprint(request) -> str:
         return digest
     else:
         return ":".join([digest[i : i + 2] for i in range(0, len(digest), 2)])
+
+
+@pytest.fixture(scope="session")
+def httpbin_node_config() -> NodeConfig:
+    try:
+        sock = socket.create_connection(("httpbin.org", 443))
+    except Exception as e:
+        pytest.skip(f"Couldn't connect to httpbin.org, internet not connected? {e}")
+    sock.close()
+    return NodeConfig(
+        "https", "httpbin.org", 443, verify_certs=False, ssl_show_warn=False
+    )
