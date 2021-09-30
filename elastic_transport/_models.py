@@ -210,24 +210,24 @@ class HttpHeaders(MutableMapping[str, str]):
 class ApiResponseMeta:
     """Metadata that is returned from Transport.perform_request()"""
 
-    #: Node which handled the request
-    node: "NodeConfig"
-
-    #: Number of seconds from start of request to start of response
-    duration: float
+    #: HTTP status code
+    status: int
 
     #: HTTP version being used
     http_version: str
 
-    #: HTTP status code
-    status: int
-
     #: HTTP headers
     headers: HttpHeaders
 
+    #: Number of seconds from start of request to start of response
+    duration: float
+
+    #: Node which handled the request
+    node: "NodeConfig"
+
     #: Extras that can be set to anything, typically used by third-parties.
     #: Third-party keys should start with an underscore and prefix.
-    _extras: Dict[str, Any] = field(default_factory=dict)
+    _extras: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
     def mimetype(self) -> Optional[str]:
@@ -386,6 +386,14 @@ class NodeConfig:
                 self.path_prefix,
             )
         )
+
+
+@dataclass()
+class SniffOptions:
+    """Options which are passed to Transport.sniff_callback"""
+
+    is_initial_sniff: bool
+    sniff_timeout: Optional[float]
 
 
 @dataclass(frozen=True, repr=True)

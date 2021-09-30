@@ -15,7 +15,11 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import random
 import re
+import threading
+import time
+import warnings
 from unittest import mock
 
 import pytest
@@ -28,8 +32,10 @@ from elastic_transport import (
     NodeConfig,
     NotFoundError,
     RequestsHttpNode,
+    SniffOptions,
     Transport,
     TransportError,
+    TransportWarning,
     Urllib3HttpNode,
 )
 from elastic_transport.client_utils import DEFAULT
@@ -232,7 +238,7 @@ def test_resurrected_connection_will_be_marked_as_live_on_success():
         assert 1 == len(t.node_pool.dead_nodes.queue)
 
 
-def test_mark_dead_error_doesnt_raise():
+def test_sniff_on_node_failure_error_doesnt_raise():
     t = Transport(
         [
             NodeConfig("http", "localhost", 80, _extras={"status": 502}),
@@ -243,8 +249,10 @@ def test_mark_dead_error_doesnt_raise():
         randomize_nodes_in_pool=False,
     )
     bad_node = t.node_pool.all_nodes[NodeConfig("http", "localhost", 80)]
-    with mock.patch.object(t, "mark_dead") as mark_dead:
-        mark_dead.side_effect = TransportError("sniffing error!")
+    with mock.patch.object(t, "sniff") as sniff, mock.patch.object(
+        t.node_pool, "mark_dead"
+    ) as mark_dead:
+        sniff.side_effect = TransportError("sniffing error!")
         t.perform_request("GET", "/")
     mark_dead.assert_called_with(bad_node)
 
@@ -304,3 +312,220 @@ def test_transport_client_meta_node_class(node_class):
     t = Transport([NodeConfig("http", "localhost", 80)])
     assert t._transport_client_meta[2][0] == "ur"
     assert [x[0] for x in t._transport_client_meta[:2]] == ["py", "t"]
+
+
+def test_sniff_on_start():
+    calls = []
+
+    def sniff_callback(*args):
+        nonlocal calls
+        calls.append(args)
+        return []
+
+    t = Transport(
+        [NodeConfig("http", "localhost", 80)],
+        node_class=DummyNode,
+        sniff_on_start=True,
+        sniff_callback=sniff_callback,
+    )
+    assert len(calls) == 1
+
+    t.perform_request("GET", "/")
+
+    assert len(calls) == 1
+    transport, sniff_options = calls[0]
+    assert transport is t
+    assert sniff_options == SniffOptions(is_initial_sniff=True, sniff_timeout=1.0)
+
+
+def test_sniff_before_requests():
+    calls = []
+
+    def sniff_callback(*args):
+        nonlocal calls
+        calls.append(args)
+        return []
+
+    t = Transport(
+        [NodeConfig("http", "localhost", 80)],
+        node_class=DummyNode,
+        sniff_before_requests=True,
+        sniff_callback=sniff_callback,
+    )
+    assert len(calls) == 0
+
+    t.perform_request("GET", "/")
+
+    assert len(calls) == 1
+    transport, sniff_options = calls[0]
+    assert transport is t
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+
+
+def test_sniff_on_node_failure():
+    calls = []
+
+    def sniff_callback(*args):
+        nonlocal calls
+        calls.append(args)
+        return []
+
+    t = Transport(
+        [
+            NodeConfig("http", "localhost", 80),
+            NodeConfig("http", "localhost", 81, _extras={"status": 500}),
+        ],
+        randomize_nodes_in_pool=False,
+        node_selector_class="round_robin",
+        node_class=DummyNode,
+        max_retries=1,
+        sniff_on_node_failure=True,
+        sniff_callback=sniff_callback,
+    )
+    assert len(calls) == 0
+
+    t.perform_request("GET", "/")
+    assert len(calls) == 0
+
+    with pytest.raises(InternalServerError):
+        t.perform_request("GET", "/")
+
+    assert len(calls) == 1
+    transport, sniff_options = calls[0]
+    assert transport is t
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"sniff_on_start": True},
+        {"sniff_on_node_failure": True},
+        {"sniff_before_requests": True},
+    ],
+)
+def test_error_with_sniffing_enabled_without_callback(kwargs):
+    with pytest.raises(ValueError) as e:
+        Transport([NodeConfig("http", "localhost", 80)], **kwargs)
+
+    assert str(e.value) == "Enabling sniffing requires specifying a 'sniff_callback'"
+
+
+def test_error_sniffing_callback_without_sniffing_enabled():
+    with pytest.raises(ValueError) as e:
+        Transport([NodeConfig("http", "localhost", 80)], sniff_callback=lambda *_: [])
+
+    assert str(e.value) == (
+        "Using 'sniff_callback' requires enabling sniffing via 'sniff_on_start', "
+        "'sniff_before_requests' or 'sniff_on_node_failure'"
+    )
+
+
+def test_heterogeneous_node_config_warning_with_sniffing():
+    with warnings.catch_warnings(record=True) as w:
+        Transport(
+            [
+                NodeConfig("http", "localhost", 80, path_prefix="/a"),
+                NodeConfig("http", "localhost", 81, path_prefix="/b"),
+            ],
+            sniff_on_start=True,
+            sniff_callback=lambda *_: [],
+        )
+
+    assert len(w) == 1
+    assert w[0].category == TransportWarning
+    assert str(w[0].message) == (
+        "Detected NodeConfig instances with different options. It's "
+        "recommended to keep all options except for 'host' and 'port' "
+        "the same for sniffing to work reliably."
+    )
+
+
+def test_sniffed_nodes_added_to_pool():
+    sniffed_nodes = [
+        NodeConfig("http", "localhost", 80),
+        NodeConfig("http", "localhost", 81),
+    ]
+
+    t = Transport(
+        [
+            NodeConfig("http", "localhost", 80),
+        ],
+        node_class=DummyNode,
+        sniff_before_requests=True,
+        sniff_callback=lambda *_: sniffed_nodes,
+    )
+    assert len(t.node_pool.all_nodes) == 1
+
+    t.perform_request("GET", "/")
+
+    # The node pool knows when nodes are already in the pool
+    # so we shouldn't get duplicates after sniffing.
+    assert len(t.node_pool.all_nodes) == 2
+    assert set(sniffed_nodes) == set(t.node_pool.all_nodes)
+
+
+def test_sniff_error_resets_lock_and_last_sniffed_at():
+    def sniff_error(*_):
+        raise TransportError("This is an error!")
+
+    t = Transport(
+        [
+            NodeConfig("http", "localhost", 80),
+        ],
+        node_class=DummyNode,
+        sniff_before_requests=True,
+        sniff_callback=sniff_error,
+    )
+    last_sniffed_at = t._last_sniffed_at
+
+    with pytest.raises(TransportError) as e:
+        t.perform_request("GET", "/")
+    assert str(e.value) == "This is an error!"
+
+    assert t._last_sniffed_at == last_sniffed_at
+    assert t._sniffing_lock.locked() is False
+
+
+@pytest.mark.parametrize("pool_size", [1, 8])
+def test_threading_test(pool_size):
+    node_configs = [
+        NodeConfig("http", "localhost", 80),
+        NodeConfig("http", "localhost", 81),
+        NodeConfig("http", "localhost", 82),
+        NodeConfig("http", "localhost", 83, _extras={"status": 500}),
+    ]
+
+    def sniff_callback(*_):
+        time.sleep(random.random())
+        return node_configs
+
+    t = Transport(
+        node_configs,
+        retry_on_status=[500],
+        max_retries=5,
+        node_class=DummyNode,
+        sniff_on_start=True,
+        sniff_before_requests=True,
+        sniff_on_node_failure=True,
+        sniff_callback=sniff_callback,
+    )
+
+    class ThreadTest(threading.Thread):
+        def __init__(self):
+            super().__init__()
+            self.successful_requests = 0
+
+        def run(self) -> None:
+            nonlocal t, start
+
+            while time.time() < start + 2:
+                t.perform_request("GET", "/")
+                self.successful_requests += 1
+
+    threads = [ThreadTest() for _ in range(16)]
+    start = time.time()
+    [thread.start() for thread in threads]
+    [thread.join() for thread in threads]
+
+    assert sum(thread.successful_requests for thread in threads) >= 1000

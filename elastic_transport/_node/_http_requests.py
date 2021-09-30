@@ -23,6 +23,7 @@ from typing import Optional, Tuple
 
 import urllib3
 
+from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, client_meta_version
@@ -97,7 +98,7 @@ class RequestsHttpNode(BaseNode):
         ):
             warnings.warn(
                 f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
-                stacklevel=2,
+                stacklevel=warn_stacklevel(),
                 category=SecurityWarning,
             )
 

@@ -289,7 +289,7 @@ class NodePool:
                 # Start the node as dead because 'dead_nodes' is thread-safe.
                 # The node will be resurrected on the next call to .get()
                 self.dead_consecutive_failures[node.config] = 0
-                self.dead_nodes.put((0.0, node))
+                self.dead_nodes.put((time.time(), node))
 
     def remove(self, node_config: NodeConfig) -> None:
         # Can't mark a seed node as removed.

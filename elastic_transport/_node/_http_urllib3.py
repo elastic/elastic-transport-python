@@ -25,6 +25,7 @@ import urllib3
 from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
 from urllib3.util.retry import Retry
 
+from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, client_meta_version
@@ -87,7 +88,7 @@ class Urllib3HttpNode(BaseNode):
                 if config.ssl_show_warn:
                     warnings.warn(
                         f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
-                        stacklevel=2,
+                        stacklevel=warn_stacklevel(),
                         category=SecurityWarning,
                     )
                 else:
