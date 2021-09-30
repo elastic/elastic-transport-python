@@ -43,6 +43,8 @@ except ImportError:  # pragma: nocover
 
 
 class AiohttpHttpNode(BaseAsyncNode):
+    """Default asynchronous node class using the ``aiohttp`` library via HTTP"""
+
     _ELASTIC_CLIENT_META = ("ai", _AIOHTTP_META_VERSION)
 
     def __init__(self, config: NodeConfig):
@@ -178,10 +180,10 @@ class AiohttpHttpNode(BaseAsyncNode):
             ):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
-                )
+                ) from None
             elif isinstance(e, (ssl.SSLError, aiohttp_exceptions.ClientSSLError)):
-                raise TlsError(str(e), errors=(e,))
-            raise ConnectionError(str(e), errors=(e,))
+                raise TlsError(str(e), errors=(e,)) from None
+            raise ConnectionError(str(e), errors=(e,)) from None
 
         return (
             ApiResponseMeta(
@@ -221,7 +223,7 @@ class AiohttpHttpNode(BaseAsyncNode):
 
 
 @functools.lru_cache(maxsize=64, typed=True)
-def aiohttp_fingerprint(ssl_assert_fingerprint: str) -> aiohttp.Fingerprint:
+def aiohttp_fingerprint(ssl_assert_fingerprint: str) -> "aiohttp.Fingerprint":
     """Changes 'ssl_assert_fingerprint' into a configured 'aiohttp.Fingerprint' instance.
     Uses a cache to prevent creating tons of objects needlessly.
     """

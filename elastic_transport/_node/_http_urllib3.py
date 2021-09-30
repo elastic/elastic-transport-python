@@ -31,9 +31,14 @@ from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, client_meta_version
 from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS, BaseNode
 
+try:
+    from ._urllib3_chain_certs import HTTPSConnectionPool
+except (ImportError, AttributeError):
+    HTTPSConnectionPool = urllib3.HTTPSConnectionPool
+
 
 class Urllib3HttpNode(BaseNode):
-    """Default synchronous node class using the `urllib3` library via HTTP."""
+    """Default synchronous node class using the ``urllib3`` library via HTTP"""
 
     _ELASTIC_CLIENT_META = ("ur", client_meta_version(urllib3.__version__))
 
@@ -45,7 +50,7 @@ class Urllib3HttpNode(BaseNode):
 
         # if ssl_context provided use SSL by default
         if config.scheme == "https" and config.ssl_context:
-            pool_class = urllib3.HTTPSConnectionPool
+            pool_class = HTTPSConnectionPool
             kw.update(
                 {
                     "assert_fingerprint": config.ssl_assert_fingerprint,
@@ -54,7 +59,7 @@ class Urllib3HttpNode(BaseNode):
             )
 
         elif config.scheme == "https":
-            pool_class = urllib3.HTTPSConnectionPool
+            pool_class = HTTPSConnectionPool
             kw.update(
                 {
                     "ssl_version": config.ssl_version,
@@ -147,10 +152,10 @@ class Urllib3HttpNode(BaseNode):
             if isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
-                )
+                ) from None
             elif isinstance(e, (ssl.SSLError, urllib3.exceptions.SSLError)):
-                raise TlsError(str(e), errors=(e,))
-            raise ConnectionError(str(e), errors=(e,))
+                raise TlsError(str(e), errors=(e,)) from None
+            raise ConnectionError(str(e), errors=(e,)) from None
 
         response = ApiResponseMeta(
             node=self.config,
