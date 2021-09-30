@@ -168,22 +168,23 @@ class AsyncTransport(Transport):
 
             except TransportError as e:
                 retry = False
+                node_failure = e.status not in NOT_DEAD_NODE_HTTP_STATUSES
                 if isinstance(e, ConnectionTimeout):
                     retry = self.retry_on_timeout
+                    node_failure = True
                 elif isinstance(e, ConnectionError):
                     retry = True
+                    node_failure = True
                 elif e.status in self.retry_on_status:
                     retry = True
 
+                # If the error was determined to be a node failure
+                # we mark it dead in the node pool to allow for
+                # other nodes to be retried.
+                if node_failure:
+                    self.node_pool.mark_dead(node)
+
                 if retry:
-                    try:
-                        # only mark as dead if we are retrying
-                        if e.status not in NOT_DEAD_NODE_HTTP_STATUSES:
-                            await self.mark_dead(node)
-                    except TransportError:
-                        # If sniffing on failure, it could fail too. Catch the
-                        # exception not to interrupt the retries.
-                        pass
                     # raise exception on last retry
                     if attempt == self.max_retries:
                         e.errors = tuple(errors)
@@ -198,10 +199,6 @@ class AsyncTransport(Transport):
                 # node didn't fail, confirm it's live status
                 self.node_pool.mark_live(node)
                 return response, data
-
-    async def mark_dead(self, node: BaseNode) -> None:
-        """Marks a node as dead and optionally starts sniffing for additional nodes if enabled"""
-        self.node_pool.mark_dead(node)
 
     async def close(self) -> None:
         """

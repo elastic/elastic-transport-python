@@ -48,6 +48,7 @@ from ._models import (
     NodeConfig,
     QueryParams,
     RequestOptions,
+    SniffOptions,
 )
 from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
@@ -95,6 +96,7 @@ __all__ = [
     "SerializationError",
     "Serializer",
     "ServiceUnavailableError",
+    "SniffOptions",
     "TextSerializer",
     "TlsError",
     "TooManyRequestsError",

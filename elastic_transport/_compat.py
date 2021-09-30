@@ -16,7 +16,9 @@
 #  under the License.
 
 import asyncio
+import inspect
 import sys
+from pathlib import Path
 from urllib.parse import quote as _quote
 from urllib.parse import urlencode, urlparse
 
@@ -66,6 +68,50 @@ except ImportError:
 
         def __exit__(self, *_) -> None:
             pass
+
+        def acquire(self, blocking: bool = True) -> bool:
+            return True
+
+        def release(self) -> None:
+            pass
+
+
+def warn_stacklevel() -> int:
+    """Dynamically determine warning stacklevel for warnings based on the call stack"""
+    try:
+        # Grab the root module from the current module '__name__'
+        module_name = __name__.partition(".")[0]
+        module_path = Path(sys.modules[module_name].__file__)
+
+        # If the module is a folder we're looking at
+        # subdirectories, otherwise we're looking for
+        # an exact match.
+        module_is_folder = module_path.name == "__init__.py"
+        if module_is_folder:
+            module_path = module_path.parent
+
+        # Look through frames until we find a file that
+        # isn't a part of our module, then return that stacklevel.
+        for level, frame in enumerate(inspect.stack()):
+            # Garbage collecting frames
+            frame_filename = Path(frame.filename)
+            del frame
+
+            if (
+                # If the module is a folder we look at subdirectory
+                module_is_folder
+                and module_path not in frame_filename.parents
+            ) or (
+                # Otherwise we're looking for an exact match.
+                not module_is_folder
+                and module_path != frame_filename
+            ):
+                return level
+    except KeyError:
+        pass
+    except Exception:
+        return 2
+    return 0
 
 
 __all__ = [
