@@ -15,8 +15,10 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from typing import Any, List, Optional, Tuple, Type, Union
+import asyncio
+from typing import Any, Awaitable, Callable, List, Optional, Tuple, Type, Union
 
+from ._compat import await_if_coro, get_running_loop
 from ._exceptions import (
     HTTP_STATUS_TO_ERROR,
     ApiError,
@@ -24,10 +26,14 @@ from ._exceptions import (
     ConnectionTimeout,
     TransportError,
 )
-from ._models import ApiResponseMeta, NodeConfig
+from ._models import ApiResponseMeta, NodeConfig, SniffOptions
 from ._node import AiohttpHttpNode, BaseNode
 from ._node_pool import NodePool, NodeSelector
-from ._transport import NOT_DEAD_NODE_HTTP_STATUSES, Transport
+from ._transport import (
+    NOT_DEAD_NODE_HTTP_STATUSES,
+    Transport,
+    validate_sniffing_options,
+)
 from .client_utils import DEFAULT, normalize_headers
 
 
@@ -52,6 +58,17 @@ class AsyncTransport(Transport):
         max_retries: int = 3,
         retry_on_status=(429, 502, 503, 504),
         retry_on_timeout: bool = False,
+        sniff_on_start: bool = False,
+        sniff_before_requests: bool = False,
+        sniff_on_node_failure: bool = False,
+        sniff_timeout: Optional[float] = 1.0,
+        min_delay_between_sniffing: float = 10.0,
+        sniff_callback: Optional[
+            Callable[
+                ["Transport", "SniffOptions"],
+                Union[List[NodeConfig], Awaitable[List[NodeConfig]]],
+            ]
+        ] = None,
     ):
         """
         :arg node_configs: List of 'NodeConfig' instances to create initial set of nodes.
@@ -74,11 +91,33 @@ class AsyncTransport(Transport):
             on a different node. defaults to ``(429, 502, 503, 504)``
         :arg retry_on_timeout: should timeout trigger a retry on different
             node? (default ``False``)
-
-        Any extra keyword arguments will be passed to the `node_class`
-        when creating and instance unless overridden by that node's
-        options provided as part of the hosts parameter.
+        :arg sniff_on_start: If ``True`` will sniff for additional nodes as soon
+            as possible, guaranteed before the first request.
+        :arg sniff_on_node_failure: If ``True`` will sniff for additional nodees
+            after a node is marked as dead in the pool.
+        :arg sniff_before_requests: If ``True`` will occasionally sniff for additional
+            nodes as requests are sent.
+        :arg sniff_timeout: Timeout value in seconds to use for sniffing requests.
+            Defaults to 1 second.
+        :arg min_delay_between_sniffing: Number of seconds to wait between calls to
+            :meth:`elastic_transport.Transport.sniff` to avoid sniffing too frequently.
+            Defaults to 10 seconds.
+        :arg sniff_callback: Function that is passed a :class:`elastic_transport.Transport` and
+            :class:`elastic_transport.SniffOptions` and should do node discovery and
+            return a list of :class:`elastic_transport.NodeConfig` instances or a coroutine
+            that returns the list.
         """
+
+        # Since we don't pass all the sniffing options to super().__init__()
+        # we want to validate the sniffing options here too.
+        validate_sniffing_options(
+            node_configs=node_configs,
+            sniff_on_start=sniff_on_start,
+            sniff_before_requests=sniff_before_requests,
+            sniff_on_node_failure=sniff_on_node_failure,
+            sniff_callback=sniff_callback,
+        )
+
         super().__init__(
             node_configs=node_configs,
             node_class=node_class,
@@ -91,7 +130,19 @@ class AsyncTransport(Transport):
             max_retries=max_retries,
             retry_on_status=retry_on_status,
             retry_on_timeout=retry_on_timeout,
+            sniff_timeout=sniff_timeout,
+            min_delay_between_sniffing=min_delay_between_sniffing,
         )
+
+        self._sniff_on_start = sniff_on_start
+        self._sniff_before_requests = sniff_before_requests
+        self._sniff_on_node_failure = sniff_on_node_failure
+        self._sniff_timeout = sniff_timeout
+        self._sniff_callback = sniff_callback
+        self._sniffing_lock = None
+        self._sniffing_task: Optional[asyncio.Task] = None
+        self._last_sniffed_at = 0.0
+        self._loop: Optional[asyncio.BaseEventLoop] = None
 
     async def perform_request(
         self,
@@ -123,6 +174,8 @@ class AsyncTransport(Transport):
         :arg ignore_status: Collection of HTTP status codes to not raise an error for.
         :returns: Tuple of the HttpResponse with the deserialized response.
         """
+        await self._async_init()
+
         if isinstance(ignore_status, int):
             ignore_status = {ignore_status}
 
@@ -143,8 +196,13 @@ class AsyncTransport(Transport):
         errors = []
 
         for attempt in range(self.max_retries + 1):
-            node = self.node_pool.get()
 
+            # If we sniff before requests are made we want to do so before
+            # 'node_pool.get()' is called so our sniffed nodes show up in the pool.
+            if self._sniff_before_requests:
+                await self.sniff(False)
+
+            node = self.node_pool.get()
             try:
                 response, raw_data = await node.perform_request(
                     method,
@@ -184,6 +242,14 @@ class AsyncTransport(Transport):
                 if node_failure:
                     self.node_pool.mark_dead(node)
 
+                    if self._sniff_on_node_failure:
+                        try:
+                            await self.sniff(False)
+                        except TransportError:
+                            # If sniffing on failure, it could fail too. Catch the
+                            # exception not to interrupt the retries.
+                            pass
+
                 if retry:
                     # raise exception on last retry
                     if attempt == self.max_retries:
@@ -200,9 +266,75 @@ class AsyncTransport(Transport):
                 self.node_pool.mark_live(node)
                 return response, data
 
+    async def sniff(self, is_initial_sniff: bool) -> None:
+        await self._async_init()
+        task = self._create_sniffing_task(is_initial_sniff)
+
+        # Only block on the task if this is the initial sniff.
+        # Otherwise we do the sniffing in the background.
+        if is_initial_sniff and task:
+            await task
+
     async def close(self) -> None:
         """
         Explicitly closes all nodes in the transport's pool
         """
         for node in self.node_pool.all():
             await node.close()
+
+    def _should_sniff(self, is_initial_sniff: bool) -> bool:
+        """Decide if we should sniff or not. _async_init() must be called
+        before using this function.The async implementation doesn't have a lock.
+        """
+        if is_initial_sniff:
+            return True
+
+        # Only start a new sniff if the previous run is completed.
+        if self._sniffing_task:
+            if not self._sniffing_task.done():
+                return False
+            # If there was a previous run we collect the sniffing task's
+            # result as it could have failed with an exception.
+            self._sniffing_task.result()
+
+        return (
+            self._loop.time() - self._last_sniffed_at
+            >= self._min_delay_between_sniffing
+        )
+
+    def _create_sniffing_task(self, is_initial_sniff: bool) -> Optional[asyncio.Task]:
+        """Creates a sniffing task if one should be created and returns the task if created."""
+        task = None
+        if self._should_sniff(is_initial_sniff):
+            # 'self._sniffing_task' is unset within the task implementation.
+            task = self._loop.create_task(self._sniffing_task_impl(is_initial_sniff))
+            self._sniffing_task = task
+        return task
+
+    async def _sniffing_task_impl(self, is_initial_sniff: bool) -> None:
+        """Implementation of the sniffing task"""
+        previously_sniffed_at = self._last_sniffed_at
+        try:
+            self._last_sniffed_at = self._loop.time()
+            options = SniffOptions(
+                is_initial_sniff=is_initial_sniff, sniff_timeout=self._sniff_timeout
+            )
+            for node_config in await await_if_coro(self._sniff_callback(self, options)):
+                self.node_pool.add(node_config)
+
+        # If sniffing failed for any reason we
+        # want to allow retrying immediately.
+        except BaseException:
+            self._last_sniffed_at = previously_sniffed_at
+            raise
+
+    async def _async_init(self) -> None:
+        """Async constructor which is called on the first call to perform_request()
+        because we're not guaranteed to be within an active asyncio event loop
+        when __init__() is called.
+        """
+        if self._loop is not None:
+            return  # Call at most once!
+        self._loop = get_running_loop()
+        if self._sniff_on_start:
+            await self.sniff(True)

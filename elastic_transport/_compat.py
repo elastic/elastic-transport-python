@@ -19,6 +19,7 @@ import asyncio
 import inspect
 import sys
 from pathlib import Path
+from typing import Awaitable, TypeVar, Union
 from urllib.parse import quote as _quote
 from urllib.parse import urlencode, urlparse
 
@@ -45,6 +46,15 @@ except ImportError:
         return loop
 
 
+T = TypeVar("T")
+
+
+async def await_if_coro(coro: Union[T, Awaitable[T]]) -> T:
+    if inspect.iscoroutine(coro):
+        return await coro
+    return coro
+
+
 _QUOTE_ALWAYS_SAFE = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~"
 )
@@ -69,7 +79,7 @@ except ImportError:
         def __exit__(self, *_) -> None:
             pass
 
-        def acquire(self, blocking: bool = True) -> bool:
+        def acquire(self, _: bool = True) -> bool:
             return True
 
         def release(self) -> None:
@@ -109,12 +119,11 @@ def warn_stacklevel() -> int:
                 return level
     except KeyError:
         pass
-    except Exception:
-        return 2
     return 0
 
 
 __all__ = [
+    "await_if_coro",
     "get_running_loop",
     "ordered_dict",
     "quote",

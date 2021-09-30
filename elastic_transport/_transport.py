@@ -126,21 +126,13 @@ class Transport:
                 )
             node_class = NODE_CLASS_NAMES[node_class]
 
-        # Additional requirements for when sniffing is enabled
-        sniffing_enabled = (
-            sniff_before_requests or sniff_on_start or sniff_on_node_failure
+        validate_sniffing_options(
+            node_configs=node_configs,
+            sniff_on_start=sniff_on_start,
+            sniff_before_requests=sniff_before_requests,
+            sniff_on_node_failure=sniff_on_node_failure,
+            sniff_callback=sniff_callback,
         )
-        if sniffing_enabled and not sniff_callback:
-            raise ValueError("Enabling sniffing requires specifying a 'sniff_callback'")
-        if not sniffing_enabled and sniff_callback:
-            raise ValueError(
-                "Using 'sniff_callback' requires enabling sniffing via 'sniff_on_start', "
-                "'sniff_before_requests' or 'sniff_on_node_failure'"
-            )
-
-        # If we're sniffing we want to warn the user for non-homogenous NodeConfigs.
-        if sniffing_enabled and len(node_configs) > 1:
-            warn_if_varying_node_config_options(node_configs)
 
         # Create the default metadata for the x-elastic-client-meta
         # HTTP header. Only requires adding the (service, service_version)
@@ -356,6 +348,30 @@ class Transport:
         ):
             return False
         return self._sniffing_lock.acquire(False)
+
+
+def validate_sniffing_options(
+    *,
+    node_configs: List[NodeConfig],
+    sniff_before_requests: bool,
+    sniff_on_start: bool,
+    sniff_on_node_failure: bool,
+    sniff_callback: Optional[Any],
+) -> None:
+    """Validates the Transport configurations for sniffing"""
+
+    sniffing_enabled = sniff_before_requests or sniff_on_start or sniff_on_node_failure
+    if sniffing_enabled and not sniff_callback:
+        raise ValueError("Enabling sniffing requires specifying a 'sniff_callback'")
+    if not sniffing_enabled and sniff_callback:
+        raise ValueError(
+            "Using 'sniff_callback' requires enabling sniffing via 'sniff_on_start', "
+            "'sniff_before_requests' or 'sniff_on_node_failure'"
+        )
+
+    # If we're sniffing we want to warn the user for non-homogenous NodeConfigs.
+    if sniffing_enabled and len(node_configs) > 1:
+        warn_if_varying_node_config_options(node_configs)
 
 
 def warn_if_varying_node_config_options(node_configs: List[NodeConfig]) -> None:
