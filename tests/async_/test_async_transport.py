@@ -15,8 +15,12 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import asyncio
+import random
 import re
 import sys
+import time
+import warnings
 from unittest import mock
 
 import pytest
@@ -30,8 +34,11 @@ from elastic_transport import (
     InternalServerError,
     NodeConfig,
     NotFoundError,
+    SniffOptions,
     TransportError,
+    TransportWarning,
 )
+from elastic_transport._compat import get_running_loop
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 from elastic_transport.client_utils import DEFAULT
 from tests.conftest import AsyncDummyNode
@@ -322,3 +329,249 @@ async def test_transport_client_meta_node_class(node_class):
     t = AsyncTransport([NodeConfig("http", "localhost", 80)])
     assert t._transport_client_meta[2][0] == "ai"
     assert [x[0] for x in t._transport_client_meta[:2]] == ["py", "t"]
+
+
+async def test_sniff_on_start():
+    calls = []
+
+    def sniff_callback(*args):
+        nonlocal calls
+        calls.append(args)
+        return []
+
+    t = AsyncTransport(
+        [NodeConfig("http", "localhost", 80)],
+        node_class=AsyncDummyNode,
+        sniff_on_start=True,
+        sniff_callback=sniff_callback,
+    )
+    assert len(calls) == 0
+    await t._async_init()
+    assert len(calls) == 1
+
+    await t.perform_request("GET", "/")
+
+    assert len(calls) == 1
+    transport, sniff_options = calls[0]
+    assert transport is t
+    assert sniff_options == SniffOptions(is_initial_sniff=True, sniff_timeout=1.0)
+
+
+async def test_sniff_before_requests():
+    calls = []
+
+    def sniff_callback(*args):
+        nonlocal calls
+        calls.append(args)
+        return []
+
+    t = AsyncTransport(
+        [NodeConfig("http", "localhost", 80)],
+        node_class=AsyncDummyNode,
+        sniff_before_requests=True,
+        sniff_callback=sniff_callback,
+    )
+    assert len(calls) == 0
+
+    await t.perform_request("GET", "/")
+    await t._sniffing_task
+
+    assert len(calls) == 1
+    transport, sniff_options = calls[0]
+    assert transport is t
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+
+
+async def test_sniff_on_node_failure():
+    calls = []
+
+    def sniff_callback(*args):
+        nonlocal calls
+        calls.append(args)
+        return []
+
+    t = AsyncTransport(
+        [
+            NodeConfig("http", "localhost", 80),
+            NodeConfig("http", "localhost", 81, _extras={"status": 500}),
+        ],
+        randomize_nodes_in_pool=False,
+        node_selector_class="round_robin",
+        node_class=AsyncDummyNode,
+        max_retries=1,
+        sniff_on_node_failure=True,
+        sniff_callback=sniff_callback,
+    )
+    assert t._sniffing_task is None
+    assert len(calls) == 0
+
+    await t.perform_request("GET", "/")
+    assert t._sniffing_task is None
+    assert len(calls) == 0
+
+    with pytest.raises(InternalServerError):
+        await t.perform_request("GET", "/")
+
+    await t._sniffing_task
+    assert len(calls) == 1
+    transport, sniff_options = calls[0]
+    assert transport is t
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"sniff_on_start": True},
+        {"sniff_on_node_failure": True},
+        {"sniff_before_requests": True},
+    ],
+)
+async def test_error_with_sniffing_enabled_without_callback(kwargs):
+    with pytest.raises(ValueError) as e:
+        AsyncTransport([NodeConfig("http", "localhost", 80)], **kwargs)
+
+    assert str(e.value) == "Enabling sniffing requires specifying a 'sniff_callback'"
+
+
+async def test_error_sniffing_callback_without_sniffing_enabled():
+    with pytest.raises(ValueError) as e:
+        AsyncTransport(
+            [NodeConfig("http", "localhost", 80)], sniff_callback=lambda *_: []
+        )
+
+    assert str(e.value) == (
+        "Using 'sniff_callback' requires enabling sniffing via 'sniff_on_start', "
+        "'sniff_before_requests' or 'sniff_on_node_failure'"
+    )
+
+
+async def test_heterogeneous_node_config_warning_with_sniffing():
+    with warnings.catch_warnings(record=True) as w:
+        AsyncTransport(
+            [
+                NodeConfig("http", "localhost", 80, path_prefix="/a"),
+                NodeConfig("http", "localhost", 81, path_prefix="/b"),
+            ],
+            sniff_on_start=True,
+            sniff_callback=lambda *_: [],
+        )
+
+    assert len(w) == 1
+    assert w[0].category == TransportWarning
+    assert str(w[0].message) == (
+        "Detected NodeConfig instances with different options. It's "
+        "recommended to keep all options except for 'host' and 'port' "
+        "the same for sniffing to work reliably."
+    )
+
+
+@pytest.mark.parametrize("async_sniff_callback", [True, False])
+async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
+    sniffed_nodes = [
+        NodeConfig("http", "localhost", 80),
+        NodeConfig("http", "localhost", 81),
+    ]
+
+    loop = get_running_loop()
+    sniffed_at = 0.0
+
+    # Test that we accept both sync and async sniff_callbacks
+    if async_sniff_callback:
+
+        async def sniff_callback(*_):
+            nonlocal loop, sniffed_at
+            await asyncio.sleep(0.1)
+            sniffed_at = loop.time()
+            return sniffed_nodes
+
+    else:
+
+        def sniff_callback(*_):
+            nonlocal loop, sniffed_at
+            time.sleep(0.1)
+            sniffed_at = loop.time()
+            return sniffed_nodes
+
+    t = AsyncTransport(
+        [
+            NodeConfig("http", "localhost", 80),
+        ],
+        node_class=AsyncDummyNode,
+        sniff_before_requests=True,
+        sniff_callback=sniff_callback,
+    )
+    assert len(t.node_pool.all_nodes) == 1
+
+    request_at = loop.time()
+    await t.perform_request("GET", "/")
+    response_at = loop.time()
+    await t._sniffing_task
+
+    assert 0.1 <= (sniffed_at - request_at) <= 0.15
+    assert 0 <= response_at - request_at < 0.05
+
+    # The node pool knows when nodes are already in the pool
+    # so we shouldn't get duplicates after sniffing.
+    assert len(t.node_pool.all_nodes) == 2
+    assert set(sniffed_nodes) == set(t.node_pool.all_nodes)
+
+
+async def test_sniff_error_resets_lock_and_last_sniffed_at():
+    def sniff_error(*_):
+        raise TransportError("This is an error!")
+
+    t = AsyncTransport(
+        [
+            NodeConfig("http", "localhost", 80),
+        ],
+        node_class=AsyncDummyNode,
+        sniff_on_start=True,
+        sniff_callback=sniff_error,
+    )
+    last_sniffed_at = t._last_sniffed_at
+
+    with pytest.raises(TransportError) as e:
+        await t.perform_request("GET", "/")
+    assert str(e.value) == "This is an error!"
+
+    assert t._last_sniffed_at == last_sniffed_at
+    assert t._sniffing_task.done()
+
+
+@pytest.mark.parametrize("pool_size", [1, 8])
+async def test_multiple_tasks_test(pool_size):
+    node_configs = [
+        NodeConfig("http", "localhost", 80),
+        NodeConfig("http", "localhost", 81),
+        NodeConfig("http", "localhost", 82),
+        NodeConfig("http", "localhost", 83, _extras={"status": 500}),
+    ]
+
+    async def sniff_callback(*_):
+        await asyncio.sleep(random.random())
+        return node_configs
+
+    t = AsyncTransport(
+        node_configs,
+        retry_on_status=[500],
+        max_retries=5,
+        node_class=AsyncDummyNode,
+        sniff_on_start=True,
+        sniff_before_requests=True,
+        sniff_on_node_failure=True,
+        sniff_callback=sniff_callback,
+    )
+
+    loop = get_running_loop()
+    start = loop.time()
+
+    async def run_requests():
+        successful_requests = 0
+        while loop.time() - start < 2:
+            await t.perform_request("GET", "/")
+            successful_requests += 1
+        return successful_requests
+
+    tasks = [loop.create_task(run_requests()) for _ in range(pool_size * 2)]
+    assert sum([await task for task in tasks]) >= 1000

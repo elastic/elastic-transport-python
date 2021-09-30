@@ -523,7 +523,7 @@ def test_threading_test(pool_size):
                 t.perform_request("GET", "/")
                 self.successful_requests += 1
 
-    threads = [ThreadTest() for _ in range(16)]
+    threads = [ThreadTest() for _ in range(pool_size * 2)]
     start = time.time()
     [thread.start() for thread in threads]
     [thread.join() for thread in threads]

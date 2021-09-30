@@ -184,7 +184,7 @@ def test_threading_test(pool_size):
                 else:
                     pool.mark_live(node)
 
-    threads = [ThreadTest() for _ in range(16)]
+    threads = [ThreadTest() for _ in range(pool_size * 2)]
     [thread.start() for thread in threads]
     [thread.join() for thread in threads]
 
