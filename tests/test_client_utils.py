@@ -21,6 +21,7 @@ import pytest
 
 from elastic_transport import Urllib3HttpNode, __version__
 from elastic_transport.client_utils import (
+    basic_auth_to_header,
     client_meta_version,
     create_user_agent,
     parse_cloud_id,
@@ -192,4 +193,38 @@ def test_url_to_node_config_error_missing_component(url):
     assert (
         str(e.value)
         == "URL must include a 'scheme', 'host', and 'port' component (ie 'https://localhost:9200')"
+    )
+
+
+def test_url_with_auth_into_authorization():
+    node_config = url_to_node_config("http://localhost:9200")
+    assert node_config.headers == {}
+
+    node_config = url_to_node_config("http://@localhost:9200")
+    assert node_config.headers == {}
+
+    node_config = url_to_node_config("http://user:pass@localhost:9200")
+    assert node_config.headers == {"Authorization": "Basic dXNlcjpwYXNz"}
+
+    node_config = url_to_node_config("http://user:@localhost:9200")
+    assert node_config.headers == {"Authorization": "Basic dXNlcjo="}
+
+    node_config = url_to_node_config("http://user@localhost:9200")
+    assert node_config.headers == {"Authorization": "Basic dXNlcjo="}
+
+    node_config = url_to_node_config("http://me@example.com:password@localhost:9200")
+    assert node_config.headers == {
+        "Authorization": "Basic bWUlNDBleGFtcGxlLmNvbTpwYXNzd29yZA=="
+    }
+
+
+@pytest.mark.parametrize(
+    "basic_auth", ["", b"", ("",), ("", 1), (1, ""), ["", ""], False, object()]
+)
+def test_basic_auth_errors(basic_auth):
+    with pytest.raises(ValueError) as e:
+        basic_auth_to_header(basic_auth)
+    assert (
+        str(e.value)
+        == "'basic_auth' must be a 2-tuple of str/bytes (username, password)"
     )

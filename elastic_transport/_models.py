@@ -143,15 +143,19 @@ class HttpHeaders(MutableMapping[str, str]):
             raise ValueError("Can't modify headers that have been frozen")
         del self._internal[self._normalize_key(key)]
 
-    def __eq__(self, other):
-        if isinstance(other, Mapping):
-            return dict(self.items()) == dict(other.items())
-        return NotImplemented
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Mapping):
+            return NotImplemented
+        if not isinstance(other, HttpHeaders):
+            other = HttpHeaders(other)
+        return {k: v for k, (_, v) in self._internal.items()} == {
+            k: v for k, (_, v) in other._internal.items()
+        }
 
-    def __ne__(self, other):
-        if isinstance(other, Mapping):
-            return dict(self.items()) != dict(other.items())
-        return NotImplemented
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, Mapping):
+            return NotImplemented
+        return not self == other
 
     def __iter__(self):
         return iter(self.keys())

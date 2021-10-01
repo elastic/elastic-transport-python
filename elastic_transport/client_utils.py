@@ -15,6 +15,23 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+#  Licensed to Elasticsearch B.V. under one or more contributor
+#  license agreements. See the NOTICE file distributed with
+#  this work for additional information regarding copyright
+#  ownership. Elasticsearch B.V. licenses this file to you under
+#  the Apache License, Version 2.0 (the "License"); you may
+#  not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+# 	http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing,
+#  software distributed under the License is distributed on an
+#  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+#  KIND, either express or implied.  See the License for the
+#  specific language governing permissions and limitations
+#  under the License.
+import base64
 import binascii
 import dataclasses
 import re
@@ -31,6 +48,7 @@ from ._version import __version__
 
 __all__ = [
     "DEFAULT",
+    "basic_auth_to_header",
     "dataclasses",
     "create_user_agent",
     "client_meta_version",
@@ -153,17 +171,41 @@ def percent_encode(string: str, safe: str = "/") -> str:
     return _quote(string, safe)
 
 
+def basic_auth_to_header(basic_auth: Tuple[str, str]) -> str:
+    """Converts a 2-tuple into a 'Basic' HTTP Authorization header"""
+    if (
+        not isinstance(basic_auth, tuple)
+        or len(basic_auth) != 2
+        or any(not isinstance(item, (str, bytes)) for item in basic_auth)
+    ):
+        raise ValueError(
+            "'basic_auth' must be a 2-tuple of str/bytes (username, password)"
+        )
+    return f"Basic {base64.b64encode((b':'.join(to_bytes(x) for x in basic_auth))).decode()}"
+
+
 def url_to_node_config(url: str) -> NodeConfig:
-    """Constructs a :class:`elastic_transport.NodeConfig` instance from a URL"""
+    """Constructs a :class:`elastic_transport.NodeConfig` instance from a URL.
+    If a username/password are specified in the URL they are converted to an
+    'Authorization' header.
+    """
     try:
         parsed_url = parse_url(url)
     except LocationParseError:
         raise ValueError(f"Could not parse URL {url!r}") from None
 
-    if None in (parsed_url.scheme, parsed_url.host, parsed_url.port):
+    if any(
+        component in (None, "")
+        for component in (parsed_url.scheme, parsed_url.host, parsed_url.port)
+    ):
         raise ValueError(
             "URL must include a 'scheme', 'host', and 'port' component (ie 'https://localhost:9200')"
         )
+
+    headers = {}
+    if parsed_url.auth:
+        username, _, password = parsed_url.auth.partition(":")
+        headers["authorization"] = basic_auth_to_header((username, password))
 
     host = parsed_url.host.strip("[]")
     path_prefix = "" if parsed_url.path in (None, "", "/") else parsed_url.path
@@ -172,4 +214,5 @@ def url_to_node_config(url: str) -> NodeConfig:
         host=host,
         port=parsed_url.port,
         path_prefix=path_prefix,
+        headers=headers,
     )
