@@ -297,6 +297,11 @@ class NodeConfig:
     #: SHA-256 fingerprint of the node's certificate. If this value is
     #: given then root-of-trust verification isn't done and only the
     #: node's certificate fingerprint is verified.
+    #:
+    #: On CPython 3.10+ this also verifies if any certificate in the
+    #: chain including the Root CA matches this fingerprint. However
+    #: because this requires using private APIs support for this is
+    #: **experimental**.
     ssl_assert_fingerprint: Optional[str] = None
     #: Minimum TLS version to use to connect to the node.
     ssl_version: Optional[int] = None

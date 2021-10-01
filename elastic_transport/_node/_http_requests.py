@@ -35,29 +35,39 @@ try:
 
     _REQUESTS_AVAILABLE = True
     _REQUESTS_META_VERSION = client_meta_version(requests.__version__)
+
+    # Use our custom HTTPSConnectionPool for chain cert fingerprint support.
+    try:
+        from ._urllib3_chain_certs import HTTPSConnectionPool
+    except (ImportError, AttributeError):
+        HTTPSConnectionPool = urllib3.HTTPSConnectionPool
+
+    class _ElasticHTTPAdapter(HTTPAdapter):
+        def __init__(self, node_config: NodeConfig, **kwargs):
+            self._node_config = node_config
+            super().__init__(**kwargs)
+
+        def init_poolmanager(
+            self, connections, maxsize, block=False, **pool_kwargs
+        ) -> None:
+            if self._node_config.ssl_context:
+                pool_kwargs.setdefault("ssl_context", self._node_config.ssl_context)
+            if self._node_config.ssl_assert_fingerprint:
+                pool_kwargs.setdefault(
+                    "assert_fingerprint", self._node_config.ssl_assert_fingerprint
+                )
+
+            super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
+            self.poolmanager.pool_classes_by_scheme["https"] = HTTPSConnectionPool
+
+
 except ImportError:  # pragma: nocover
     _REQUESTS_AVAILABLE = False
     _REQUESTS_META_VERSION = ""
 
 
 class RequestsHttpNode(BaseNode):
-    """
-    Connection using the `requests` library communicating via HTTP.
-
-    :arg use_ssl: use ssl for the connection if `True`
-    :arg verify_certs: whether to verify SSL certificates
-    :arg ssl_show_warn: show warning when verify certs is disabled
-    :arg ca_certs: optional path to CA bundle. By default standard requests'
-        bundle will be used.
-    :arg client_cert: path to the file containing the private key and the
-        certificate, or cert only if using client_key
-    :arg client_key: path to the file containing the private key if using
-        separate cert and key files (client_cert will contain only the cert)
-    :arg headers: any custom http headers to be add to requests
-    :arg http_compress: Use gzip compression
-    :arg opaque_id: Send this value in the 'X-Opaque-Id' HTTP header
-        For tracing all requests made by this transport.
-    """
+    """Synchronous node using the ``requests`` library communicating via HTTP"""
 
     _ELASTIC_CLIENT_META = ("rq", _REQUESTS_META_VERSION)
 
@@ -109,8 +119,10 @@ class RequestsHttpNode(BaseNode):
             pool_maxsize=config.connections_per_node,
             pool_block=True,
         )
-        for prefix in ("http://", "https://"):
-            self.session.mount(prefix=prefix, adapter=adapter)
+        # Preload the HTTPConnectionPool so initialization issues
+        # are raised here instead of in perform_request()
+        adapter.get_connection(self.base_url)
+        self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
 
     def perform_request(
         self,
@@ -161,10 +173,10 @@ class RequestsHttpNode(BaseNode):
             if isinstance(e, requests.Timeout):
                 raise ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
-                )
+                ) from None
             elif isinstance(e, (ssl.SSLError, requests.exceptions.SSLError)):
-                raise TlsError(str(e), errors=(e,))
-            raise ConnectionError(str(e), errors=(e,))
+                raise TlsError(str(e), errors=(e,)) from None
+            raise ConnectionError(str(e), errors=(e,)) from None
 
         response = ApiResponseMeta(
             node=self.config,
@@ -180,22 +192,3 @@ class RequestsHttpNode(BaseNode):
         Explicitly closes connections
         """
         self.session.close()
-
-
-class _ElasticHTTPAdapter(HTTPAdapter):
-    def __init__(self, node_config: NodeConfig, **kwargs):
-        self._node_config = node_config
-        super().__init__(**kwargs)
-
-    def init_poolmanager(
-        self, connections, maxsize, block=False, **pool_kwargs
-    ) -> urllib3.PoolManager:
-        if self._node_config.ssl_context:
-            pool_kwargs.setdefault("ssl_context", self._node_config.ssl_context)
-        if self._node_config.ssl_assert_fingerprint:
-            pool_kwargs.setdefault(
-                "ssl_assert_fingerprint", self._node_config.ssl_assert_fingerprint
-            )
-        return super().init_poolmanager(
-            connections, maxsize, block=block, **pool_kwargs
-        )

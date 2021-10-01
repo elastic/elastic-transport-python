@@ -264,7 +264,7 @@ async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
         resp, _ = await node.perform_request("GET", "/")
 
     assert resp.status == 200
-    assert w == []
+    assert [str(x.message) for x in w if x.category != DeprecationWarning] == []
 
 
 async def test_default_headers():
