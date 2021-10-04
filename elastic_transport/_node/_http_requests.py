@@ -69,7 +69,7 @@ except ImportError:  # pragma: nocover
 class RequestsHttpNode(BaseNode):
     """Synchronous node using the ``requests`` library communicating via HTTP"""
 
-    _ELASTIC_CLIENT_META = ("rq", _REQUESTS_META_VERSION)
+    _CLIENT_META_HTTP_CLIENT = ("rq", _REQUESTS_META_VERSION)
 
     def __init__(self, config: NodeConfig):
         if not _REQUESTS_AVAILABLE:  # pragma: nocover
@@ -129,22 +129,22 @@ class RequestsHttpNode(BaseNode):
         method: str,
         target: str,
         body: Optional[bytes] = None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
         headers=None,
+        request_timeout=DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:
         url = self.base_url + target
         headers = HttpHeaders(headers or ())
 
-        if not body:  # Filter out empty bytes
-            body = None
-        if self._http_compress and body:
-            body = gzip.compress(body)
-            headers["content-encoding"] = "gzip"
-
-        request_headers = self.headers.copy()
+        request_headers = self._headers.copy()
         if headers:
             request_headers.update(headers)
+
+        if body:
+            if self._http_compress:
+                body = gzip.compress(body)
+                request_headers["content-encoding"] = "gzip"
+        else:
+            body = None
 
         start = time.time()
         request = requests.Request(

@@ -40,7 +40,7 @@ except (ImportError, AttributeError):
 class Urllib3HttpNode(BaseNode):
     """Default synchronous node class using the ``urllib3`` library via HTTP"""
 
-    _ELASTIC_CLIENT_META = ("ur", client_meta_version(urllib3.__version__))
+    _CLIENT_META_HTTP_CLIENT = ("ur", client_meta_version(urllib3.__version__))
 
     def __init__(self, config: NodeConfig):
         super().__init__(config)
@@ -104,7 +104,7 @@ class Urllib3HttpNode(BaseNode):
             port=config.port,
             timeout=urllib3.Timeout(total=config.request_timeout),
             maxsize=config.connections_per_node,
-            block=True,
+            block=False,
             **kw,
         )
 
@@ -113,9 +113,8 @@ class Urllib3HttpNode(BaseNode):
         method: str,
         target: str,
         body: Optional[bytes] = None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
         headers=None,
+        request_timeout=DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:
 
         start = time.time()
@@ -124,15 +123,16 @@ class Urllib3HttpNode(BaseNode):
             if request_timeout is not DEFAULT:
                 kw["timeout"] = request_timeout
 
-            request_headers = self.headers.copy()
+            request_headers = self._headers.copy()
             if headers:
                 request_headers.update(headers)
 
-            if not body:  # Filter out empty bytes
+            if body:
+                if self._http_compress:
+                    body = gzip.compress(body)
+                    request_headers["content-encoding"] = "gzip"
+            else:
                 body = None
-            if self._http_compress and body:
-                body = gzip.compress(body)
-                request_headers["content-encoding"] = "gzip"
 
             response = self.pool.urlopen(
                 method,

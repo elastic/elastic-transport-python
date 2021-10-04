@@ -16,108 +16,22 @@
 #  under the License.
 
 import ssl
-import sys
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, Optional, Union
+from typing import Any, Dict, NamedTuple, Optional, Type, TypeVar, Union
 
 from ._compat import Mapping, MutableMapping
 
-if sys.version_info >= (3, 7):  # dict is insert ordered on Python 3.7+
-    ordered_dict = dict
-else:
-    from collections import OrderedDict as ordered_dict
+#: Sentinel used as a default value when ``None`` has special meaning like timeouts.
+#: The only comparisons that are supported for this type are ``is``.
+DefaultType = NamedTuple("DefaultType", ())
+DefaultType.__repr__ = lambda *_: "DEFAULT"
+DEFAULT = DefaultType()
+
+T = TypeVar("T")
 
 
-class QueryParams:
-    """Class which handles duplicate keys and ordered parameters for query"""
-
-    __slots__ = ("_internal",)
-
-    def __init__(self, initial=None):
-        self._internal = ordered_dict()  # dict[str, list[Any]]
-
-        if initial is not None:
-            if isinstance(initial, (dict, QueryParams)):
-                initial_items = initial.items()
-            elif isinstance(initial, (list, tuple)):
-                initial_items = initial
-            else:
-                raise TypeError(
-                    "'params' must be of type Dict[str, Any] or Sequence[Tuple[str, Any]]"
-                )
-            for key, val in initial_items:
-                self.add(key, val)
-
-    def copy(self):
-        params = QueryParams()
-        for key, val in self.items():
-            params.add(key, val)
-        return params
-
-    def pop(self, key, default=()):
-        self._check_types(key)
-        return list(self._internal.pop(key, default))
-
-    def add(self, key, value):
-        self._check_types(key)
-        self._internal.setdefault(key, []).append(value)
-
-    def extend(self, params):
-        for key, val in QueryParams(params).items():
-            self.add(key, val)
-
-    def keys(self):
-        return self._internal.keys()
-
-    def items(self):
-        for key, values in self._internal.items():
-            for value in values:
-                yield key, value
-
-    def _check_types(self, key):
-        if not isinstance(key, str):
-            raise TypeError(
-                f"Keys in 'params' must be type str not {type(key).__name__}"
-            )
-
-    def __setitem__(self, key, value):
-        self._check_types(key)
-        self._internal.pop(key, None)
-        self.add(key, value)
-
-    def __delitem__(self, key):
-        self._check_types(key)
-        del self._internal[key]
-
-    def __len__(self):
-        return sum(map(len, self._internal.values()))
-
-    def __bool__(self):
-        return len(self) > 0
-
-    def __eq__(self, other):
-        if isinstance(other, QueryParams):
-            return list(self.items()) == list(other.items())
-        elif isinstance(other, (list, tuple)):
-            return self == QueryParams(other)
-        elif isinstance(other, dict):
-            # Because dicts aren't ordered we don't compare
-            # order when comparing to a dict
-            return sorted(self.items()) == sorted(QueryParams(other).items())
-        return NotImplemented
-
-    def __ne__(self, other):
-        if not isinstance(other, (QueryParams, list, tuple, dict)):
-            return NotImplemented
-        return not (self == other)
-
-    def __contains__(self, item):
-        return item in self._internal
-
-    def __repr__(self):
-        return f"QueryParams({list(self.items())!r})"
-
-    __str__ = __repr__
+def set_non_defaults(cls: Type[T], **kwargs: Any) -> T:
+    return cls(**{k: v for k, v in kwargs.items() if v is not DEFAULT})
 
 
 class HttpHeaders(MutableMapping[str, str]):
@@ -403,20 +317,3 @@ class SniffOptions:
 
     is_initial_sniff: bool
     sniff_timeout: Optional[float]
-
-
-@dataclass(frozen=True, repr=True)
-class RequestOptions:
-    """Options which can be passed per request to the Transport"""
-
-    headers: HttpHeaders = field(default_factory=_empty_frozen_http_headers())
-    timeout: Optional[float] = 5.0
-    max_retries: int = 0
-    retry_on_status: FrozenSet[int] = frozenset((429, 501, 502, 503))
-    retry_on_timeout: bool = True
-    ignore_status: FrozenSet[int] = frozenset()
-
-    # Third-party extras for custom implementations or smuggling data
-    # to the connection/transport layer. Third-party keys should start
-    # with an underscore and prefix.
-    _extras: Dict[str, Any] = field(default_factory=dict, hash=False)

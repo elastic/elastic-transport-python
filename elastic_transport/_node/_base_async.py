@@ -25,14 +25,13 @@ from ._base import BaseNode
 class BaseAsyncNode(BaseNode):
     """Base class for Async HTTP node implementations"""
 
-    async def perform_request(
+    async def perform_request(  # type: ignore
         self,
         method,
         target,
         body=None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
         headers=None,
+        request_timeout=DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
         raise NotImplementedError()
 

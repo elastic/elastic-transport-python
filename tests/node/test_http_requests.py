@@ -130,6 +130,7 @@ class TestRequestsHttpNode:
 
         assert req.body is None
         assert req.headers["accept-encoding"] == "gzip"
+        print(req.headers)
         assert "content-encoding" not in req.headers
 
     @pytest.mark.parametrize("request_timeout", [None, 15])

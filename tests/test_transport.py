@@ -50,14 +50,15 @@ def test_transport_close_node_pool():
 
 
 def test_request_with_custom_user_agent_header():
-    t = Transport([NodeConfig("http", "localhost", 80)], node_class=DummyNode)
+    t = Transport(
+        [NodeConfig("http", "localhost", 80)], node_class=DummyNode, meta_header=False
+    )
 
     t.perform_request("GET", "/", headers={"user-agent": "my-custom-value/1.2.3"})
     assert 1 == len(t.node_pool.get().calls)
     assert {
         "body": None,
         "request_timeout": DEFAULT,
-        "ignore_status": (),
         "headers": {"user-agent": "my-custom-value/1.2.3"},
     } == t.node_pool.get().calls[0][1]
 
@@ -111,6 +112,27 @@ def test_request_will_fail_after_x_retries():
             )
         ],
         node_class=DummyNode,
+        max_retries=0,
+    )
+
+    with pytest.raises(ConnectionError) as e:
+        t.perform_request("GET", "/")
+
+    assert 1 == len(t.node_pool.get().calls)
+    assert len(e.value.errors) == 0
+
+    # max_retries=3
+    t = Transport(
+        [
+            NodeConfig(
+                "http",
+                "localhost",
+                80,
+                _extras={"exception": ConnectionError("abandon ship")},
+            )
+        ],
+        node_class=DummyNode,
+        max_retries=3,
     )
 
     with pytest.raises(ConnectionError) as e:
@@ -118,6 +140,14 @@ def test_request_will_fail_after_x_retries():
 
     assert 4 == len(t.node_pool.get().calls)
     assert len(e.value.errors) == 3
+    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+
+    # max_retries=2 in perform_request()
+    with pytest.raises(ConnectionError) as e:
+        t.perform_request("GET", "/", max_retries=2)
+
+    assert 7 == len(t.node_pool.get().calls)
+    assert len(e.value.errors) == 2
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
 
@@ -136,6 +166,7 @@ def test_retry_on_timeout(retry_on_timeout):
             ),
         ],
         node_class=DummyNode,
+        max_retries=1,
         retry_on_timeout=retry_on_timeout,
         randomize_nodes_in_pool=False,
     )
@@ -244,6 +275,7 @@ def test_sniff_on_node_failure_error_doesnt_raise():
             NodeConfig("http", "localhost", 80, _extras={"status": 502}),
             NodeConfig("http", "localhost", 81),
         ],
+        max_retries=1,
         retry_on_status=(502,),
         node_class=DummyNode,
         randomize_nodes_in_pool=False,
@@ -301,17 +333,63 @@ def test_head_response_false():
 )
 def test_transport_client_meta_node_class(node_class):
     t = Transport([NodeConfig("http", "localhost", 80)], node_class=node_class)
-    assert t._transport_client_meta[2] == t.node_pool.node_class._ELASTIC_CLIENT_META
-    assert t._transport_client_meta[2][0] in ("ur", "rq")
+    assert (
+        t._transport_client_meta[3] == t.node_pool.node_class._CLIENT_META_HTTP_CLIENT
+    )
+    assert t._transport_client_meta[3][0] in ("ur", "rq")
     assert re.match(
-        r"^py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
+        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
         ",".join(f"{k}={v}" for k, v in t._transport_client_meta),
     )
 
     # Defaults to urllib3
     t = Transport([NodeConfig("http", "localhost", 80)])
-    assert t._transport_client_meta[2][0] == "ur"
-    assert [x[0] for x in t._transport_client_meta[:2]] == ["py", "t"]
+    assert t._transport_client_meta[3][0] == "ur"
+    assert [x[0] for x in t._transport_client_meta[:3]] == ["et", "py", "t"]
+
+
+def test_client_meta_header():
+    class DummyNodeWithClientMeta(DummyNode):
+        _CLIENT_META_HTTP_CLIENT = ("dm", "0.0.0p")
+
+    t = Transport(
+        [NodeConfig("http", "localhost", 80)],
+        node_class=DummyNodeWithClientMeta,
+        client_meta_service=("es", "8.0.0p"),
+    )
+    t.perform_request("GET", "/")
+
+    calls = t.node_pool.get().calls
+    assert 1 == len(calls)
+    headers = calls[0][1]["headers"]
+
+    assert sorted(headers.keys()) == ["x-elastic-client-meta"]
+    assert re.match(
+        r"^es=8\.0\.0p,py=[0-9.]+p?,t=[0-9.]+p?,dm=0\.0\.0p$",
+        headers["x-elastic-client-meta"],
+    )
+
+
+def test_client_meta_header_extras():
+    class DummyNodeWithClientMeta(DummyNode):
+        _CLIENT_META_HTTP_CLIENT = ("dm", "0.0.0p")
+
+    t = Transport(
+        [NodeConfig("http", "localhost", 80)],
+        node_class=DummyNodeWithClientMeta,
+        client_meta_service=("es", "8.0.0p"),
+    )
+    t.perform_request("GET", "/", client_meta=(("h", "s"),))
+
+    calls = t.node_pool.get().calls
+    assert 1 == len(calls)
+    headers = calls[0][1]["headers"]
+
+    assert sorted(headers.keys()) == ["x-elastic-client-meta"]
+    assert re.match(
+        r"^es=8\.0\.0p,py=[0-9.]+p?,t=[0-9.]+p?,dm=0\.0\.0p,h=s$",
+        headers["x-elastic-client-meta"],
+    )
 
 
 def test_sniff_on_start():
@@ -335,7 +413,7 @@ def test_sniff_on_start():
     assert len(calls) == 1
     transport, sniff_options = calls[0]
     assert transport is t
-    assert sniff_options == SniffOptions(is_initial_sniff=True, sniff_timeout=1.0)
+    assert sniff_options == SniffOptions(is_initial_sniff=True, sniff_timeout=0.5)
 
 
 def test_sniff_before_requests():
@@ -359,7 +437,7 @@ def test_sniff_before_requests():
     assert len(calls) == 1
     transport, sniff_options = calls[0]
     assert transport is t
-    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=0.5)
 
 
 def test_sniff_on_node_failure():
@@ -393,7 +471,7 @@ def test_sniff_on_node_failure():
     assert len(calls) == 1
     transport, sniff_options = calls[0]
     assert transport is t
-    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=0.5)
 
 
 @pytest.mark.parametrize(

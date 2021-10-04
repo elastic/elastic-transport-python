@@ -19,7 +19,19 @@ import dataclasses
 import time
 import warnings
 from platform import python_version
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Dict,
+    FrozenSet,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 from ._compat import Lock, warn_stacklevel
 from ._exceptions import (
@@ -30,12 +42,19 @@ from ._exceptions import (
     TransportError,
     TransportWarning,
 )
-from ._models import ApiResponseMeta, NodeConfig, SniffOptions
+from ._models import (
+    DEFAULT,
+    ApiResponseMeta,
+    DefaultType,
+    HttpHeaders,
+    NodeConfig,
+    SniffOptions,
+)
 from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import NodePool, NodeSelector
-from ._serializer import DEFAULT_SERIALIZERS, Deserializer, Serializer
+from ._serializer import DEFAULT_SERIALIZERS, Serializer, SerializerCollection
 from ._version import __version__
-from .client_utils import DEFAULT, client_meta_version, normalize_headers
+from .client_utils import client_meta_version
 
 # Allows for using a node_class by name rather than import.
 NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
@@ -48,6 +67,7 @@ NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
 # mean everything is fine server-wise and instead the API call
 # in question responded successfully.
 NOT_DEAD_NODE_HTTP_STATUSES = {None, 400, 402, 401, 403, 404}
+DEFAULT_CLIENT_META_SERVICE = ("et", client_meta_version(__version__))
 
 
 class Transport:
@@ -75,11 +95,13 @@ class Transport:
         sniff_on_start: bool = False,
         sniff_before_requests: bool = False,
         sniff_on_node_failure: bool = False,
-        sniff_timeout: Optional[float] = 1.0,
+        sniff_timeout: Optional[float] = 0.5,
         min_delay_between_sniffing: float = 10.0,
         sniff_callback: Optional[
             Callable[["Transport", "SniffOptions"], List[NodeConfig]]
         ] = None,
+        meta_header: bool = True,
+        client_meta_service: Tuple[str, str] = DEFAULT_CLIENT_META_SERVICE,
     ):
         """
         :arg node_configs: List of 'NodeConfig' instances to create initial set of nodes.
@@ -116,6 +138,10 @@ class Transport:
         :arg sniff_callback: Function that is passed a :class:`elastic_transport.Transport` and
             :class:`elastic_transport.SniffOptions` and should do node discovery and
             return a list of :class:`elastic_transport.NodeConfig` instances.
+        :arg meta_header: If set to False the ``X-Elastic-Client-Meta`` HTTP header won't be sent.
+            Defaults to True.
+        :arg client_meta_service: Key-value pair for the service field of the client metadata header.
+            Defaults to the service key-value for Elastic Transport.
         """
         if isinstance(node_class, str):
             if node_class not in NODE_CLASS_NAMES:
@@ -138,28 +164,31 @@ class Transport:
         # HTTP header. Only requires adding the (service, service_version)
         # tuple to the beginning of the client_meta
         self._transport_client_meta = (
+            client_meta_service,
             ("py", client_meta_version(python_version())),
             ("t", client_meta_version(__version__)),
         )
 
         # Grab the 'HTTP_CLIENT_META' property from the node class
-        http_client_meta = getattr(node_class, "_ELASTIC_CLIENT_META", None)
+        http_client_meta = getattr(node_class, "_CLIENT_META_HTTP_CLIENT", None)
         if http_client_meta:
             self._transport_client_meta += (http_client_meta,)
+        self.meta_header = meta_header
 
         # serialization config
         _serializers = DEFAULT_SERIALIZERS.copy()
         # if custom serializers map has been supplied, override the defaults with it
         if serializers:
             _serializers.update(serializers)
-        # create a deserializer with our config
-        self.deserializer = Deserializer(
+        # Create our collection of serializers
+        self.serializers = SerializerCollection(
             _serializers, default_mimetype=default_mimetype
         )
 
+        # Set of default request options
         self.max_retries = max_retries
-        self.retry_on_timeout = retry_on_timeout
         self.retry_on_status = retry_on_status
+        self.retry_on_timeout = retry_on_timeout
 
         # Build the NodePool from all the options
         node_pool_kwargs = {}
@@ -192,10 +221,15 @@ class Transport:
         self,
         method: str,
         target: str,
-        headers=None,
+        *,
         body: Optional[Any] = None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
+        headers: Union[Mapping[str, Any], DefaultType] = DEFAULT,
+        max_retries: Union[int, DefaultType] = DEFAULT,
+        retry_on_status: Union[int, DefaultType] = DEFAULT,
+        retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
+        request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
+        ignore_status: Union[Collection[int], DefaultType] = DEFAULT,
+        client_meta: Union[Tuple[Tuple[str, str], ...]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, Any]:
         """
         Perform the actual request. Retrieve a node from the node
@@ -203,25 +237,49 @@ class Transport:
         return the data.
 
         If an exception was raised, mark the node as failed and retry (up
-        to `max_retries` times).
+        to ``max_retries`` times).
 
         If the operation was successful and the node used was previously
         marked as dead, mark it as live, resetting it's failure count.
 
         :arg method: HTTP method to use
         :arg target: HTTP request target
-        :arg headers: dictionary of headers, will be handed over to the
-            underlying :class:`~elastic_transport.BaseNode` class
         :arg body: body of the request, will be serialized using serializer and
             passed to the node
-        :arg request_timeout: Timeout to be passed to the HTTP client for the request
-        :arg ignore_status: Collection of HTTP status codes to not raise an error for.
-        :returns: Tuple of the HttpResponse with the deserialized response.
+        :arg headers: Additional headers to send with the request.
+        :arg max_retries: Maximum number of retries before giving up on a request.
+            Set to ``0`` to disable retries.
+        :arg retry_on_status: Collection of HTTP status codes to retry.
+        :arg retry_on_timeout: Set to true to retry after timeout errors.
+        :arg request_timeout: Amount of time to wait for a response to fail with a timeout error.
+        :arg ignore_status: HTTP status codes to not raise an :class:`elastic_transport.ApiError` when encountered.
+        :arg client_meta: Extra client metadata key-value pairs to send in the client meta header.
+        :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
-        if isinstance(ignore_status, int):
-            ignore_status = {ignore_status}
+        if headers is DEFAULT:
+            request_headers = HttpHeaders()
+        else:
+            request_headers = HttpHeaders(headers)
+        if max_retries is DEFAULT:
+            max_retries = self.max_retries
+        if retry_on_timeout is DEFAULT:
+            retry_on_timeout = self.retry_on_timeout
+        if retry_on_status is DEFAULT:
+            retry_on_status = self.retry_on_status
 
-        request_headers = normalize_headers(headers)
+        ignore_status: FrozenSet[int]
+        if ignore_status is DEFAULT:
+            ignore_status = frozenset()
+        elif isinstance(ignore_status, int):
+            ignore_status = frozenset((ignore_status,))
+        else:
+            ignore_status = frozenset(ignore_status)
+
+        if self.meta_header:
+            client_meta = self._transport_client_meta + client_meta
+            request_headers["x-elastic-client-meta"] = ",".join(
+                f"{k}={v}" for k, v in client_meta
+            )
 
         # Serialize the request body to bytes based on the given mimetype.
         if body is not None:
@@ -229,15 +287,16 @@ class Transport:
                 raise ValueError(
                     "Must provide a 'Content-Type' header to requests with bodies"
                 )
-            mimetype = request_headers["content-type"].partition(";")[0] or None
-            request_data = self.deserializer.dumps(body, mimetype=mimetype)
+            request_body = self.serializers.dumps(
+                body, mimetype=request_headers["content-type"]
+            )
         else:
-            request_data = None
+            request_body = None
 
         # Errors are stored from (oldest->newest)
         errors = []
 
-        for attempt in range(self.max_retries + 1):
+        for attempt in range(max_retries + 1):
 
             # If we sniff before requests are made we want to do so before
             # 'node_pool.get()' is called so our sniffed nodes show up in the pool.
@@ -246,36 +305,35 @@ class Transport:
 
             node = self.node_pool.get()
             try:
-                response, raw_data = node.perform_request(
+                meta, raw_data = node.perform_request(
                     method,
                     target,
-                    body=request_data,
+                    body=request_body,
                     headers=request_headers,
-                    ignore_status=ignore_status,
                     request_timeout=request_timeout,
                 )
 
                 if raw_data not in (None, b""):
-                    data = self.deserializer.loads(raw_data, response.mimetype)
+                    data = self.serializers.loads(raw_data, meta.mimetype)
                 else:
                     data = None
 
                 # Non-2XX statuses should be re-raised as ApiErrors.
-                if not (200 <= response.status <= 299):
-                    raise HTTP_STATUS_TO_ERROR.get(response.status, ApiError)(
-                        data, status=response.status
+                if not (200 <= meta.status <= 299) or meta.status in ignore_status:
+                    raise HTTP_STATUS_TO_ERROR.get(meta.status, ApiError)(
+                        data, status=meta.status
                     )
 
             except TransportError as e:
                 retry = False
                 node_failure = e.status not in NOT_DEAD_NODE_HTTP_STATUSES
                 if isinstance(e, ConnectionTimeout):
-                    retry = self.retry_on_timeout
+                    retry = retry_on_timeout
                     node_failure = True
                 elif isinstance(e, ConnectionError):
                     retry = True
                     node_failure = True
-                elif e.status in self.retry_on_status:
+                elif e.status in retry_on_status:
                     retry = True
 
                 # If the error was determined to be a node failure
@@ -292,21 +350,16 @@ class Transport:
                             # exception not to interrupt the retries.
                             pass
 
-                if retry:
-                    # raise exception on last retry
-                    if attempt == self.max_retries:
-                        e.errors = tuple(errors)
-                        raise
-                    else:
-                        errors.append(e)
-                else:
+                if not retry or attempt >= max_retries:
                     e.errors = tuple(errors)
                     raise
+                else:
+                    errors.append(e)
 
             else:
                 # node didn't fail, confirm it's live status
                 self.node_pool.mark_live(node)
-                return response, data
+                return meta, data
 
     def sniff(self, is_initial_sniff: bool) -> None:
         previously_sniffed_at = self._last_sniffed_at
