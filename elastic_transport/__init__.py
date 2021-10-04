@@ -42,21 +42,14 @@ from ._exceptions import (
     UnauthorizedError,
     UnprocessableEntityError,
 )
-from ._models import (
-    ApiResponseMeta,
-    HttpHeaders,
-    NodeConfig,
-    QueryParams,
-    RequestOptions,
-    SniffOptions,
-)
+from ._models import ApiResponseMeta, HttpHeaders, NodeConfig, SniffOptions
 from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
 from ._serializer import (
-    Deserializer,
     JsonSerializer,
     NdjsonSerializer,
     Serializer,
+    SerializerCollection,
     TextSerializer,
 )
 from ._transport import Transport
@@ -73,7 +66,6 @@ __all__ = [
     "ConflictError",
     "ConnectionError",
     "ConnectionTimeout",
-    "Deserializer",
     "ForbiddenError",
     "GatewayTimeoutError",
     "HttpHeaders",
@@ -87,7 +79,6 @@ __all__ = [
     "NotFoundError",
     "PayloadTooLargeError",
     "PaymentRequiredError",
-    "QueryParams",
     "RandomSelector",
     "RequestOptions",
     "RequestsHttpNode",
@@ -95,6 +86,7 @@ __all__ = [
     "SecurityWarning",
     "SerializationError",
     "Serializer",
+    "SerializerCollection",
     "ServiceUnavailableError",
     "SniffOptions",
     "TextSerializer",

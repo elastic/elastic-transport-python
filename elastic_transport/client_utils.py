@@ -35,7 +35,6 @@ import base64
 import binascii
 import dataclasses
 import re
-from collections import namedtuple
 from platform import python_version
 from typing import Optional, Tuple, Union
 from urllib.parse import quote as _quote
@@ -43,7 +42,7 @@ from urllib.parse import quote as _quote
 from urllib3.exceptions import LocationParseError
 from urllib3.util import parse_url
 
-from ._models import NodeConfig
+from ._models import DEFAULT, NodeConfig
 from ._version import __version__
 
 __all__ = [
@@ -59,10 +58,6 @@ __all__ = [
     "percent_encode",
     "url_to_node_config",
 ]
-
-#: Sentinel used as a default value when ``None`` has special meaning like timeouts.
-#: The only comparisons that are supported for this type are ``is``.
-DEFAULT = namedtuple("DEFAULT", ())()
 
 
 def create_user_agent(name: str, version: str) -> str:
@@ -80,18 +75,6 @@ def client_meta_version(version: str) -> str:
     if ver_is_pre:
         version += "p"
     return version
-
-
-def normalize_headers(headers):
-    """Normalizes HTTP headers to be lowercase to ensure
-    there are no case-collisions deeper within the stack.
-    """
-    if not headers:
-        return {}
-    return {
-        k.lower(): v
-        for k, v in (headers.items() if hasattr(headers, "items") else headers)
-    }
 
 
 @dataclasses.dataclass(frozen=True, repr=True)

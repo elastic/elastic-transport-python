@@ -27,7 +27,7 @@ from typing import Tuple
 from .._compat import get_running_loop, warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
-from ..client_utils import DEFAULT, client_meta_version, normalize_headers
+from ..client_utils import DEFAULT, client_meta_version
 from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS
 from ._base_async import BaseAsyncNode
 
@@ -45,7 +45,7 @@ except ImportError:  # pragma: nocover
 class AiohttpHttpNode(BaseAsyncNode):
     """Default asynchronous node class using the ``aiohttp`` library via HTTP"""
 
-    _ELASTIC_CLIENT_META = ("ai", _AIOHTTP_META_VERSION)
+    _CLIENT_META_HTTP_CLIENT = ("ai", _AIOHTTP_META_VERSION)
 
     def __init__(self, config: NodeConfig):
         if not _AIOHTTP_AVAILABLE:  # pragma: nocover
@@ -112,9 +112,8 @@ class AiohttpHttpNode(BaseAsyncNode):
         method,
         target,
         body=None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
         headers=None,
+        request_timeout=DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:
         if self.session is None:
             self._create_aiohttp_session()
@@ -140,15 +139,16 @@ class AiohttpHttpNode(BaseAsyncNode):
             total=request_timeout if request_timeout is not None else 0
         )
 
-        request_headers = normalize_headers(self.headers)
+        request_headers = self._headers.copy()
         if headers:
-            request_headers.update(normalize_headers(headers))
+            request_headers.update(headers)
 
-        if not body:  # Filter out empty bytes
+        if body:
+            if self._http_compress:
+                body = gzip.compress(body)
+                request_headers["content-encoding"] = "gzip"
+        else:
             body = None
-        if self._http_compress and body:
-            body = gzip.compress(body)
-            request_headers["content-encoding"] = "gzip"
 
         kwargs = {}
         if self._ssl_assert_fingerprint:

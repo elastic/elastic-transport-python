@@ -22,15 +22,15 @@ from decimal import Decimal
 import pytest
 
 from elastic_transport import (
-    Deserializer,
     JsonSerializer,
     NdjsonSerializer,
     SerializationError,
+    SerializerCollection,
     TextSerializer,
 )
 from elastic_transport._serializer import DEFAULT_SERIALIZERS
 
-deserializer = Deserializer(DEFAULT_SERIALIZERS)
+serializers = SerializerCollection(DEFAULT_SERIALIZERS)
 
 
 def test_date_serialization():
@@ -98,19 +98,19 @@ def test_unicode_surrogates_handled():
 
 
 def test_deserializes_json_by_default():
-    assert {"some": "data"} == deserializer.loads(b'{"some":"data"}')
+    assert {"some": "data"} == serializers.loads(b'{"some":"data"}')
 
 
 def test_deserializes_text_with_correct_ct():
-    assert '{"some":"data"}' == deserializer.loads(b'{"some":"data"}', "text/plain")
-    assert '{"some":"data"}' == deserializer.loads(
+    assert '{"some":"data"}' == serializers.loads(b'{"some":"data"}', "text/plain")
+    assert '{"some":"data"}' == serializers.loads(
         b'{"some":"data"}', "text/plain; charset=whatever"
     )
 
 
 def test_raises_serialization_error_on_unknown_mimetype():
     with pytest.raises(SerializationError) as e:
-        deserializer.loads(b"{}", "fake/type")
+        serializers.loads(b"{}", "fake/type")
     assert (
         str(e.value)
         == "Unknown mimetype, not able to serialize or deserialize: fake/type"
@@ -119,7 +119,7 @@ def test_raises_serialization_error_on_unknown_mimetype():
 
 def test_raises_improperly_configured_when_default_mimetype_cannot_be_deserialized():
     with pytest.raises(ValueError) as e:
-        Deserializer({})
+        SerializerCollection({})
     assert (
         str(e.value)
         == "Must configure a serializer for the default mimetype 'application/json'"
@@ -127,8 +127,8 @@ def test_raises_improperly_configured_when_default_mimetype_cannot_be_deserializ
 
 
 def test_text_asterisk_works_for_all_text_types():
-    assert deserializer.loads(b"{}", "text/html") == "{}"
-    assert deserializer.dumps("{}", "text/html") == b"{}"
+    assert serializers.loads(b"{}", "text/html") == "{}"
+    assert serializers.dumps("{}", "text/html") == b"{}"
 
 
 @pytest.mark.parametrize("should_strip", [False, True])

@@ -41,8 +41,10 @@ class TextSerializer(Serializer):
     def loads(self, data: bytes) -> str:
         try:
             return data.decode("utf-8", "surrogatepass")
-        except UnicodeError:
-            raise SerializationError(f"Unable to deserialize as text: {data!r}")
+        except UnicodeError as e:
+            raise SerializationError(
+                f"Unable to deserialize as text: {data!r}", errors=(e,)
+            )
 
     def dumps(self, data: str) -> bytes:
         # The body is already encoded to bytes
@@ -146,7 +148,12 @@ DEFAULT_SERIALIZERS = {
 }
 
 
-class Deserializer:
+class SerializerCollection:
+    """Collection of serializers that can be fetched by mimetype. Used by
+    :class:`elastic_transport.Transport` to serialize and deserialize native
+    Python types into bytes before passing to a node.
+    """
+
     def __init__(
         self,
         serializers: Optional[Mapping[str, Serializer]] = None,
@@ -155,7 +162,7 @@ class Deserializer:
         if serializers is None:
             serializers = DEFAULT_SERIALIZERS
         try:
-            self.default = serializers[default_mimetype]
+            self.default_serializer = serializers[default_mimetype]
         except KeyError:
             raise ValueError(
                 f"Must configure a serializer for the default mimetype {default_mimetype!r}"
@@ -163,15 +170,15 @@ class Deserializer:
         self.serializers = dict(serializers)
 
     def dumps(self, data: Any, mimetype: Optional[str] = None) -> bytes:
-        return self._serializer_for_mimetype(mimetype).dumps(data)
+        return self.get_serializer(mimetype).dumps(data)
 
     def loads(self, data: bytes, mimetype: Optional[str] = None) -> Any:
-        return self._serializer_for_mimetype(mimetype).loads(data)
+        return self.get_serializer(mimetype).loads(data)
 
-    def _serializer_for_mimetype(self, mimetype: Optional[str]) -> Serializer:
+    def get_serializer(self, mimetype: Optional[str]) -> Serializer:
         # split out charset
         if mimetype is None:
-            serializer = self.default
+            serializer = self.default_serializer
         else:
             mimetype, _, _ = mimetype.partition(";")
             try:

@@ -46,7 +46,7 @@ class BaseNode:
     :arg config: :class:`~elastic_transport.NodeConfig` instance
     """
 
-    _ELASTIC_CLIENT_META = None
+    _CLIENT_META_HTTP_CLIENT = None
 
     def __init__(self, config: NodeConfig):
         self._config = config
@@ -123,9 +123,8 @@ class BaseNode:
         method,
         target,
         body=None,
-        request_timeout=DEFAULT,
-        ignore_status=(),
         headers=None,
+        request_timeout=DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
         raise NotImplementedError()
 

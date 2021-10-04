@@ -47,7 +47,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_async_transport_httpbin(httpbin_node_config):
-    t = AsyncTransport([httpbin_node_config])
+    t = AsyncTransport([httpbin_node_config], meta_header=False)
     resp, data = await t.perform_request("GET", "/anything?key=value")
 
     assert resp.status == 200
@@ -70,14 +70,17 @@ async def test_transport_close_node_pool():
 
 
 async def test_request_with_custom_user_agent_header():
-    t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class=AsyncDummyNode)
+    t = AsyncTransport(
+        [NodeConfig("http", "localhost", 80)],
+        node_class=AsyncDummyNode,
+        meta_header=False,
+    )
 
     await t.perform_request("GET", "/", headers={"user-agent": "my-custom-value/1.2.3"})
     assert 1 == len(t.node_pool.get().calls)
     assert {
         "body": None,
         "request_timeout": DEFAULT,
-        "ignore_status": (),
         "headers": {"user-agent": "my-custom-value/1.2.3"},
     } == t.node_pool.get().calls[0][1]
 
@@ -318,17 +321,21 @@ async def test_head_response_false():
 )
 async def test_transport_client_meta_node_class(node_class):
     t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class=node_class)
-    assert t._transport_client_meta[2] == t.node_pool.node_class._ELASTIC_CLIENT_META
-    assert t._transport_client_meta[2][0] == "ai"
+    assert (
+        t._transport_client_meta[3] == t.node_pool.node_class._CLIENT_META_HTTP_CLIENT
+    )
+    assert t._transport_client_meta[3][0] == "ai"
     assert re.match(
-        r"^py=[0-9.]+p?,t=[0-9.]+p?,ai=[0-9.]+p?$",
+        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,ai=[0-9.]+p?$",
         ",".join(f"{k}={v}" for k, v in t._transport_client_meta),
     )
 
     # Defaults to aiohttp
-    t = AsyncTransport([NodeConfig("http", "localhost", 80)])
-    assert t._transport_client_meta[2][0] == "ai"
-    assert [x[0] for x in t._transport_client_meta[:2]] == ["py", "t"]
+    t = AsyncTransport(
+        [NodeConfig("http", "localhost", 80)], client_meta_service=("es", "8.0.0p")
+    )
+    assert t._transport_client_meta[3][0] == "ai"
+    assert [x[0] for x in t._transport_client_meta[:3]] == ["es", "py", "t"]
 
 
 async def test_sniff_on_start():
@@ -354,7 +361,7 @@ async def test_sniff_on_start():
     assert len(calls) == 1
     transport, sniff_options = calls[0]
     assert transport is t
-    assert sniff_options == SniffOptions(is_initial_sniff=True, sniff_timeout=1.0)
+    assert sniff_options == SniffOptions(is_initial_sniff=True, sniff_timeout=0.5)
 
 
 async def test_sniff_before_requests():
@@ -379,7 +386,7 @@ async def test_sniff_before_requests():
     assert len(calls) == 1
     transport, sniff_options = calls[0]
     assert transport is t
-    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=0.5)
 
 
 async def test_sniff_on_node_failure():
@@ -416,7 +423,7 @@ async def test_sniff_on_node_failure():
     assert len(calls) == 1
     transport, sniff_options = calls[0]
     assert transport is t
-    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=1.0)
+    assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=0.5)
 
 
 @pytest.mark.parametrize(

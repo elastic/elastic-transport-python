@@ -21,7 +21,7 @@ from binascii import hexlify, unhexlify
 from hmac import compare_digest
 from typing import Any, List, Optional
 
-import _ssl
+import _ssl  # type: ignore
 import urllib3
 
 from ._base import RERAISE_EXCEPTIONS
@@ -29,7 +29,7 @@ from ._base import RERAISE_EXCEPTIONS
 if sys.version_info < (3, 10) or sys.implementation.name != "cpython":
     raise ImportError("Only supported on CPython 3.10+")
 
-_ENCODING_DER = _ssl.ENCODING_DER
+_ENCODING_DER: int = _ssl.ENCODING_DER
 _HASHES_BY_LENGTH = {32: hashlib.md5, 40: hashlib.sha1, 64: hashlib.sha256}
 
 __all__ = ["HTTPSConnectionPool"]
