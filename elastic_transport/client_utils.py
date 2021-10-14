@@ -15,22 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-#  Licensed to Elasticsearch B.V. under one or more contributor
-#  license agreements. See the NOTICE file distributed with
-#  this work for additional information regarding copyright
-#  ownership. Elasticsearch B.V. licenses this file to you under
-#  the Apache License, Version 2.0 (the "License"); you may
-#  not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-# 	http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing,
-#  software distributed under the License is distributed on an
-#  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-#  KIND, either express or implied.  See the License for the
-#  specific language governing permissions and limitations
-#  under the License.
 import base64
 import binascii
 import dataclasses
@@ -42,20 +26,21 @@ from urllib.parse import quote as _quote
 from urllib3.exceptions import LocationParseError
 from urllib3.util import parse_url
 
-from ._models import DEFAULT, NodeConfig
+from ._models import DEFAULT, DefaultType, NodeConfig
 from ._version import __version__
 
 __all__ = [
-    "DEFAULT",
-    "basic_auth_to_header",
-    "dataclasses",
-    "create_user_agent",
-    "client_meta_version",
     "CloudId",
+    "DEFAULT",
+    "DefaultType",
+    "basic_auth_to_header",
+    "client_meta_version",
+    "create_user_agent",
+    "dataclasses",
     "parse_cloud_id",
-    "to_str",
-    "to_bytes",
     "percent_encode",
+    "to_bytes",
+    "to_str",
     "url_to_node_config",
 ]
 

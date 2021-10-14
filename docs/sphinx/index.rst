@@ -7,7 +7,6 @@ API Reference
    installation
    nodes
    exceptions
-   warnings
    logging
    transport
    node_pool

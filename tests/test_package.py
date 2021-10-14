@@ -15,8 +15,22 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import pytest
+
 import elastic_transport
+from elastic_transport import client_utils
+
+modules = pytest.mark.parametrize("module", [elastic_transport, client_utils])
 
 
-def test__all__sorted():
-    assert elastic_transport.__all__ == sorted(elastic_transport.__all__)
+@modules
+def test__all__sorted(module):
+    print(sorted(module.__all__))
+    assert module.__all__ == sorted(module.__all__)
+
+
+@modules
+def test__all__is_importable(module):
+    assert {attr for attr in module.__all__ if hasattr(module, attr)} == set(
+        module.__all__
+    )

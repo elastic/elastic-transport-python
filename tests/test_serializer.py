@@ -131,17 +131,17 @@ def test_text_asterisk_works_for_all_text_types():
     assert serializers.dumps("{}", "text/html") == b"{}"
 
 
-@pytest.mark.parametrize("should_strip", [False, True])
+@pytest.mark.parametrize("should_strip", [False, b"\n", b"\r\n"])
 def test_ndjson_loads(should_strip):
     serializer = NdjsonSerializer()
     data = (
         b'{"key":"value"}\n'
         b'{"number":0.1,"one":1}\n'
-        b'{"list":[1,2,3]}\n'
-        b'{"unicode":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}\n'
+        b'{"list":[1,2,3]}\r\n'
+        b'{"unicode":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}\r\n'
     )
     if should_strip:
-        data = data.strip(b"\n")
+        data = data.strip(should_strip)
     data = serializer.loads(data)
 
     assert data == [
@@ -160,6 +160,8 @@ def test_ndjson_dumps():
             {"number": 0.1, "one": 1},
             {"list": [1, 2, 3]},
             {"unicode": "你好\uda6a"},
+            '{"key:"value"}',
+            b'{"bytes":"too"}',
         ]
     )
     assert data == (
@@ -167,4 +169,6 @@ def test_ndjson_dumps():
         b'{"number":0.1,"one":1}\n'
         b'{"list":[1,2,3]}\n'
         b'{"unicode":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}\n'
+        b'{"key:"value"}\n'
+        b'{"bytes":"too"}\n'
     )

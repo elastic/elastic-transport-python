@@ -15,7 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from elastic_transport import ApiError, TransportError
+from elastic_transport import ApiError, ApiResponseMeta, TransportError
 
 
 def test_exception_repr_and_str():
@@ -31,6 +31,15 @@ def test_exception_repr_and_str():
 
 
 def test_api_error_status_repr():
-    e = ApiError({"errors": [{"status": 500}]}, status=500)
-    assert repr(e) == "ApiError({'errors': [{'status': 500}]}, status=500)"
-    assert str(e) == "{'errors': [{'status': 500}]}"
+    e = ApiError(
+        {"errors": [{"status": 500}]},
+        body={},
+        meta=ApiResponseMeta(
+            status=500, http_version="1.1", headers={}, duration=0.0, node=None
+        ),
+    )
+    assert (
+        repr(e)
+        == "ApiError({'errors': [{'status': 500}]}, meta=ApiResponseMeta(status=500, http_version='1.1', headers={}, duration=0.0, node=None), body={})"
+    )
+    assert str(e) == "[500] {'errors': [{'status': 500}]}"

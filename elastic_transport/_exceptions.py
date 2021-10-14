@@ -15,7 +15,9 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from typing import ClassVar, Optional
+from typing import Any
+
+from ._models import ApiResponseMeta
 
 
 class TransportWarning(Warning):
@@ -37,18 +39,13 @@ class TransportError(Exception):
     they are stored under 'headers'.
     """
 
-    status: ClassVar[Optional[int]] = None
-
-    def __init__(self, message, errors=(), status=None):
+    def __init__(self, message, errors=()):
         super().__init__(message)
         self.errors = tuple(errors)
         self.message = message
-        self.status = status
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         parts = [repr(self.message)]
-        if self.status is not None:
-            parts.append(f"status={self.status!r}")
         if self.errors:
             parts.append(f"errors={self.errors!r}")
         return "{}({})".format(self.__class__.__name__, ", ".join(parts))
@@ -66,128 +63,47 @@ class SerializationError(TransportError):
 class ConnectionError(TransportError):
     """Error raised by the HTTP connection"""
 
+    def __str__(self) -> str:
+        if self.errors:
+            return f"Connection error caused by: {self.errors[0].__class__.__name__}({self.errors[0]})"
+        return "Connection error"
+
 
 class TlsError(ConnectionError):
     """Error raised by during the TLS handshake"""
+
+    def __str__(self) -> str:
+        if self.errors:
+            return f"TLS error caused by: {self.errors[0].__class__.__name__}({self.errors[0]})"
+        return "TLS error"
 
 
 class ConnectionTimeout(TransportError):
     """Connection timed out during an operation"""
 
+    def __str__(self) -> str:
+        if self.errors:
+            return f"Connection timeout caused by: {self.errors[0].__class__.__name__}({self.errors[0]})"
+        return "Connection timed out"
+
 
 class ApiError(TransportError):
-    """Error that is raised by the service or API"""
+    """Base-class for clients that raise errors due to a response such as '404 Not Found'"""
 
-    status: ClassVar[int]
-
-    def __init__(self, message, errors=(), status=None, headers=None, body=None):
-        if status is None:
-            status = getattr(self, "status", None)
-        self.headers = headers
+    def __init__(self, message: str, meta: ApiResponseMeta, body: Any, errors=()):
+        super().__init__(message=message, errors=errors)
+        self.meta = meta
         self.body = body
-        super().__init__(message=message, errors=errors, status=status)
 
+    def __repr__(self) -> str:
+        parts = [repr(self.message)]
+        if self.meta:
+            parts.append(f"meta={self.meta!r}")
+        if self.errors:
+            parts.append(f"errors={self.errors!r}")
+        if self.body is not None:
+            parts.append(f"body={self.body!r}")
+        return "{}({})".format(self.__class__.__name__, ", ".join(parts))
 
-class BadRequestError(ApiError):
-    """Error for HTTP status 400 'Bad Request'"""
-
-    status = 400
-
-
-class UnauthorizedError(ApiError):
-    """Error for HTTP status 401 'Unauthorized'"""
-
-    status = 401
-
-
-class PaymentRequiredError(ApiError):
-    """Error for HTTP status 402 'Payment Required'
-    Usually signals that your instance doesn't have
-    a proper license active for the operation
-    """
-
-    status = 402
-
-
-class ForbiddenError(ApiError):
-    """Error for HTTP status 403 'Forbidden'"""
-
-    status = 403
-
-
-class NotFoundError(ApiError):
-    """Error for HTTP status 404 'Not Found'"""
-
-    status = 404
-
-
-class ConflictError(ApiError):
-    """Error for HTTP status 409 'Conflict'"""
-
-    status = 409
-
-
-class PayloadTooLargeError(ApiError):
-    """Error for HTTP status 413 'Payload Too Large'"""
-
-    status = 413
-
-
-class UnprocessableEntityError(ApiError):
-    """Error for HTTP status 422 'Unprocessable Entity'"""
-
-    status = 422
-
-
-class TooManyRequestsError(ApiError):
-    """Error for HTTP status 429 'Too Many Requests'"""
-
-    status = 429
-
-
-class InternalServerError(ApiError):
-    """Error for HTTP status 500 'Internal Server Error'"""
-
-    status = 500
-
-
-class MethodNotImplementedError(ApiError):
-    """Error for HTTP status 501 'Method Not Allowed'"""
-
-    status = 501
-
-
-class BadGatewayError(ApiError):
-    """Error for HTTP status 502 'Bad Gateway'"""
-
-    status = 502
-
-
-class ServiceUnavailableError(ApiError):
-    """Error for HTTP status 503 'Service Unavailable'"""
-
-    status = 503
-
-
-class GatewayTimeoutError(ApiError):
-    """Error for HTTP status 504 'Gateway Timeout'"""
-
-    status = 504
-
-
-HTTP_STATUS_TO_ERROR = {
-    400: BadRequestError,
-    401: UnauthorizedError,
-    402: PaymentRequiredError,
-    403: ForbiddenError,
-    404: NotFoundError,
-    405: MethodNotImplementedError,
-    409: ConflictError,
-    413: PayloadTooLargeError,
-    422: UnprocessableEntityError,
-    429: TooManyRequestsError,
-    500: InternalServerError,
-    502: BadGatewayError,
-    503: ServiceUnavailableError,
-    504: GatewayTimeoutError,
-}
+    def __str__(self) -> str:
+        return f"[{self.meta.status}] {self.message}"
