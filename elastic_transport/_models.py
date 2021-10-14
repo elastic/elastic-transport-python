@@ -15,9 +15,10 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import dataclasses
 import ssl
 from dataclasses import dataclass, field
-from typing import Any, Dict, NamedTuple, Optional, Type, TypeVar, Union
+from typing import Any, Dict, NamedTuple, Optional, TypeVar, Union
 
 from ._compat import Mapping, MutableMapping
 
@@ -28,10 +29,6 @@ DefaultType.__repr__ = lambda *_: "DEFAULT"
 DEFAULT = DefaultType()
 
 T = TypeVar("T")
-
-
-def set_non_defaults(cls: Type[T], **kwargs: Any) -> T:
-    return cls(**{k: v for k, v in kwargs.items() if v is not DEFAULT})
 
 
 class HttpHeaders(MutableMapping[str, str]):
@@ -143,10 +140,6 @@ class ApiResponseMeta:
     #: Node which handled the request
     node: "NodeConfig"
 
-    #: Extras that can be set to anything, typically used by third-parties.
-    #: Third-party keys should start with an underscore and prefix.
-    _extras: Dict[str, Any] = field(default_factory=dict, repr=False)
-
     @property
     def mimetype(self) -> Optional[str]:
         """Mimetype to be used by the serializer to decode the raw response bytes."""
@@ -236,6 +229,11 @@ class NodeConfig:
     # future decisions like sniffing, instance roles, etc.
     # Third-party keys should start with an underscore and prefix.
     _extras: Dict[str, Any] = field(default_factory=dict, hash=False)
+
+    def replace(self, **kwargs: Any) -> "NodeConfig":
+        if not kwargs:
+            return self
+        return dataclasses.replace(self, **kwargs)
 
     def __post_init__(self) -> None:
         if not isinstance(self.headers, HttpHeaders) or not self.headers.frozen:

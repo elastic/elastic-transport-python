@@ -27,13 +27,10 @@ import pytest
 
 from elastic_transport import (
     AiohttpHttpNode,
-    ApiError,
     AsyncTransport,
     ConnectionError,
     ConnectionTimeout,
-    InternalServerError,
     NodeConfig,
-    NotFoundError,
     SniffOptions,
     TransportError,
     TransportWarning,
@@ -155,19 +152,22 @@ async def test_retry_on_timeout(retry_on_timeout):
                 _extras={"exception": ConnectionTimeout("abandon ship")},
             ),
             NodeConfig(
-                "http", "localhost", 81, _extras={"exception": InternalServerError("")}
+                "http",
+                "localhost",
+                81,
+                _extras={"exception": ConnectionError("error!")},
             ),
         ],
         node_class=AsyncDummyNode,
+        max_retries=1,
         retry_on_timeout=retry_on_timeout,
         randomize_nodes_in_pool=False,
     )
 
     if retry_on_timeout:
-        with pytest.raises(InternalServerError) as e:
+        with pytest.raises(ConnectionError) as e:
             await t.perform_request("GET", "/")
         assert len(e.value.errors) == 1
-        assert e.value.status == 500
         assert isinstance(e.value.errors[0], ConnectionTimeout)
 
     else:
@@ -206,11 +206,17 @@ async def test_retry_on_status():
         max_retries=5,
     )
 
-    with pytest.raises(ApiError) as e:
-        await t.perform_request("GET", "/")
-    assert e.value.status == 555
-    assert len(e.value.errors) == 3
-    assert {err.status for err in e.value.errors} == {401, 403, 404}
+    meta, _ = await t.perform_request("GET", "/")
+    assert meta.status == 555
+
+    # Assert that every node is called once
+    node_calls = [len(node.calls) for node in t.node_pool.all_nodes.values()]
+    assert node_calls == [
+        1,
+        1,
+        1,
+        1,
+    ]
 
 
 async def test_failed_connection_will_be_marked_as_dead():
@@ -308,9 +314,9 @@ async def test_head_response_false():
         [NodeConfig("http", "localhost", 80, _extras={"status": 404, "body": b""})],
         node_class=AsyncDummyNode,
     )
-    with pytest.raises(NotFoundError) as e:
-        await t.perform_request("HEAD", "/")
-    assert e.value.status == 404
+    meta, resp = await t.perform_request("HEAD", "/")
+    assert meta.status == 404
+    assert resp is None
     # 404s don't count as a dead node status.
     assert 0 == len(t.node_pool.dead_nodes.queue)
 
@@ -353,7 +359,7 @@ async def test_sniff_on_start():
         sniff_callback=sniff_callback,
     )
     assert len(calls) == 0
-    await t._async_init()
+    await t._async_call()
     assert len(calls) == 1
 
     await t.perform_request("GET", "/")
@@ -412,15 +418,14 @@ async def test_sniff_on_node_failure():
     assert t._sniffing_task is None
     assert len(calls) == 0
 
-    await t.perform_request("GET", "/")
+    await t.perform_request("GET", "/")  # 200
     assert t._sniffing_task is None
     assert len(calls) == 0
 
-    with pytest.raises(InternalServerError):
-        await t.perform_request("GET", "/")
-
+    await t.perform_request("GET", "/")  # 500
     await t._sniffing_task
     assert len(calls) == 1
+
     transport, sniff_options = calls[0]
     assert transport is t
     assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=0.5)

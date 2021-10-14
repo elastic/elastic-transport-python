@@ -39,6 +39,8 @@ class TextSerializer(Serializer):
     mimetype = "text/*"
 
     def loads(self, data: bytes) -> str:
+        if isinstance(data, str):
+            return data
         try:
             return data.decode("utf-8", "surrogatepass")
         except UnicodeError as e:
@@ -92,8 +94,11 @@ class JsonSerializer(Serializer):
     def dumps(self, data: Any) -> bytes:
         # The body is already encoded to bytes
         # so we forward the request body along.
-        if isinstance(data, bytes):
+        if isinstance(data, str):
+            return data.encode("utf-8", "surrogatepass")
+        elif isinstance(data, bytes):
             return data
+
         try:
             return self.json_dumps(data)
         # This should be captured by the .default()
@@ -124,20 +129,30 @@ class NdjsonSerializer(JsonSerializer):
     def dumps(self, data: Any) -> bytes:
         # The body is already encoded to bytes
         # so we forward the request body along.
-        if isinstance(data, bytes):
-            return data
+        if isinstance(data, (bytes, str)):
+            data = (data,)
+
         buffer = bytearray()
         for line in data:
-            try:
-                buffer += self.json_dumps(line)
-                buffer += b"\n"
-            # This should be captured by the .default()
-            # call but just in case we also wrap these.
-            except (ValueError, UnicodeError, TypeError) as e:  # pragma: nocover
-                raise SerializationError(
-                    message=f"Unable to serialize to NDJSON: {data!r} (type: {type(data).__name__})",
-                    errors=(e,),
-                )
+            if isinstance(line, str):
+                line = line.encode("utf-8", "surrogatepass")
+            if isinstance(line, bytes):
+                buffer += line
+                # Ensure that there is always a final newline
+                if not line.endswith(b"\n"):
+                    buffer += b"\n"
+            else:
+                try:
+                    buffer += self.json_dumps(line)
+                    buffer += b"\n"
+                # This should be captured by the .default()
+                # call but just in case we also wrap these.
+                except (ValueError, UnicodeError, TypeError) as e:  # pragma: nocover
+                    raise SerializationError(
+                        message=f"Unable to serialize to NDJSON: {data!r} (type: {type(data).__name__})",
+                        errors=(e,),
+                    )
+
         return bytes(buffer)
 
 

@@ -19,24 +19,10 @@ import dataclasses
 import time
 import warnings
 from platform import python_version
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Dict,
-    FrozenSet,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Type, Union
 
 from ._compat import Lock, warn_stacklevel
 from ._exceptions import (
-    HTTP_STATUS_TO_ERROR,
-    ApiError,
     ConnectionError,
     ConnectionTimeout,
     TransportError,
@@ -173,6 +159,9 @@ class Transport:
         http_client_meta = getattr(node_class, "_CLIENT_META_HTTP_CLIENT", None)
         if http_client_meta:
             self._transport_client_meta += (http_client_meta,)
+
+        if not isinstance(meta_header, bool):
+            raise TypeError("'meta_header' must be of type bool")
         self.meta_header = meta_header
 
         # serialization config
@@ -228,7 +217,6 @@ class Transport:
         retry_on_status: Union[int, DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
-        ignore_status: Union[Collection[int], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, Any]:
         """
@@ -252,7 +240,6 @@ class Transport:
         :arg retry_on_status: Collection of HTTP status codes to retry.
         :arg retry_on_timeout: Set to true to retry after timeout errors.
         :arg request_timeout: Amount of time to wait for a response to fail with a timeout error.
-        :arg ignore_status: HTTP status codes to not raise an :class:`elastic_transport.ApiError` when encountered.
         :arg client_meta: Extra client metadata key-value pairs to send in the client meta header.
         :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
@@ -266,14 +253,6 @@ class Transport:
             retry_on_timeout = self.retry_on_timeout
         if retry_on_status is DEFAULT:
             retry_on_status = self.retry_on_status
-
-        ignore_status: FrozenSet[int]
-        if ignore_status is DEFAULT:
-            ignore_status = frozenset()
-        elif isinstance(ignore_status, int):
-            ignore_status = frozenset((ignore_status,))
-        else:
-            ignore_status = frozenset(ignore_status)
 
         if self.meta_header:
             client_meta = self._transport_client_meta + client_meta
@@ -303,6 +282,8 @@ class Transport:
             if self._sniff_before_requests:
                 self.sniff(False)
 
+            retry = False
+            last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
             node = self.node_pool.get()
             try:
                 meta, raw_data = node.perform_request(
@@ -318,23 +299,19 @@ class Transport:
                 else:
                     data = None
 
-                # Non-2XX statuses should be re-raised as ApiErrors.
-                if not (200 <= meta.status <= 299) or meta.status in ignore_status:
-                    raise HTTP_STATUS_TO_ERROR.get(meta.status, ApiError)(
-                        data, status=meta.status
-                    )
+                if meta.status in retry_on_status:
+                    retry = True
+                    # Keep track of the last response we see so we can return
+                    # it in case the retried request returns with a transport error.
+                    last_response = (meta, data)
 
             except TransportError as e:
-                retry = False
-                node_failure = e.status not in NOT_DEAD_NODE_HTTP_STATUSES
                 if isinstance(e, ConnectionTimeout):
                     retry = retry_on_timeout
                     node_failure = True
                 elif isinstance(e, ConnectionError):
                     retry = True
                     node_failure = True
-                elif e.status in retry_on_status:
-                    retry = True
 
                 # If the error was determined to be a node failure
                 # we mark it dead in the node pool to allow for
@@ -351,15 +328,41 @@ class Transport:
                             pass
 
                 if not retry or attempt >= max_retries:
+                    # Since we're exhausted but we have previously
+                    # received some sort of response from the API
+                    # we should forward that along instead of the
+                    # transport error. Likely to be more actionable.
+                    if last_response is not None:
+                        return last_response
+
                     e.errors = tuple(errors)
                     raise
                 else:
                     errors.append(e)
 
             else:
-                # node didn't fail, confirm it's live status
-                self.node_pool.mark_live(node)
-                return meta, data
+                # If we got back a response we need to check if that status
+                # is indicative of a healthy node even if it's a non-2XX status
+                if (
+                    200 <= meta.status < 299
+                    or meta.status in NOT_DEAD_NODE_HTTP_STATUSES
+                ):
+                    self.node_pool.mark_live(node)
+                else:
+                    self.node_pool.mark_dead(node)
+
+                    if self._sniff_on_node_failure:
+                        try:
+                            self.sniff(False)
+                        except TransportError:
+                            # If sniffing on failure, it could fail too. Catch the
+                            # exception not to interrupt the retries.
+                            pass
+
+                # We either got a response we're happy with or
+                # we've exhausted all of our retries so we return it.
+                if not retry or attempt >= max_retries:
+                    return meta, data
 
     def sniff(self, is_initial_sniff: bool) -> None:
         previously_sniffed_at = self._last_sniffed_at
