@@ -36,7 +36,7 @@ class Serializer:
 
 
 class TextSerializer(Serializer):
-    mimetype = "text/*"
+    mimetype: ClassVar[str] = "text/*"
 
     def loads(self, data: bytes) -> str:
         if isinstance(data, str):
@@ -62,7 +62,7 @@ class TextSerializer(Serializer):
 
 
 class JsonSerializer(Serializer):
-    mimetype = "application/json"
+    mimetype: ClassVar[str] = "application/json"
 
     def default(self, data: Any) -> Any:
         if isinstance(data, date):
@@ -111,7 +111,7 @@ class JsonSerializer(Serializer):
 
 
 class NdjsonSerializer(JsonSerializer):
-    mimetype = "application/x-ndjson"
+    mimetype: ClassVar[str] = "application/x-ndjson"
 
     def loads(self, data: bytes) -> Any:
         ndjson = []

@@ -22,12 +22,12 @@ import gzip
 import os
 import ssl
 import warnings
-from typing import Tuple
+from typing import Optional, Tuple, Union
 
 from .._compat import get_running_loop, warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
-from ..client_utils import DEFAULT, client_meta_version
+from ..client_utils import DEFAULT, DefaultType, client_meta_version, resolve_default
 from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS
 from ._base_async import BaseAsyncNode
 
@@ -83,12 +83,13 @@ class AiohttpHttpNode(BaseAsyncNode):
                         category=SecurityWarning,
                     )
 
-            if os.path.isfile(ca_certs):
-                ssl_context.load_verify_locations(cafile=ca_certs)
-            elif os.path.isdir(ca_certs):
-                ssl_context.load_verify_locations(capath=ca_certs)
-            else:
-                raise ValueError("ca_certs parameter is not a path")
+            if ca_certs is not None:
+                if os.path.isfile(ca_certs):
+                    ssl_context.load_verify_locations(cafile=ca_certs)
+                elif os.path.isdir(ca_certs):
+                    ssl_context.load_verify_locations(capath=ca_certs)
+                else:
+                    raise ValueError("ca_certs parameter is not a path")
 
             # Use client_cert and client_key variables for SSL certificate configuration.
             if config.client_cert and not os.path.isfile(config.client_cert):
@@ -100,20 +101,20 @@ class AiohttpHttpNode(BaseAsyncNode):
             elif config.client_cert:
                 ssl_context.load_cert_chain(config.client_cert)
 
-        self._loop = None
-        self.session = None
+        self._loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
+        self.session: Optional[aiohttp.ClientSession] = None
 
         # Parameters for creating an aiohttp.ClientSession later.
         self._connections_per_node = config.connections_per_node
         self._ssl_context = config.ssl_context
 
-    async def perform_request(
+    async def perform_request(  # type: ignore[override]
         self,
-        method,
-        target,
-        body=None,
-        headers=None,
-        request_timeout=DEFAULT,
+        method: str,
+        target: str,
+        body: Optional[bytes] = None,
+        headers: Optional[HttpHeaders] = None,
+        request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:
         if self.session is None:
             self._create_aiohttp_session()
@@ -130,13 +131,9 @@ class AiohttpHttpNode(BaseAsyncNode):
             is_head = True
 
         # total=0 means no timeout for aiohttp
-        request_timeout = (
-            request_timeout
-            if (request_timeout is not DEFAULT)
-            else self.config.request_timeout
-        )
+        resolved_timeout = resolve_default(request_timeout, self.config.request_timeout)
         aiohttp_timeout = aiohttp.ClientTimeout(
-            total=request_timeout if request_timeout is not None else 0
+            total=resolved_timeout if resolved_timeout is not None else 0
         )
 
         request_headers = self._headers.copy()
@@ -196,7 +193,7 @@ class AiohttpHttpNode(BaseAsyncNode):
             raw_data,
         )
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # type: ignore[override]
         if self.session:
             await self.session.close()
             self.session = None

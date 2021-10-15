@@ -17,15 +17,15 @@
 
 import asyncio
 import logging
-from typing import Tuple
+from typing import ClassVar, Optional, Tuple, Union
 
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from .._version import __version__
-from ..client_utils import DEFAULT
+from ..client_utils import DEFAULT, DefaultType
 
 logger = logging.getLogger("elastic_transport.node")
 
-DEFAULT_CA_CERTS = None
+DEFAULT_CA_CERTS: Optional[str] = None
 DEFAULT_USER_AGENT = f"elastic-transport-python/{__version__}"
 RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError)
 
@@ -46,14 +46,13 @@ class BaseNode:
     :arg config: :class:`~elastic_transport.NodeConfig` instance
     """
 
-    _CLIENT_META_HTTP_CLIENT = None
+    _CLIENT_META_HTTP_CLIENT: ClassVar[Tuple[str, str]]
 
     def __init__(self, config: NodeConfig):
         self._config = config
-        self._headers = self.config.headers.copy()
+        self._headers: HttpHeaders = self.config.headers.copy()  # type: ignore[attr-defined]
         self.headers.setdefault("connection", "keep-alive")
         self.headers.setdefault("user-agent", DEFAULT_USER_AGENT)
-
         self._http_compress = bool(config.http_compress or False)
         if config.http_compress:
             self.headers["accept-encoding"] = "gzip"
@@ -120,18 +119,18 @@ class BaseNode:
 
     def perform_request(
         self,
-        method,
-        target,
-        body=None,
-        headers=None,
-        request_timeout=DEFAULT,
+        method: str,
+        target: str,
+        body: Optional[bytes] = None,
+        headers: Optional[HttpHeaders] = None,
+        request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
         raise NotImplementedError()
 
     def close(self) -> None:  # pragma: nocover
         pass
 
-    def log_request_success(self, method, url, body, status, response, duration):
+    def log_request_success(self, method, url, body, status, response, duration):  # type: ignore
         """Log a successful API call"""
         # body has already been serialized to utf-8, deserialize it for logging
         # TODO: find a better way to avoid (de)encoding the body back and forth
@@ -145,7 +144,7 @@ class BaseNode:
         logger.debug("> %s", body)
         logger.debug("< %s", response)
 
-    def log_request_fail(
+    def log_request_fail(  # type: ignore
         self,
         method,
         url,

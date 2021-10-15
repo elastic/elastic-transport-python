@@ -20,11 +20,11 @@ import binascii
 import dataclasses
 import re
 from platform import python_version
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, TypeVar, Union
 from urllib.parse import quote as _quote
 
-from urllib3.exceptions import LocationParseError
-from urllib3.util import parse_url
+from urllib3.exceptions import LocationParseError  # type: ignore[import]
+from urllib3.util import parse_url  # type: ignore[import]
 
 from ._models import DEFAULT, DefaultType, NodeConfig
 from ._version import __version__
@@ -39,10 +39,20 @@ __all__ = [
     "dataclasses",
     "parse_cloud_id",
     "percent_encode",
+    "resolve_default",
     "to_bytes",
     "to_str",
     "url_to_node_config",
 ]
+
+T = TypeVar("T")
+
+
+def resolve_default(val: Union[DefaultType, T], default: T) -> T:
+    """Resolves a value that could be the ``DEFAULT`` sentinel
+    into either the given value or the default value.
+    """
+    return val if val is not DEFAULT else default  # type: ignore[return-value]
 
 
 def create_user_agent(name: str, version: str) -> str:
@@ -56,7 +66,12 @@ def client_meta_version(version: str) -> str:
     """Converts a Python version into a version string
     compatible with the ``X-Elastic-Client-Meta`` HTTP header.
     """
-    version, ver_is_pre = re.match(r"^([0-9][0-9.]*[0-9]|[0-9])(.*)$", version).groups()
+    match = re.match(r"^([0-9][0-9.]*[0-9]|[0-9])(.*)$", version)
+    if match is None:
+        raise ValueError(
+            "Version {version!r} not formatted like a Python version string"
+        )
+    version, ver_is_pre = match.groups()
     if ver_is_pre:
         version += "p"
     return version
@@ -83,6 +98,9 @@ def parse_cloud_id(cloud_id: str) -> CloudId:
         parent_dn = parts[0]
         if not parent_dn:
             raise ValueError()  # Caught and re-raised properly below
+
+        es_uuid: Optional[str]
+        kibana_uuid: Optional[str]
         try:
             es_uuid = parts[1]
         except IndexError:
@@ -91,6 +109,7 @@ def parse_cloud_id(cloud_id: str) -> CloudId:
             kibana_uuid = parts[2] or None
         except IndexError:
             kibana_uuid = None
+
         if ":" in parent_dn:
             parent_dn, _, parent_port = parent_dn.rpartition(":")
             port = int(parent_port)
@@ -114,7 +133,7 @@ def to_str(
 ) -> str:
     if type(value) == bytes:
         return value.decode(encoding, errors)
-    return value
+    return value  # type: ignore[return-value]
 
 
 def to_bytes(
@@ -122,7 +141,7 @@ def to_bytes(
 ) -> bytes:
     if type(value) == str:
         return value.encode(encoding, errors)
-    return value
+    return value  # type: ignore[return-value]
 
 
 # Python 3.7 added '~' to the safe list for urllib.parse.quote()
@@ -131,12 +150,17 @@ _QUOTE_ALWAYS_SAFE = frozenset(
 )
 
 
-def percent_encode(string: str, safe: str = "/") -> str:
+def percent_encode(
+    string: str,
+    safe: str = "/",
+    encoding: Optional[str] = None,
+    errors: Optional[str] = None,
+) -> str:
     """Percent-encodes a string so it can be used in an HTTP request target"""
     # Redefines 'urllib.parse.quote()' to always have the '~' character
     # within the 'ALWAYS_SAFE' list. The character was added in Python 3.7
     safe = "".join(_QUOTE_ALWAYS_SAFE.union(set(safe)))
-    return _quote(string, safe)
+    return _quote(string, safe, encoding=encoding, errors=errors)
 
 
 def basic_auth_to_header(basic_auth: Tuple[str, str]) -> str:

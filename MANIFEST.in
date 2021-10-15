@@ -3,6 +3,7 @@ include MANIFEST.in
 include README.md
 include CHANGELOG.md
 include setup.py
+include elastic_transport/py.typed
 
 prune docs/_build
 prune tests

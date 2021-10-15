@@ -16,7 +16,20 @@
 #  under the License.
 
 import asyncio
-from typing import Any, Awaitable, Callable, List, Mapping, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Collection,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
+
+from elastic_transport.client_utils import resolve_default
 
 from ._compat import await_if_coro, get_running_loop
 from ._exceptions import ConnectionError, ConnectionTimeout, TransportError
@@ -28,7 +41,7 @@ from ._models import (
     NodeConfig,
     SniffOptions,
 )
-from ._node import AiohttpHttpNode, BaseNode
+from ._node import AiohttpHttpNode, BaseAsyncNode
 from ._node_pool import NodePool, NodeSelector
 from ._serializer import Serializer
 from ._transport import (
@@ -50,7 +63,7 @@ class AsyncTransport(Transport):
     def __init__(
         self,
         node_configs: List[NodeConfig],
-        node_class: Union[str, Type[BaseNode]] = AiohttpHttpNode,
+        node_class: Union[str, Type[BaseAsyncNode]] = AiohttpHttpNode,
         node_pool_class: Type[NodePool] = NodePool,
         randomize_nodes_in_pool: bool = True,
         node_selector_class: Optional[Union[str, Type[NodeSelector]]] = None,
@@ -59,7 +72,7 @@ class AsyncTransport(Transport):
         serializers: Optional[Mapping[str, Serializer]] = None,
         default_mimetype: str = "application/json",
         max_retries: int = 3,
-        retry_on_status=(429, 502, 503, 504),
+        retry_on_status: Collection[int] = (429, 502, 503, 504),
         retry_on_timeout: bool = False,
         sniff_on_start: bool = False,
         sniff_before_requests: bool = False,
@@ -68,7 +81,7 @@ class AsyncTransport(Transport):
         min_delay_between_sniffing: float = 10.0,
         sniff_callback: Optional[
             Callable[
-                ["Transport", "SniffOptions"],
+                ["AsyncTransport", "SniffOptions"],
                 Union[List[NodeConfig], Awaitable[List[NodeConfig]]],
             ]
         ] = None,
@@ -146,13 +159,20 @@ class AsyncTransport(Transport):
         self._sniff_before_requests = sniff_before_requests
         self._sniff_on_node_failure = sniff_on_node_failure
         self._sniff_timeout = sniff_timeout
-        self._sniff_callback = sniff_callback
-        self._sniffing_lock = None
-        self._sniffing_task: Optional[asyncio.Task] = None
+        self._sniff_callback = sniff_callback  # type: ignore
+        self._sniffing_task: Optional["asyncio.Task[Any]"] = None
         self._last_sniffed_at = 0.0
-        self._loop: Optional[asyncio.BaseEventLoop] = None
 
-    async def perform_request(
+        # We set this to 'None' here but it'll never be None by the
+        # time it's needed. Gets set within '_async_call()' which should
+        # precede all logic within async calls.
+        self._loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
+
+        # AsyncTransport doesn't require a thread lock for
+        # sniffing. Uses '_sniffing_task' instead.
+        self._sniffing_lock = None  # type: ignore[assignment]
+
+    async def perform_request(  # type: ignore[override,return]
         self,
         method: str,
         target: str,
@@ -160,7 +180,7 @@ class AsyncTransport(Transport):
         body: Optional[Any] = None,
         headers: Union[Mapping[str, Any], DefaultType] = DEFAULT,
         max_retries: Union[int, DefaultType] = DEFAULT,
-        retry_on_status: Union[int, DefaultType] = DEFAULT,
+        retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...]] = DEFAULT,
@@ -195,20 +215,19 @@ class AsyncTransport(Transport):
             request_headers = HttpHeaders()
         else:
             request_headers = HttpHeaders(headers)
-        if max_retries is DEFAULT:
-            max_retries = self.max_retries
-        if retry_on_timeout is DEFAULT:
-            retry_on_timeout = self.retry_on_timeout
-        if retry_on_status is DEFAULT:
-            retry_on_status = self.retry_on_status
+        max_retries = resolve_default(max_retries, self.max_retries)
+        retry_on_timeout = resolve_default(retry_on_timeout, self.retry_on_timeout)
+        retry_on_status = resolve_default(retry_on_status, self.retry_on_status)
 
         if self.meta_header:
-            client_meta = self._transport_client_meta + client_meta
             request_headers["x-elastic-client-meta"] = ",".join(
-                f"{k}={v}" for k, v in client_meta
+                f"{k}={v}"
+                for k, v in self._transport_client_meta
+                + resolve_default(client_meta, ())
             )
 
         # Serialize the request body to bytes based on the given mimetype.
+        request_body: Optional[bytes]
         if body is not None:
             if "content-type" not in request_headers:
                 raise ValueError(
@@ -221,7 +240,7 @@ class AsyncTransport(Transport):
             request_body = None
 
         # Errors are stored from (oldest->newest)
-        errors = []
+        errors: List[Exception] = []
 
         for attempt in range(max_retries + 1):
 
@@ -232,7 +251,7 @@ class AsyncTransport(Transport):
 
             retry = False
             last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
-            node = self.node_pool.get()
+            node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
             try:
                 meta, raw_data = await node.perform_request(
                     method,
@@ -312,7 +331,7 @@ class AsyncTransport(Transport):
                 if not retry or attempt >= max_retries:
                     return meta, data
 
-    async def sniff(self, is_initial_sniff: bool) -> None:
+    async def sniff(self, is_initial_sniff: bool) -> None:  # type: ignore[override]
         await self._async_call()
         task = self._create_sniffing_task(is_initial_sniff)
 
@@ -321,11 +340,12 @@ class AsyncTransport(Transport):
         if is_initial_sniff and task:
             await task
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # type: ignore[override]
         """
         Explicitly closes all nodes in the transport's pool
         """
-        for node in self.node_pool.all():
+        node: BaseAsyncNode
+        for node in self.node_pool.all():  # type: ignore[assignment]
             await node.close()
 
     def _should_sniff(self, is_initial_sniff: bool) -> bool:
@@ -348,7 +368,9 @@ class AsyncTransport(Transport):
             >= self._min_delay_between_sniffing
         )
 
-    def _create_sniffing_task(self, is_initial_sniff: bool) -> Optional[asyncio.Task]:
+    def _create_sniffing_task(
+        self, is_initial_sniff: bool
+    ) -> Optional["asyncio.Task[Any]"]:
         """Creates a sniffing task if one should be created and returns the task if created."""
         task = None
         if self._should_sniff(is_initial_sniff):
@@ -365,6 +387,7 @@ class AsyncTransport(Transport):
             options = SniffOptions(
                 is_initial_sniff=is_initial_sniff, sniff_timeout=self._sniff_timeout
             )
+            assert self._sniff_callback is not None
             for node_config in await await_if_coro(self._sniff_callback(self, options)):
                 self.node_pool.add(node_config)
 

@@ -19,7 +19,7 @@ import asyncio
 import inspect
 import sys
 from pathlib import Path
-from typing import Awaitable, TypeVar, Union
+from typing import Any, Awaitable, TypeVar, Union
 from urllib.parse import quote as _quote
 from urllib.parse import urlencode, urlparse
 
@@ -39,7 +39,7 @@ try:
     from asyncio import get_running_loop
 except ImportError:
 
-    def get_running_loop():
+    def get_running_loop() -> asyncio.AbstractEventLoop:
         loop = asyncio.get_event_loop()
         if not loop.is_running():
             raise RuntimeError("no running event loop")
@@ -51,8 +51,8 @@ T = TypeVar("T")
 
 async def await_if_coro(coro: Union[T, Awaitable[T]]) -> T:
     if inspect.iscoroutine(coro):
-        return await coro
-    return coro
+        return await coro  # type: ignore
+    return coro  # type: ignore
 
 
 _QUOTE_ALWAYS_SAFE = frozenset(
@@ -60,8 +60,7 @@ _QUOTE_ALWAYS_SAFE = frozenset(
 )
 
 
-def quote(string, safe="/"):
-    # type: (str, str) -> str
+def quote(string: str, safe: str = "/") -> str:
     # Redefines 'urllib.parse.quote()' to always have the '~' character
     # within the 'ALWAYS_SAFE' list. The character was added in Python 3.7
     safe = "".join(_QUOTE_ALWAYS_SAFE.union(set(safe)))
@@ -72,11 +71,11 @@ try:
     from threading import Lock
 except ImportError:
 
-    class Lock:
+    class Lock:  # type: ignore
         def __enter__(self) -> None:
             pass
 
-        def __exit__(self, *_) -> None:
+        def __exit__(self, *_: Any) -> None:
             pass
 
         def acquire(self, _: bool = True) -> bool:

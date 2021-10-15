@@ -46,6 +46,7 @@ setup(
         "Source Code": "https://github.com/elastic/elastic-transport-python",
         "Issue Tracker": "https://github.com/elastic/elastic-transport-python/issues",
     },
+    package_data={"elastic_transport": ["py.typed"]},
     packages=packages,
     install_requires=[
         "urllib3>=1.26.2, <2",

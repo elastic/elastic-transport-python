@@ -21,11 +21,25 @@ import threading
 import time
 from collections import defaultdict
 from queue import Empty, PriorityQueue
-from typing import Dict, List, Optional, Sequence, Set, Tuple, Type, Union, overload
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    overload,
+)
 
 from ._compat import Lock, ordered_dict
 from ._models import NodeConfig
 from ._node import BaseNode
+
+if TYPE_CHECKING:
+    from typing import Literal
 
 logger = logging.getLogger("elastic_transport.node_pool")
 
@@ -78,7 +92,7 @@ class RoundRobinSelector(NodeSelector):
 
     def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
         self._thread_local.rr = (getattr(self._thread_local, "rr", -1) + 1) % len(nodes)
-        return nodes[self._thread_local.rr]
+        return nodes[self._thread_local.rr]  # type: ignore[no-any-return]
 
 
 _SELECTOR_CLASS_NAMES: Dict[str, Type[NodeSelector]] = {
@@ -234,7 +248,11 @@ class NodePool:
             pass
 
     @overload
-    def resurrect(self, force: bool = True) -> BaseNode:
+    def resurrect(self, force: "Literal[True]" = ...) -> BaseNode:
+        ...
+
+    @overload
+    def resurrect(self, force: "Literal[False]" = ...) -> Optional[BaseNode]:
         ...
 
     def resurrect(self, force: bool = False) -> Optional[BaseNode]:

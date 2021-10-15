@@ -22,7 +22,8 @@ from hmac import compare_digest
 from typing import Any, List, Optional
 
 import _ssl  # type: ignore
-import urllib3
+import urllib3  # type: ignore[import]
+import urllib3.connection  # type: ignore[import]
 
 from ._base import RERAISE_EXCEPTIONS
 
@@ -35,7 +36,7 @@ _HASHES_BY_LENGTH = {32: hashlib.md5, 40: hashlib.sha1, 64: hashlib.sha256}
 __all__ = ["HTTPSConnectionPool"]
 
 
-class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
+class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):  # type: ignore[misc]
     """HTTPSConnectionPool implementation which supports ``assert_fingerprint``
     on certificates within the chain instead of only the leaf cert using private
     APIs in CPython 3.10+
@@ -66,7 +67,7 @@ class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
 
         super().__init__(*args, **kwargs)
 
-    def _validate_conn(self, conn):
+    def _validate_conn(self, conn: urllib3.connection.HTTPSConnection) -> None:
         """
         Called right before a request is made, after the socket is created.
         """

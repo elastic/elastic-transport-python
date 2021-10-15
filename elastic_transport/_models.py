@@ -18,14 +18,39 @@
 import dataclasses
 import ssl
 from dataclasses import dataclass, field
-from typing import Any, Dict, NamedTuple, Optional, TypeVar, Union
+from typing import (
+    AbstractSet,
+    Any,
+    Collection,
+    Dict,
+    Iterator,
+    NamedTuple,
+    NoReturn,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    ValuesView,
+)
 
 from ._compat import Mapping, MutableMapping
 
 #: Sentinel used as a default value when ``None`` has special meaning like timeouts.
 #: The only comparisons that are supported for this type are ``is``.
 DefaultType = NamedTuple("DefaultType", ())
-DefaultType.__repr__ = lambda *_: "DEFAULT"
+
+
+def _not_implemented(*_: Any) -> NoReturn:
+    raise NotImplementedError()
+
+
+DefaultType.__str__ = lambda *_: "DEFAULT"  # type: ignore
+DefaultType.__repr__ = lambda *_: "DEFAULT"  # type: ignore
+DefaultType.__eq__ = _not_implemented  # type: ignore
+DefaultType.__ne__ = _not_implemented  # type: ignore
+DefaultType.__iter__ = _not_implemented  # type: ignore
+DefaultType.__hash__ = _not_implemented  # type: ignore
+
 DEFAULT = DefaultType()
 
 T = TypeVar("T")
@@ -34,22 +59,25 @@ T = TypeVar("T")
 class HttpHeaders(MutableMapping[str, str]):
     """HTTP headers"""
 
-    def __init__(self, initial=None):
+    def __init__(
+        self,
+        initial: Optional[Union[Mapping[str, str], Collection[Tuple[str, str]]]] = None,
+    ) -> None:
         self._internal = {}
         self._frozen = False
         if initial:
             for key, val in dict(initial).items():
                 self._internal[self._normalize_key(key)] = (key, val)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: str) -> None:
         if self._frozen:
             raise ValueError("Can't modify headers that have been frozen")
         self._internal[self._normalize_key(key)] = (key, value)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: str) -> str:
         return self._internal[self._normalize_key(item)][1]
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> None:
         if self._frozen:
             raise ValueError("Can't modify headers that have been frozen")
         del self._internal[self._normalize_key(key)]
@@ -68,7 +96,7 @@ class HttpHeaders(MutableMapping[str, str]):
             return NotImplemented
         return not self == other
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         return iter(self.keys())
 
     def __len__(self) -> int:
@@ -77,8 +105,8 @@ class HttpHeaders(MutableMapping[str, str]):
     def __bool__(self) -> bool:
         return bool(self._internal)
 
-    def __contains__(self, item: str) -> bool:
-        return self._normalize_key(item) in self._internal
+    def __contains__(self, item: object) -> bool:
+        return isinstance(item, str) and self._normalize_key(item) in self._internal
 
     def __repr__(self) -> str:
         return repr(dict(self.items()))
@@ -91,16 +119,16 @@ class HttpHeaders(MutableMapping[str, str]):
             raise ValueError("Can't calculate the hash of headers that aren't frozen")
         return hash(tuple((k, v) for k, (_, v) in sorted(self._internal.items())))
 
-    def get(self, key, default=None):
+    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:  # type: ignore[override]
         return self._internal.get(self._normalize_key(key), (None, default))[1]
 
-    def keys(self):
-        return [key for _, (key, _) in self._internal.items()]
+    def keys(self) -> AbstractSet[str]:
+        return self._internal.keys()
 
-    def values(self):
-        return [val for _, (_, val) in self._internal.items()]
+    def values(self) -> ValuesView[str]:
+        return {"": v for _, v in self._internal.values()}.values()
 
-    def items(self):
+    def items(self) -> Collection[Tuple[str, str]]:  # type: ignore[override]
         return [(key, val) for _, (key, val) in self._internal.items()]
 
     def freeze(self) -> "HttpHeaders":
@@ -270,12 +298,16 @@ class NodeConfig:
             # It's not valid to set 'ssl_context' and any other
             # TLS option, the SSLContext object must be configured
             # the way the user wants already.
+            def tls_option_filter(attr: object) -> bool:
+                return (
+                    isinstance(attr, str)
+                    and attr not in ("ssl_context", "ssl_assert_fingerprint")
+                    and getattr(self, attr) is not None
+                )
+
             if self.ssl_context is not None and any(
                 filter(
-                    lambda attr: (
-                        attr not in ("ssl_context", "ssl_assert_fingerprint")
-                        and getattr(self, attr) is not None
-                    ),
+                    tls_option_filter,
                     tls_options,
                 )
             ):
