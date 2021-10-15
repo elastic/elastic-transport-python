@@ -15,7 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from typing import Any
+from typing import Any, Tuple
 
 from ._models import ApiResponseMeta
 
@@ -39,7 +39,7 @@ class TransportError(Exception):
     they are stored under 'headers'.
     """
 
-    def __init__(self, message, errors=()):
+    def __init__(self, message: Any, errors: Tuple[Exception, ...] = ()):
         super().__init__(message)
         self.errors = tuple(errors)
         self.message = message
@@ -90,7 +90,13 @@ class ConnectionTimeout(TransportError):
 class ApiError(TransportError):
     """Base-class for clients that raise errors due to a response such as '404 Not Found'"""
 
-    def __init__(self, message: str, meta: ApiResponseMeta, body: Any, errors=()):
+    def __init__(
+        self,
+        message: str,
+        meta: ApiResponseMeta,
+        body: Any,
+        errors: Tuple[Exception, ...] = (),
+    ):
         super().__init__(message=message, errors=errors)
         self.meta = meta
         self.body = body

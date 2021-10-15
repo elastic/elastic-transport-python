@@ -19,7 +19,19 @@ import dataclasses
 import time
 import warnings
 from platform import python_version
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 from ._compat import Lock, warn_stacklevel
 from ._exceptions import (
@@ -40,7 +52,7 @@ from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
 from ._node_pool import NodePool, NodeSelector
 from ._serializer import DEFAULT_SERIALIZERS, Serializer, SerializerCollection
 from ._version import __version__
-from .client_utils import client_meta_version
+from .client_utils import client_meta_version, resolve_default
 
 # Allows for using a node_class by name rather than import.
 NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
@@ -76,7 +88,7 @@ class Transport:
         serializers: Optional[Mapping[str, Serializer]] = None,
         default_mimetype: str = "application/json",
         max_retries: int = 3,
-        retry_on_status=(429, 502, 503, 504),
+        retry_on_status: Collection[int] = (429, 502, 503, 504),
         retry_on_timeout: bool = False,
         sniff_on_start: bool = False,
         sniff_before_requests: bool = False,
@@ -84,11 +96,14 @@ class Transport:
         sniff_timeout: Optional[float] = 0.5,
         min_delay_between_sniffing: float = 10.0,
         sniff_callback: Optional[
-            Callable[["Transport", "SniffOptions"], List[NodeConfig]]
+            Callable[
+                ["Transport", "SniffOptions"],
+                Union[List[NodeConfig], List[NodeConfig]],
+            ]
         ] = None,
         meta_header: bool = True,
         client_meta_service: Tuple[str, str] = DEFAULT_CLIENT_META_SERVICE,
-    ):
+    ) -> None:
         """
         :arg node_configs: List of 'NodeConfig' instances to create initial set of nodes.
         :arg node_class: subclass of :class:`~elastic_transport.BaseNode` to use
@@ -149,14 +164,17 @@ class Transport:
         # Create the default metadata for the x-elastic-client-meta
         # HTTP header. Only requires adding the (service, service_version)
         # tuple to the beginning of the client_meta
-        self._transport_client_meta = (
+        self._transport_client_meta: Tuple[Tuple[str, str], ...] = (
             client_meta_service,
             ("py", client_meta_version(python_version())),
             ("t", client_meta_version(__version__)),
         )
 
         # Grab the 'HTTP_CLIENT_META' property from the node class
-        http_client_meta = getattr(node_class, "_CLIENT_META_HTTP_CLIENT", None)
+        http_client_meta = cast(
+            Optional[Tuple[str, str]],
+            getattr(node_class, "_CLIENT_META_HTTP_CLIENT", None),
+        )
         if http_client_meta:
             self._transport_client_meta += (http_client_meta,)
 
@@ -180,14 +198,14 @@ class Transport:
         self.retry_on_timeout = retry_on_timeout
 
         # Build the NodePool from all the options
-        node_pool_kwargs = {}
+        node_pool_kwargs: Dict[str, Any] = {}
         if node_selector_class is not None:
             node_pool_kwargs["node_selector_class"] = node_selector_class
         if dead_backoff_factor is not None:
             node_pool_kwargs["dead_backoff_factor"] = dead_backoff_factor
         if max_dead_backoff is not None:
             node_pool_kwargs["max_dead_backoff"] = max_dead_backoff
-        self.node_pool = node_pool_class(
+        self.node_pool: NodePool = node_pool_class(
             node_configs,
             node_class=node_class,
             randomize_nodes=randomize_nodes_in_pool,
@@ -206,7 +224,7 @@ class Transport:
         if sniff_on_start:
             self.sniff(True)
 
-    def perform_request(
+    def perform_request(  # type: ignore[override,return]
         self,
         method: str,
         target: str,
@@ -214,7 +232,7 @@ class Transport:
         body: Optional[Any] = None,
         headers: Union[Mapping[str, Any], DefaultType] = DEFAULT,
         max_retries: Union[int, DefaultType] = DEFAULT,
-        retry_on_status: Union[int, DefaultType] = DEFAULT,
+        retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...]] = DEFAULT,
@@ -247,20 +265,19 @@ class Transport:
             request_headers = HttpHeaders()
         else:
             request_headers = HttpHeaders(headers)
-        if max_retries is DEFAULT:
-            max_retries = self.max_retries
-        if retry_on_timeout is DEFAULT:
-            retry_on_timeout = self.retry_on_timeout
-        if retry_on_status is DEFAULT:
-            retry_on_status = self.retry_on_status
+        max_retries = resolve_default(max_retries, self.max_retries)
+        retry_on_timeout = resolve_default(retry_on_timeout, self.retry_on_timeout)
+        retry_on_status = resolve_default(retry_on_status, self.retry_on_status)
 
         if self.meta_header:
-            client_meta = self._transport_client_meta + client_meta
             request_headers["x-elastic-client-meta"] = ",".join(
-                f"{k}={v}" for k, v in client_meta
+                f"{k}={v}"
+                for k, v in self._transport_client_meta
+                + resolve_default(client_meta, ())
             )
 
         # Serialize the request body to bytes based on the given mimetype.
+        request_body: Optional[bytes]
         if body is not None:
             if "content-type" not in request_headers:
                 raise ValueError(
@@ -273,7 +290,7 @@ class Transport:
             request_body = None
 
         # Errors are stored from (oldest->newest)
-        errors = []
+        errors: List[Exception] = []
 
         for attempt in range(max_retries + 1):
 
@@ -374,6 +391,7 @@ class Transport:
                 options = SniffOptions(
                     is_initial_sniff=is_initial_sniff, sniff_timeout=self._sniff_timeout
                 )
+                assert self._sniff_callback is not None
                 for node_config in self._sniff_callback(self, options):
                     self.node_pool.add(node_config)
 

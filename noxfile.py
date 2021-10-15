@@ -39,11 +39,15 @@ def format(session):
 
 @nox.session
 def lint(session):
-    session.install("flake8", "black", "isort")
+    session.install(
+        "flake8", "black", "isort", "mypy", "types-requests", "types-certifi"
+    )
+    session.install(".[develop]")
     session.run("black", "--check", "--target-version=py36", *SOURCE_FILES)
     session.run("isort", "--check", *SOURCE_FILES)
     session.run("flake8", "--ignore=E501,W503,E203", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "check", *SOURCE_FILES)
+    session.run("mypy", "--strict", "--show-error-codes", "elastic_transport/")
 
 
 @nox.session(python=["3.6", "3.7", "3.8", "3.9", "3.10"])

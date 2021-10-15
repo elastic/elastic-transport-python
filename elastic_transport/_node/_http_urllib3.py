@@ -19,22 +19,25 @@ import gzip
 import ssl
 import time
 import warnings
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
-import urllib3
-from urllib3.exceptions import ConnectTimeoutError, ReadTimeoutError
-from urllib3.util.retry import Retry
+import urllib3  # type: ignore[import]
+from urllib3.exceptions import (  # type: ignore[import]
+    ConnectTimeoutError,
+    ReadTimeoutError,
+)
+from urllib3.util.retry import Retry  # type: ignore[import]
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
-from ..client_utils import DEFAULT, client_meta_version
+from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS, BaseNode
 
 try:
     from ._urllib3_chain_certs import HTTPSConnectionPool
 except (ImportError, AttributeError):
-    HTTPSConnectionPool = urllib3.HTTPSConnectionPool
+    HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[misc]
 
 
 class Urllib3HttpNode(BaseNode):
@@ -46,7 +49,7 @@ class Urllib3HttpNode(BaseNode):
         super().__init__(config)
 
         pool_class = urllib3.HTTPConnectionPool
-        kw = {}
+        kw: Dict[str, Any] = {}
 
         # if ssl_context provided use SSL by default
         if config.scheme == "https" and config.ssl_context:
@@ -113,8 +116,8 @@ class Urllib3HttpNode(BaseNode):
         method: str,
         target: str,
         body: Optional[bytes] = None,
-        headers=None,
-        request_timeout=DEFAULT,
+        headers: Optional[HttpHeaders] = None,
+        request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:
 
         start = time.time()
@@ -157,14 +160,16 @@ class Urllib3HttpNode(BaseNode):
                 raise TlsError(str(e), errors=(e,)) from None
             raise ConnectionError(str(e), errors=(e,)) from None
 
-        response = ApiResponseMeta(
-            node=self.config,
-            duration=duration,
-            http_version="1.1",
-            status=response.status,
-            headers=response_headers,
+        return (
+            ApiResponseMeta(
+                node=self.config,
+                duration=duration,
+                http_version="1.1",
+                status=response.status,
+                headers=response_headers,
+            ),
+            data,
         )
-        return response, data
 
     def close(self) -> None:
         """

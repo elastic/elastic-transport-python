@@ -15,25 +15,25 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from typing import Tuple
+from typing import Optional, Tuple, Union
 
-from .._models import ApiResponseMeta
-from ..client_utils import DEFAULT
+from .._models import ApiResponseMeta, HttpHeaders
+from ..client_utils import DEFAULT, DefaultType
 from ._base import BaseNode
 
 
 class BaseAsyncNode(BaseNode):
     """Base class for Async HTTP node implementations"""
 
-    async def perform_request(  # type: ignore
+    async def perform_request(  # type: ignore[override]
         self,
-        method,
-        target,
-        body=None,
-        headers=None,
-        request_timeout=DEFAULT,
-    ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
-        raise NotImplementedError()
+        method: str,
+        target: str,
+        body: Optional[bytes] = None,
+        headers: Optional[HttpHeaders] = None,
+        request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
+    ) -> Tuple[ApiResponseMeta, bytes]:
+        raise NotImplementedError()  # pragma: nocover
 
-    async def close(self):  # pragma: nocover
-        raise NotImplementedError()
+    async def close(self) -> None:  # type: ignore[override]
+        raise NotImplementedError()  # pragma: nocover

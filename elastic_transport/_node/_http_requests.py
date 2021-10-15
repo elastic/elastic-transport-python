@@ -19,14 +19,14 @@ import gzip
 import ssl
 import time
 import warnings
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple, Union
 
-import urllib3
+import urllib3  # type: ignore[import]
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
-from ..client_utils import DEFAULT, client_meta_version
+from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import RERAISE_EXCEPTIONS, BaseNode
 
 try:
@@ -40,15 +40,19 @@ try:
     try:
         from ._urllib3_chain_certs import HTTPSConnectionPool
     except (ImportError, AttributeError):
-        HTTPSConnectionPool = urllib3.HTTPSConnectionPool
+        HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[misc]
 
     class _ElasticHTTPAdapter(HTTPAdapter):
-        def __init__(self, node_config: NodeConfig, **kwargs):
+        def __init__(self, node_config: NodeConfig, **kwargs: Any) -> None:
             self._node_config = node_config
             super().__init__(**kwargs)
 
         def init_poolmanager(
-            self, connections, maxsize, block=False, **pool_kwargs
+            self,
+            connections: Any,
+            maxsize: int,
+            block: bool = False,
+            **pool_kwargs: Any,
         ) -> None:
             if self._node_config.ssl_context:
                 pool_kwargs.setdefault("ssl_context", self._node_config.ssl_context)
@@ -57,7 +61,7 @@ try:
                     "assert_fingerprint", self._node_config.ssl_assert_fingerprint
                 )
 
-            super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
+            super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)  # type: ignore [no-untyped-call]
             self.poolmanager.pool_classes_by_scheme["https"] = HTTPSConnectionPool
 
 
@@ -121,7 +125,7 @@ class RequestsHttpNode(BaseNode):
         )
         # Preload the HTTPConnectionPool so initialization issues
         # are raised here instead of in perform_request()
-        adapter.get_connection(self.base_url)
+        adapter.get_connection(self.base_url)  # type: ignore[no-untyped-call]
         self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
 
     def perform_request(
@@ -129,8 +133,8 @@ class RequestsHttpNode(BaseNode):
         method: str,
         target: str,
         body: Optional[bytes] = None,
-        headers=None,
-        request_timeout=DEFAULT,
+        headers: Optional[HttpHeaders] = None,
+        request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:
         url = self.base_url + target
         headers = HttpHeaders(headers or ())
@@ -157,7 +161,7 @@ class RequestsHttpNode(BaseNode):
             else self.config.request_timeout
         }
         send_kwargs.update(
-            self.session.merge_environment_settings(
+            self.session.merge_environment_settings(  # type: ignore[no-untyped-call]
                 prepared_request.url, {}, None, None, None
             )
         )
@@ -178,14 +182,16 @@ class RequestsHttpNode(BaseNode):
                 raise TlsError(str(e), errors=(e,)) from None
             raise ConnectionError(str(e), errors=(e,)) from None
 
-        response = ApiResponseMeta(
-            node=self.config,
-            duration=duration,
-            http_version="1.1",
-            status=response.status_code,
-            headers=response_headers,
+        return (
+            ApiResponseMeta(
+                node=self.config,
+                duration=duration,
+                http_version="1.1",
+                status=response.status_code,
+                headers=response_headers,
+            ),
+            data,
         )
-        return response, data
 
     def close(self) -> None:
         """
