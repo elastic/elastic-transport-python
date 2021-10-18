@@ -54,59 +54,65 @@ class AiohttpHttpNode(BaseAsyncNode):
         super().__init__(config)
 
         self._ssl_assert_fingerprint = config.ssl_assert_fingerprint
-        if config.scheme == "https" and config.ssl_context is None:
-            if config.ssl_version is None:
-                ssl_context = ssl.create_default_context()
+        ssl_context: Optional[ssl.SSLContext] = None
+        if config.scheme == "https":
+            if config.ssl_context is not None:
+                ssl_context = config.ssl_context
             else:
-                ssl_context = ssl.SSLContext(config.ssl_version)
-
-            if config.verify_certs:
-                ssl_context.verify_mode = ssl.CERT_REQUIRED
-                ssl_context.check_hostname = True
-            else:
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
-
-            ca_certs = DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
-            if config.verify_certs:
-                if not ca_certs:
-                    raise ValueError(
-                        "Root certificates are missing for certificate "
-                        "validation. Either pass them in using the ca_certs parameter or "
-                        "install certifi to use it automatically."
-                    )
-            else:
-                if config.ssl_show_warn:
-                    warnings.warn(
-                        f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
-                        stacklevel=warn_stacklevel(),
-                        category=SecurityWarning,
-                    )
-
-            if ca_certs is not None:
-                if os.path.isfile(ca_certs):
-                    ssl_context.load_verify_locations(cafile=ca_certs)
-                elif os.path.isdir(ca_certs):
-                    ssl_context.load_verify_locations(capath=ca_certs)
+                if config.ssl_version is None:
+                    ssl_context = ssl.create_default_context()
                 else:
-                    raise ValueError("ca_certs parameter is not a path")
+                    ssl_context = ssl.SSLContext(config.ssl_version)
 
-            # Use client_cert and client_key variables for SSL certificate configuration.
-            if config.client_cert and not os.path.isfile(config.client_cert):
-                raise ValueError("client_cert is not a path to a file")
-            if config.client_key and not os.path.isfile(config.client_key):
-                raise ValueError("client_key is not a path to a file")
-            if config.client_cert and config.client_key:
-                ssl_context.load_cert_chain(config.client_cert, config.client_key)
-            elif config.client_cert:
-                ssl_context.load_cert_chain(config.client_cert)
+                if config.verify_certs:
+                    ssl_context.verify_mode = ssl.CERT_REQUIRED
+                    ssl_context.check_hostname = True
+                else:
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+
+                ca_certs = (
+                    DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
+                )
+                if config.verify_certs:
+                    if not ca_certs:
+                        raise ValueError(
+                            "Root certificates are missing for certificate "
+                            "validation. Either pass them in using the ca_certs parameter or "
+                            "install certifi to use it automatically."
+                        )
+                else:
+                    if config.ssl_show_warn:
+                        warnings.warn(
+                            f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
+                            stacklevel=warn_stacklevel(),
+                            category=SecurityWarning,
+                        )
+
+                if ca_certs is not None:
+                    if os.path.isfile(ca_certs):
+                        ssl_context.load_verify_locations(cafile=ca_certs)
+                    elif os.path.isdir(ca_certs):
+                        ssl_context.load_verify_locations(capath=ca_certs)
+                    else:
+                        raise ValueError("ca_certs parameter is not a path")
+
+                # Use client_cert and client_key variables for SSL certificate configuration.
+                if config.client_cert and not os.path.isfile(config.client_cert):
+                    raise ValueError("client_cert is not a path to a file")
+                if config.client_key and not os.path.isfile(config.client_key):
+                    raise ValueError("client_key is not a path to a file")
+                if config.client_cert and config.client_key:
+                    ssl_context.load_cert_chain(config.client_cert, config.client_key)
+                elif config.client_cert:
+                    ssl_context.load_cert_chain(config.client_cert)
 
         self._loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
         self.session: Optional[aiohttp.ClientSession] = None
 
         # Parameters for creating an aiohttp.ClientSession later.
         self._connections_per_node = config.connections_per_node
-        self._ssl_context = config.ssl_context
+        self._ssl_context = ssl_context
 
     async def perform_request(  # type: ignore[override]
         self,
