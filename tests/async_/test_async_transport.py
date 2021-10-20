@@ -113,11 +113,11 @@ def test_kwargs_passed_on_to_node_pool():
     dt = object()
     t = AsyncTransport(
         [NodeConfig("http", "localhost", 80)],
-        dead_backoff_factor=dt,
-        max_dead_backoff=dt,
+        dead_node_backoff_factor=dt,
+        max_dead_node_backoff=dt,
     )
-    assert dt is t.node_pool.dead_backoff_factor
-    assert dt is t.node_pool.max_dead_backoff
+    assert dt is t.node_pool.dead_node_backoff_factor
+    assert dt is t.node_pool.max_dead_node_backoff
 
 
 async def test_request_will_fail_after_x_retries():

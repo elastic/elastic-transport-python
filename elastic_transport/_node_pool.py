@@ -128,20 +128,20 @@ class NodePool:
         self,
         node_configs: List[NodeConfig],
         node_class: Type[BaseNode],
-        dead_backoff_factor: float = 5.0,
-        max_dead_backoff: float = 60.0,
+        dead_node_backoff_factor: float = 5.0,
+        max_dead_node_backoff: float = 60.0,
         node_selector_class: Union[str, Type[NodeSelector]] = RoundRobinSelector,
         randomize_nodes: bool = True,
     ):
         """
         :arg node_configs: List of initial NodeConfigs to use
         :arg node_class: Type to use when creating nodes
-        :arg dead_backoff_factor: Number of seconds used as a factor in
+        :arg dead_node_backoff_factor: Number of seconds used as a factor in
             calculating the amount of "backoff" time we should give a node
             after an unsuccessful request. The formula is calculated as
             follows where N is the number of consecutive failures:
             ``min(dead_backoff_factor * (2 ** (N - 1)), max_dead_backoff)``
-        :arg max_dead_backoff: Maximum number of seconds to wait
+        :arg max_dead_node_backoff: Maximum number of seconds to wait
             when calculating the "backoff" time for a dead node.
         :arg node_selector_class: :class:`~elastic_transport.NodeSelector`
             subclass to use if more than one connection is live
@@ -206,8 +206,8 @@ class NodePool:
         self.removed_nodes: Set[NodeConfig] = set()
 
         # default timeout after which to try resurrecting a connection
-        self.dead_backoff_factor = dead_backoff_factor
-        self.max_dead_backoff = max_dead_backoff
+        self.dead_node_backoff_factor = dead_node_backoff_factor
+        self.max_dead_node_backoff = max_dead_node_backoff
 
     def mark_dead(self, node: BaseNode, _now: Optional[float] = None) -> None:
         """
@@ -224,8 +224,8 @@ class NodePool:
             consecutive_failures = self.dead_consecutive_failures[node.config] + 1
             self.dead_consecutive_failures[node.config] = consecutive_failures
             timeout = min(
-                self.dead_backoff_factor * 2 ** (consecutive_failures - 1),
-                self.max_dead_backoff,
+                self.dead_node_backoff_factor * (2 ** (consecutive_failures - 1)),
+                self.max_dead_node_backoff,
             )
             self.dead_nodes.put((now + timeout, node))
             logger.warning(
@@ -322,13 +322,15 @@ class NodePool:
         no nodes are available and passes the list of live nodes to
         the selector instance to choose from.
         """
+        # Even with the optimization below we want to participate in the
+        # dead/alive cycle in case more nodes join after sniffing, for example.
+        self.resurrect()
+
         # Flag that short-circuits the extra logic if we have only one node.
         # The only way this flag can be set to 'True' is if there were only
         # one node defined within 'seed_nodes' so we know this good to do.
         if self._all_nodes_len_1:
             return self.all_nodes[self.seed_nodes[0]]
-
-        self.resurrect()
 
         # Filter nodes in 'alive_nodes' to ones not marked as removed.
         nodes = [

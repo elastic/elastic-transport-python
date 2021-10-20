@@ -83,8 +83,8 @@ class Transport:
         node_pool_class: Type[NodePool] = NodePool,
         randomize_nodes_in_pool: bool = True,
         node_selector_class: Optional[Union[str, Type[NodeSelector]]] = None,
-        dead_backoff_factor: Optional[float] = None,
-        max_dead_backoff: Optional[float] = None,
+        dead_node_backoff_factor: Optional[float] = None,
+        max_dead_node_backoff: Optional[float] = None,
         serializers: Optional[Mapping[str, Serializer]] = None,
         default_mimetype: str = "application/json",
         max_retries: int = 3,
@@ -113,9 +113,9 @@ class Transport:
             Defaults to true.
         :arg node_selector_class: Class to be used to select nodes within
             the :class:`~elastic_transport.NodePool`.
-        :arg dead_backoff_factor: Exponential backoff factor to calculate the amount
+        :arg dead_node_backoff_factor: Exponential backoff factor to calculate the amount
             of time to timeout a node after an unsuccessful API call.
-        :arg max_dead_backoff: Maximum amount of time to timeout a node after an
+        :arg max_dead_node_backoff: Maximum amount of time to timeout a node after an
             unsuccessful API call.
         :arg serializers: optional dict of serializer instances that will be
             used for deserializing data coming from the server. (key is the mimetype)
@@ -201,10 +201,10 @@ class Transport:
         node_pool_kwargs: Dict[str, Any] = {}
         if node_selector_class is not None:
             node_pool_kwargs["node_selector_class"] = node_selector_class
-        if dead_backoff_factor is not None:
-            node_pool_kwargs["dead_backoff_factor"] = dead_backoff_factor
-        if max_dead_backoff is not None:
-            node_pool_kwargs["max_dead_backoff"] = max_dead_backoff
+        if dead_node_backoff_factor is not None:
+            node_pool_kwargs["dead_node_backoff_factor"] = dead_node_backoff_factor
+        if max_dead_node_backoff is not None:
+            node_pool_kwargs["max_dead_node_backoff"] = max_dead_node_backoff
         self.node_pool: NodePool = node_pool_class(
             node_configs,
             node_class=node_class,
@@ -449,7 +449,7 @@ def validate_sniffing_options(
 
 
 def warn_if_varying_node_config_options(node_configs: List[NodeConfig]) -> None:
-    """Function which detects situations when sniffing may product incorrect configs"""
+    """Function which detects situations when sniffing may produce incorrect configs"""
     exempt_attrs = {"host", "port", "connections_per_node", "_extras"}
     match_attr_dict = None
     for node_config in node_configs:
