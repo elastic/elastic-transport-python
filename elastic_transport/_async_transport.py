@@ -67,8 +67,8 @@ class AsyncTransport(Transport):
         node_pool_class: Type[NodePool] = NodePool,
         randomize_nodes_in_pool: bool = True,
         node_selector_class: Optional[Union[str, Type[NodeSelector]]] = None,
-        dead_backoff_factor: Optional[float] = None,
-        max_dead_backoff: Optional[float] = None,
+        dead_node_backoff_factor: Optional[float] = None,
+        max_dead_node_backoff: Optional[float] = None,
         serializers: Optional[Mapping[str, Serializer]] = None,
         default_mimetype: str = "application/json",
         max_retries: int = 3,
@@ -97,9 +97,9 @@ class AsyncTransport(Transport):
             Defaults to true.
         :arg node_selector_class: Class to be used to select nodes within
             the :class:`~elastic_transport.NodePool`.
-        :arg dead_backoff_factor: Exponential backoff factor to calculate the amount
+        :arg dead_node_backoff_factor: Exponential backoff factor to calculate the amount
             of time to timeout a node after an unsuccessful API call.
-        :arg max_dead_backoff: Maximum amount of time to timeout a node after an
+        :arg max_dead_node_backoff: Maximum amount of time to timeout a node after an
             unsuccessful API call.
         :arg serializers: optional dict of serializer instances that will be
             used for deserializing data coming from the server. (key is the mimetype)
@@ -142,8 +142,8 @@ class AsyncTransport(Transport):
             node_pool_class=node_pool_class,
             randomize_nodes_in_pool=randomize_nodes_in_pool,
             node_selector_class=node_selector_class,
-            dead_backoff_factor=dead_backoff_factor,
-            max_dead_backoff=max_dead_backoff,
+            dead_node_backoff_factor=dead_node_backoff_factor,
+            max_dead_node_backoff=max_dead_node_backoff,
             serializers=serializers,
             default_mimetype=default_mimetype,
             max_retries=max_retries,

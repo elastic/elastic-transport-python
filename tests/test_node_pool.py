@@ -160,6 +160,71 @@ def test_dead_nodes_are_skipped():
     assert all([pool.get().config == alive_node.config for _ in range(10)])
 
 
+def test_dead_node_backoff_calculation():
+    node_configs = [NodeConfig("http", "localhost", 9200)]
+    pool = NodePool(
+        node_configs,
+        node_class=Urllib3HttpNode,
+        dead_node_backoff_factor=0.5,
+        max_dead_node_backoff=3.5,
+    )
+    node = pool.get()
+    pool.mark_dead(node, _now=0)
+
+    assert pool.dead_consecutive_failures == {node.config: 1}
+    assert pool.dead_nodes.queue == [(0.5, node)]
+
+    assert pool.get() is node
+    pool.mark_dead(node, _now=0)
+
+    assert pool.dead_consecutive_failures == {node.config: 2}
+    assert pool.dead_nodes.queue == [(1.0, node)]
+
+    assert pool.get() is node
+    pool.mark_dead(node, _now=0)
+
+    assert pool.dead_consecutive_failures == {node.config: 3}
+    assert pool.dead_nodes.queue == [(2.0, node)]
+
+    assert pool.get() is node
+    pool.mark_dead(node, _now=0)
+
+    assert pool.dead_consecutive_failures == {node.config: 4}
+    assert pool.dead_nodes.queue == [(3.5, node)]
+
+    assert pool.get() is node
+    pool.mark_live(node)
+
+    assert pool.dead_consecutive_failures == {}
+    assert pool.dead_nodes.queue == []
+
+
+def test_add_node_after_sniffing():
+    node_configs = [NodeConfig("http", "localhost", 9200)]
+    pool = NodePool(
+        node_configs,
+        node_class=Urllib3HttpNode,
+    )
+
+    # Initial node is marked as dead
+    node = pool.get()
+    pool.mark_dead(node)
+
+    new_node_config = NodeConfig("http", "localhost", 9201)
+    pool.add(new_node_config)
+
+    # Internal flag is updated properly
+    assert pool._all_nodes_len_1 is False
+
+    # We get the new node instead of the old one
+    new_node = pool.get()
+    assert new_node.config == new_node_config
+
+    # The old node is still on timeout so we should only get the new one.
+    for _ in range(10):
+        assert pool.get() is new_node
+
+
 @pytest.mark.parametrize("pool_size", [1, 8])
 def test_threading_test(pool_size):
     pool = NodePool(
