@@ -331,7 +331,7 @@ class AsyncTransport(Transport):
                 if not retry or attempt >= max_retries:
                     return meta, data
 
-    async def sniff(self, is_initial_sniff: bool) -> None:  # type: ignore[override]
+    async def sniff(self, is_initial_sniff: bool = False) -> None:  # type: ignore[override]
         await self._async_call()
         task = self._create_sniffing_task(is_initial_sniff)
 

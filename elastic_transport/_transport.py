@@ -381,7 +381,7 @@ class Transport:
                 if not retry or attempt >= max_retries:
                     return meta, data
 
-    def sniff(self, is_initial_sniff: bool) -> None:
+    def sniff(self, is_initial_sniff: bool = False) -> None:
         previously_sniffed_at = self._last_sniffed_at
         should_sniff = self._should_sniff(is_initial_sniff)
         try:
