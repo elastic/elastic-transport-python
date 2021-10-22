@@ -71,8 +71,12 @@ def client_meta_version(version: str) -> str:
         raise ValueError(
             "Version {version!r} not formatted like a Python version string"
         )
-    version, ver_is_pre = match.groups()
-    if ver_is_pre:
+    version, version_suffix = match.groups()
+
+    # Don't treat post-releases as pre-releases.
+    if re.search(r"^\.post[0-9]*$", version_suffix):
+        return version
+    if version_suffix:
         version += "p"
     return version
 

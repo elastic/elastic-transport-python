@@ -45,6 +45,8 @@ def test_create_user_agent():
         ("7.10.0-alpha1", "7.10.0p"),
         ("3.9.0b1", "3.9.0p"),
         ("3.9.pre1", "3.9p"),
+        ("3.7.4.post1", "3.7.4"),
+        ("3.7.4.post", "3.7.4"),
     ],
 )
 def test_client_meta_version(version, meta_version):
