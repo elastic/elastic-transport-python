@@ -32,7 +32,13 @@ from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
-from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS, BaseNode
+from ._base import (
+    BUILTIN_EXCEPTIONS,
+    DEFAULT_CA_CERTS,
+    RERAISE_EXCEPTIONS,
+    BaseNode,
+    ssl_context_from_node_config,
+)
 
 try:
     from ._urllib3_chain_certs import HTTPSConnectionPool
@@ -51,21 +57,13 @@ class Urllib3HttpNode(BaseNode):
         pool_class = urllib3.HTTPConnectionPool
         kw: Dict[str, Any] = {}
 
-        # if ssl_context provided use SSL by default
-        if config.scheme == "https" and config.ssl_context:
+        if config.scheme == "https":
             pool_class = HTTPSConnectionPool
-            kw.update(
-                {
-                    "assert_fingerprint": config.ssl_assert_fingerprint,
-                    "ssl_context": config.ssl_context,
-                }
-            )
+            ssl_context = ssl_context_from_node_config(config)
 
-        elif config.scheme == "https":
-            pool_class = HTTPSConnectionPool
             kw.update(
                 {
-                    "ssl_version": config.ssl_version,
+                    "ssl_context": ssl_context,
                     "assert_hostname": config.ssl_assert_hostname,
                     "assert_fingerprint": config.ssl_assert_fingerprint,
                 }
@@ -158,6 +156,8 @@ class Urllib3HttpNode(BaseNode):
                 ) from None
             elif isinstance(e, (ssl.SSLError, urllib3.exceptions.SSLError)):
                 raise TlsError(str(e), errors=(e,)) from None
+            elif isinstance(e, BUILTIN_EXCEPTIONS):
+                raise
             raise ConnectionError(str(e), errors=(e,)) from None
 
         return (

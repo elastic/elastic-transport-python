@@ -17,6 +17,8 @@
 
 import asyncio
 import logging
+import os
+import ssl
 from typing import ClassVar, Optional, Tuple, Union
 
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
@@ -28,6 +30,19 @@ logger = logging.getLogger("elastic_transport.node")
 DEFAULT_CA_CERTS: Optional[str] = None
 DEFAULT_USER_AGENT = f"elastic-transport-python/{__version__}"
 RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError)
+BUILTIN_EXCEPTIONS = (
+    ValueError,
+    KeyError,
+    NameError,
+    AttributeError,
+    LookupError,
+    AssertionError,
+    IndexError,
+    MemoryError,
+    RuntimeError,
+    SystemError,
+    TypeError,
+)
 
 try:
     import certifi
@@ -179,3 +194,82 @@ class BaseNode:
 
         if response is not None:
             logger.debug("< %s", response)
+
+
+_HAS_TLS_VERSION = hasattr(ssl, "TLSVersion")
+_SSL_PROTOCOL_VERSION_ATTRS = ("TLSv1", "TLSv1_1", "TLSv1_2")
+_SSL_PROTOCOL_VERSION_DEFAULT = getattr(ssl, "OP_NO_SSLv2", 0) | getattr(
+    ssl, "OP_NO_SSLv3", 0
+)
+_SSL_PROTOCOL_VERSION_TO_OPTIONS = {}
+_SSL_PROTOCOL_VERSION_TO_TLS_VERSION = {}
+for i, _protocol_attr in enumerate(_SSL_PROTOCOL_VERSION_ATTRS):
+    try:
+        _protocol_value = getattr(ssl, f"PROTOCOL_{_protocol_attr}")
+    except AttributeError:
+        continue
+
+    if _HAS_TLS_VERSION:
+        _tls_version_value = getattr(ssl.TLSVersion, _protocol_attr)
+        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_protocol_value] = _tls_version_value
+        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_tls_version_value] = _tls_version_value
+
+    # Because we're setting a minimum version we binary OR all the options together.
+    _SSL_PROTOCOL_VERSION_TO_OPTIONS[
+        _protocol_value
+    ] = _SSL_PROTOCOL_VERSION_DEFAULT | sum(
+        getattr(ssl, f"OP_NO_{_attr}", 0) for _attr in _SSL_PROTOCOL_VERSION_ATTRS[:i]
+    )
+
+# TLSv1.3 is unique, doesn't have a PROTOCOL_TLSvX counterpart. So we have to set it manually.
+if _HAS_TLS_VERSION:
+    try:
+        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[
+            ssl.TLSVersion.TLSv1_3
+        ] = ssl.TLSVersion.TLSv1_3
+    except AttributeError:  # pragma: nocover
+        pass
+
+
+def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
+    if node_config.ssl_context:
+        ctx = node_config.ssl_context
+    else:
+        ctx = ssl.create_default_context()
+
+        # Enable/disable certificate verification in these orders
+        # to avoid 'ValueErrors' from SSLContext. We only do this
+        # step if the user doesn't pass a preconfigured SSLContext.
+        if node_config.verify_certs:
+            ctx.verify_mode = ssl.CERT_REQUIRED
+            ctx.check_hostname = True
+        else:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+    # Enable logging of TLS session keys for use with Wireshark.
+    if hasattr(ctx, "keylog_filename"):
+        sslkeylogfile = os.environ.get("SSLKEYLOGFILE", "")
+        if sslkeylogfile:
+            ctx.keylog_filename = sslkeylogfile  # type: ignore[attr-defined]
+
+    # Apply the 'ssl_version' if given, otherwise default to TLSv1+
+    ssl_version = node_config.ssl_version
+    if ssl_version is None:
+        if _HAS_TLS_VERSION:
+            ssl_version = ssl.TLSVersion.TLSv1
+        else:
+            ssl_version = ssl.PROTOCOL_TLSv1
+
+    try:
+        if _HAS_TLS_VERSION:
+            ctx.minimum_version = _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[ssl_version]
+        else:
+            ctx.options |= _SSL_PROTOCOL_VERSION_TO_OPTIONS[ssl_version]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported value for 'ssl_version': {ssl_version!r}. Must be "
+            "either 'ssl.PROTOCOL_TLSvX' or 'ssl.TLSVersion.TLSvX'"
+        ) from None
+
+    return ctx

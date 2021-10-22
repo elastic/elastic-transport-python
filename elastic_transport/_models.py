@@ -55,6 +55,13 @@ DEFAULT = DefaultType()
 
 T = TypeVar("T")
 
+try:
+    from ssl import TLSVersion
+
+    _TYPE_SSL_VERSION = Union[int, TLSVersion]
+except ImportError:
+    _TYPE_SSL_VERSION = int  # type: ignore[misc]
+
 
 class HttpHeaders(MutableMapping[str, str]):
     """HTTP headers"""
@@ -242,8 +249,10 @@ class NodeConfig:
     #: because this requires using private APIs support for this is
     #: **experimental**.
     ssl_assert_fingerprint: Optional[str] = None
-    #: Minimum TLS version to use to connect to the node.
-    ssl_version: Optional[int] = None
+    #: Minimum TLS version to use to connect to the node. Can be either
+    #: :class:`ssl.TLSVersion` on Python 3.7+ or one of the
+    #: ``ssl.PROTOCOL_TLSvX`` instances.
+    ssl_version: Optional[_TYPE_SSL_VERSION] = None
     #: Pre-configured :class:`ssl.SSLContext` object. If this value
     #: is given then no other TLS options (besides ``ssl_assert_fingerprint``)
     #: can be set on the :class:`elastic_transport.NodeConfig`.

@@ -28,7 +28,12 @@ from .._compat import get_running_loop, warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version, resolve_default
-from ._base import DEFAULT_CA_CERTS, RERAISE_EXCEPTIONS
+from ._base import (
+    BUILTIN_EXCEPTIONS,
+    DEFAULT_CA_CERTS,
+    RERAISE_EXCEPTIONS,
+    ssl_context_from_node_config,
+)
 from ._base_async import BaseAsyncNode
 
 try:
@@ -57,19 +62,9 @@ class AiohttpHttpNode(BaseAsyncNode):
         ssl_context: Optional[ssl.SSLContext] = None
         if config.scheme == "https":
             if config.ssl_context is not None:
-                ssl_context = config.ssl_context
+                ssl_context = ssl_context_from_node_config(config)
             else:
-                if config.ssl_version is None:
-                    ssl_context = ssl.create_default_context()
-                else:
-                    ssl_context = ssl.SSLContext(config.ssl_version)
-
-                if config.verify_certs:
-                    ssl_context.verify_mode = ssl.CERT_REQUIRED
-                    ssl_context.check_hostname = True
-                else:
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
+                ssl_context = ssl_context_from_node_config(config)
 
                 ca_certs = (
                     DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
@@ -186,6 +181,8 @@ class AiohttpHttpNode(BaseAsyncNode):
                 ) from None
             elif isinstance(e, (ssl.SSLError, aiohttp_exceptions.ClientSSLError)):
                 raise TlsError(str(e), errors=(e,)) from None
+            elif isinstance(e, BUILTIN_EXCEPTIONS):
+                raise
             raise ConnectionError(str(e), errors=(e,)) from None
 
         return (

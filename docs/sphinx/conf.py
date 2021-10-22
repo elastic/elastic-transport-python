@@ -29,9 +29,20 @@ author = "Seth Michael Larson"
 version = __version__
 release = __version__
 
-extensions = ["sphinx.ext.autodoc", "furo", "sphinx_autodoc_typehints"]
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+    "furo",
+    "sphinx_autodoc_typehints",
+]
+
+pygments_style = "sphinx"
 
 templates_path = []
 exclude_patterns = []
 html_theme = "furo"
 html_static_path = []
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+}

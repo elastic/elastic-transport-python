@@ -27,7 +27,12 @@ from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
-from ._base import RERAISE_EXCEPTIONS, BaseNode
+from ._base import (
+    BUILTIN_EXCEPTIONS,
+    RERAISE_EXCEPTIONS,
+    BaseNode,
+    ssl_context_from_node_config,
+)
 
 try:
     import requests
@@ -54,8 +59,11 @@ try:
             block: bool = False,
             **pool_kwargs: Any,
         ) -> None:
-            if self._node_config.ssl_context:
-                pool_kwargs.setdefault("ssl_context", self._node_config.ssl_context)
+
+            if self._node_config.scheme == "https":
+                ssl_context = ssl_context_from_node_config(self._node_config)
+                pool_kwargs.setdefault("ssl_context", ssl_context)
+
             if self._node_config.ssl_assert_fingerprint:
                 pool_kwargs.setdefault(
                     "assert_fingerprint", self._node_config.ssl_assert_fingerprint
@@ -180,6 +188,8 @@ class RequestsHttpNode(BaseNode):
                 ) from None
             elif isinstance(e, (ssl.SSLError, requests.exceptions.SSLError)):
                 raise TlsError(str(e), errors=(e,)) from None
+            elif isinstance(e, BUILTIN_EXCEPTIONS):
+                raise
             raise ConnectionError(str(e), errors=(e,)) from None
 
         return (
