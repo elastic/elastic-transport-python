@@ -54,6 +54,10 @@ class TransportError(Exception):
         return str(self.message)
 
 
+class SniffingError(TransportError):
+    """Error that occurs during the sniffing of nodes"""
+
+
 class SerializationError(TransportError):
     """Error that occurred during the serialization or
     deserialization of an HTTP message body

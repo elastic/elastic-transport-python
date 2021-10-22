@@ -31,6 +31,7 @@ from elastic_transport import (
     ConnectionError,
     ConnectionTimeout,
     NodeConfig,
+    SniffingError,
     SniffOptions,
     TransportError,
     TransportWarning,
@@ -350,7 +351,7 @@ async def test_sniff_on_start():
     def sniff_callback(*args):
         nonlocal calls
         calls.append(args)
-        return []
+        return [NodeConfig("http", "localhost", 80)]
 
     t = AsyncTransport(
         [NodeConfig("http", "localhost", 80)],
@@ -549,6 +550,30 @@ async def test_sniff_error_resets_lock_and_last_sniffed_at():
 
     assert t._last_sniffed_at == last_sniffed_at
     assert t._sniffing_task.done()
+
+
+async def _empty_sniff(*_):
+    # Used in the below test to mock an empty sniff attempt
+    await asyncio.sleep(0)
+    return []
+
+
+@pytest.mark.parametrize("sniff_callback", [lambda *_: [], _empty_sniff])
+async def test_sniff_on_start_no_results_errors(sniff_callback):
+    t = AsyncTransport(
+        [
+            NodeConfig("http", "localhost", 80),
+        ],
+        node_class=AsyncDummyNode,
+        sniff_on_start=True,
+        sniff_callback=sniff_callback,
+    )
+    with pytest.raises(SniffingError) as e:
+        await t._async_call()
+
+    assert (
+        str(e.value) == "No viable nodes were discovered on the initial sniff attempt"
+    )
 
 
 @pytest.mark.parametrize("pool_size", [1, 8])

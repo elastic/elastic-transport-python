@@ -37,6 +37,7 @@ from ._compat import Lock, warn_stacklevel
 from ._exceptions import (
     ConnectionError,
     ConnectionTimeout,
+    SniffingError,
     TransportError,
     TransportWarning,
 )
@@ -392,7 +393,12 @@ class Transport:
                     is_initial_sniff=is_initial_sniff, sniff_timeout=self._sniff_timeout
                 )
                 assert self._sniff_callback is not None
-                for node_config in self._sniff_callback(self, options):
+                node_configs = self._sniff_callback(self, options)
+                if not node_configs and is_initial_sniff:
+                    raise SniffingError(
+                        "No viable nodes were discovered on the initial sniff attempt"
+                    )
+                for node_config in node_configs:
                     self.node_pool.add(node_config)
 
         # If sniffing failed for any reason we

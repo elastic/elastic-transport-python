@@ -29,6 +29,7 @@ from elastic_transport import (
     ConnectionTimeout,
     NodeConfig,
     RequestsHttpNode,
+    SniffingError,
     SniffOptions,
     Transport,
     TransportError,
@@ -403,7 +404,7 @@ def test_sniff_on_start():
     def sniff_callback(*args):
         nonlocal calls
         calls.append(args)
-        return []
+        return [NodeConfig("http", "localhost", 80)]
 
     t = Transport(
         [NodeConfig("http", "localhost", 80)],
@@ -511,7 +512,9 @@ def test_heterogeneous_node_config_warning_with_sniffing():
                 NodeConfig("http", "localhost", 81, path_prefix="/b"),
             ],
             sniff_on_start=True,
-            sniff_callback=lambda *_: [],
+            sniff_callback=lambda *_: [
+                NodeConfig("http", "localhost", 80, path_prefix="/a")
+            ],
         )
 
     assert len(w) == 1
@@ -567,6 +570,22 @@ def test_sniff_error_resets_lock_and_last_sniffed_at():
 
     assert t._last_sniffed_at == last_sniffed_at
     assert t._sniffing_lock.locked() is False
+
+
+def test_sniff_on_start_no_results_errors():
+    with pytest.raises(SniffingError) as e:
+        Transport(
+            [
+                NodeConfig("http", "localhost", 80),
+            ],
+            node_class=DummyNode,
+            sniff_on_start=True,
+            sniff_callback=lambda *_: [],
+        )
+
+    assert (
+        str(e.value) == "No viable nodes were discovered on the initial sniff attempt"
+    )
 
 
 @pytest.mark.parametrize("pool_size", [1, 8])

@@ -21,6 +21,9 @@ Transport Errors
 .. autoclass:: SerializationError
    :members:
 
+.. autoclass:: SniffingError
+   :members:
+
 .. autoclass:: ApiError
    :members:
 

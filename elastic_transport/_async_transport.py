@@ -32,7 +32,12 @@ from typing import (
 from elastic_transport.client_utils import resolve_default
 
 from ._compat import await_if_coro, get_running_loop
-from ._exceptions import ConnectionError, ConnectionTimeout, TransportError
+from ._exceptions import (
+    ConnectionError,
+    ConnectionTimeout,
+    SniffingError,
+    TransportError,
+)
 from ._models import (
     DEFAULT,
     ApiResponseMeta,
@@ -388,7 +393,12 @@ class AsyncTransport(Transport):
                 is_initial_sniff=is_initial_sniff, sniff_timeout=self._sniff_timeout
             )
             assert self._sniff_callback is not None
-            for node_config in await await_if_coro(self._sniff_callback(self, options)):
+            node_configs = await await_if_coro(self._sniff_callback(self, options))
+            if not node_configs and is_initial_sniff:
+                raise SniffingError(
+                    "No viable nodes were discovered on the initial sniff attempt"
+                )
+            for node_config in node_configs:
                 self.node_pool.add(node_config)
 
         # If sniffing failed for any reason we
