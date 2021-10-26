@@ -24,6 +24,8 @@ from typing import (
     Collection,
     Dict,
     Iterator,
+    Mapping,
+    MutableMapping,
     NamedTuple,
     NoReturn,
     Optional,
@@ -32,8 +34,6 @@ from typing import (
     Union,
     ValuesView,
 )
-
-from ._compat import Mapping, MutableMapping
 
 #: Sentinel used as a default value when ``None`` has special meaning like timeouts.
 #: The only comparisons that are supported for this type are ``is``.

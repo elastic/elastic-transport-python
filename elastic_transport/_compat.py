@@ -31,11 +31,6 @@ else:
     from collections import OrderedDict as ordered_dict
 
 try:
-    from typing import Mapping, MutableMapping
-except ImportError:
-    from collections import Mapping, MutableMapping
-
-try:
     from asyncio import get_running_loop
 except ImportError:
 
@@ -129,7 +124,5 @@ __all__ = [
     "urlparse",
     "urlencode",
     "string_types",
-    "Mapping",
-    "MutableMapping",
     "Lock",
 ]
