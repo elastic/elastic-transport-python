@@ -38,6 +38,12 @@ from ._node import (
     Urllib3HttpNode,
 )
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
+from ._response import ApiResponse as ApiResponse
+from ._response import BinaryApiResponse as BinaryApiResponse
+from ._response import HeadApiResponse as HeadApiResponse
+from ._response import ListApiResponse as ListApiResponse
+from ._response import ObjectApiResponse as ObjectApiResponse
+from ._response import TextApiResponse as TextApiResponse
 from ._serializer import (
     JsonSerializer,
     NdjsonSerializer,
@@ -51,18 +57,23 @@ from ._version import __version__ as __version__  # noqa
 __all__ = [
     "AiohttpHttpNode",
     "ApiError",
+    "ApiResponse",
     "ApiResponseMeta",
     "AsyncTransport",
     "BaseAsyncNode",
     "BaseNode",
+    "BinaryApiResponse",
     "ConnectionError",
     "ConnectionTimeout",
+    "HeadApiResponse",
     "HttpHeaders",
     "JsonSerializer",
+    "ListApiResponse",
     "NdjsonSerializer",
     "NodeConfig",
     "NodePool",
     "NodeSelector",
+    "ObjectApiResponse",
     "RandomSelector",
     "RequestsHttpNode",
     "RoundRobinSelector",
@@ -72,6 +83,7 @@ __all__ = [
     "SerializerCollection",
     "SniffOptions",
     "SniffingError",
+    "TextApiResponse",
     "TextSerializer",
     "TlsError",
     "Transport",
