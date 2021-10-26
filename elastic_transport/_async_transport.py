@@ -255,6 +255,7 @@ class AsyncTransport(Transport):
                 await self.sniff(False)
 
             retry = False
+            node_failure = False
             last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
             node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
             try:

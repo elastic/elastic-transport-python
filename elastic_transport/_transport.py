@@ -301,6 +301,7 @@ class Transport:
                 self.sniff(False)
 
             retry = False
+            node_failure = False
             last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
             node = self.node_pool.get()
             try:
