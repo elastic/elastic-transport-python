@@ -45,6 +45,7 @@ setup(
     project_urls={
         "Source Code": "https://github.com/elastic/elastic-transport-python",
         "Issue Tracker": "https://github.com/elastic/elastic-transport-python/issues",
+        "Documentation": "https://elastic-transport-python.readthedocs.io",
     },
     package_data={"elastic_transport": ["py.typed"]},
     packages=packages,
