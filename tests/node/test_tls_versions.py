@@ -15,6 +15,8 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import functools
+import socket
 import ssl
 
 import pytest
@@ -76,12 +78,28 @@ else:
     )
 
 
+@functools.lru_cache()
+def tlsv1_1_supported() -> bool:
+    # OpenSSL distributions on Ubuntu/Debian disable TLSv1.1 and before incorrectly.
+    # So we try to detect that and skip tests when needed.
+    try:
+        sock = socket.create_connection(("tls-v1-1.badssl.com", 1011))
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_1)
+        sock = ctx.wrap_socket(sock, server_hostname="tls-v1-1.badssl.com")
+        sock.close()
+    except ssl.SSLError:
+        return False
+    return True
+
+
 @node_classes
 @pytest.mark.parametrize(
     ["url", "ssl_version"],
     supported_version_params,
 )
 async def test_supported_tls_versions(node_class, url: str, ssl_version: int):
+    if url in (TLSv1_0_URL, TLSv1_1_URL) and not tlsv1_1_supported():
+        pytest.skip("TLSv1.1 isn't supported by this OpenSSL distribution")
     node_config = url_to_node_config(url).replace(ssl_version=ssl_version)
     node = node_class(node_config)
 
