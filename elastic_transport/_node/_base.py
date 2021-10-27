@@ -253,13 +253,13 @@ def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
         if sslkeylogfile:
             ctx.keylog_filename = sslkeylogfile  # type: ignore[attr-defined]
 
-    # Apply the 'ssl_version' if given, otherwise default to TLSv1+
+    # Apply the 'ssl_version' if given, otherwise default to TLSv1.2+
     ssl_version = node_config.ssl_version
     if ssl_version is None:
         if _HAS_TLS_VERSION:
-            ssl_version = ssl.TLSVersion.TLSv1
+            ssl_version = ssl.TLSVersion.TLSv1_2
         else:
-            ssl_version = ssl.PROTOCOL_TLSv1
+            ssl_version = ssl.PROTOCOL_TLSv1_2
 
     try:
         if _HAS_TLS_VERSION:
