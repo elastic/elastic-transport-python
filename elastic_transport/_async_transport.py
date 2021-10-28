@@ -16,6 +16,7 @@
 #  under the License.
 
 import asyncio
+import logging
 from typing import (
     Any,
     Awaitable,
@@ -55,6 +56,8 @@ from ._transport import (
     Transport,
     validate_sniffing_options,
 )
+
+_logger = logging.getLogger("elastic_transport.transport")
 
 
 class AsyncTransport(Transport):
@@ -188,7 +191,7 @@ class AsyncTransport(Transport):
         retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
-        client_meta: Union[Tuple[Tuple[str, str], ...]] = DEFAULT,
+        client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, Any]:
         """
         Perform the actual request. Retrieve a node from the node
@@ -258,6 +261,7 @@ class AsyncTransport(Transport):
             node_failure = False
             last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
             node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
+            start_time = self._loop.time()
             try:
                 meta, raw_data = await node.perform_request(
                     method,
@@ -265,6 +269,16 @@ class AsyncTransport(Transport):
                     body=request_body,
                     headers=request_headers,
                     request_timeout=request_timeout,
+                )
+                _logger.info(
+                    "%s %s%s [status:%s duration:%.3fs]"
+                    % (
+                        method,
+                        node.base_url,
+                        target,
+                        meta.status,
+                        self._loop.time() - start_time,
+                    )
                 )
 
                 if raw_data not in (None, b""):
@@ -279,6 +293,17 @@ class AsyncTransport(Transport):
                     last_response = (meta, data)
 
             except TransportError as e:
+                _logger.info(
+                    "%s %s%s [status:%s duration:%.3fs]"
+                    % (
+                        method,
+                        node.base_url,
+                        target,
+                        "N/A",
+                        self._loop.time() - start_time,
+                    )
+                )
+
                 if isinstance(e, ConnectionTimeout):
                     retry = retry_on_timeout
                     node_failure = True
@@ -311,6 +336,12 @@ class AsyncTransport(Transport):
                     e.errors = tuple(errors)
                     raise
                 else:
+                    _logger.warning(
+                        "Retrying request after failure (attempt %d of %d)",
+                        attempt,
+                        max_retries,
+                        exc_info=e,
+                    )
                     errors.append(e)
 
             else:
@@ -336,6 +367,13 @@ class AsyncTransport(Transport):
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
                     return meta, data
+                else:
+                    _logger.warning(
+                        "Retrying request after non-successful status %d (attempt %d of %d)",
+                        meta.status,
+                        attempt,
+                        max_retries,
+                    )
 
     async def sniff(self, is_initial_sniff: bool = False) -> None:  # type: ignore[override]
         await self._async_call()
@@ -380,6 +418,7 @@ class AsyncTransport(Transport):
         """Creates a sniffing task if one should be created and returns the task if created."""
         task = None
         if self._should_sniff(is_initial_sniff):
+            _logger.info("Started sniffing for additional nodes")
             # 'self._sniffing_task' is unset within the task implementation.
             task = self._loop.create_task(self._sniffing_task_impl(is_initial_sniff))
             self._sniffing_task = task
@@ -399,8 +438,21 @@ class AsyncTransport(Transport):
                 raise SniffingError(
                     "No viable nodes were discovered on the initial sniff attempt"
                 )
+
+            prev_node_pool_size = len(self.node_pool)
             for node_config in node_configs:
                 self.node_pool.add(node_config)
+
+            # Do some math to log which nodes are new/existing
+            sniffed_nodes = len(node_configs)
+            new_nodes = sniffed_nodes - (len(self.node_pool) - prev_node_pool_size)
+            existing_nodes = sniffed_nodes - new_nodes
+            _logger.debug(
+                "Discovered %d nodes during sniffing (%d new nodes, %d already in pool)",
+                sniffed_nodes,
+                new_nodes,
+                existing_nodes,
+            )
 
         # If sniffing failed for any reason we
         # want to allow retrying immediately.

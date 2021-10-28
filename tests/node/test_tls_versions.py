@@ -44,11 +44,11 @@ supported_version_params = [
     (TLSv1_0_URL, ssl.PROTOCOL_TLSv1),
     (TLSv1_1_URL, ssl.PROTOCOL_TLSv1_1),
     (TLSv1_2_URL, ssl.PROTOCOL_TLSv1_2),
-    (TLSv1_0_URL, None),
-    (TLSv1_1_URL, None),
     (TLSv1_2_URL, None),
 ]
 unsupported_version_params = [
+    (TLSv1_0_URL, None),
+    (TLSv1_1_URL, None),
     (TLSv1_0_URL, ssl.PROTOCOL_TLSv1_1),
     (TLSv1_0_URL, ssl.PROTOCOL_TLSv1_2),
     (TLSv1_1_URL, ssl.PROTOCOL_TLSv1_2),
