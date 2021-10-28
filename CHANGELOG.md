@@ -1,25 +1,44 @@
 # Changelog
 
-## 8.0.0 (unreleased)
+## 8.0.0-alpha1
 
 ### Added
 
-- Added `connections_per_node` parameter to `RequestsHttpConnection`
+- Added support for asyncio with `AsyncTransport` and `AiohttpHttpNode`
+- Added `JsonSerializer`, `NdjsonSerializer`
+- Added `connections_per_node` parameter to `RequestsHttpNode`
+- Added support for `ssl_assert_fingerprint` to `RequestsHttpNode`
+- Added **experimental** support for pinning non-leaf certificates
+  via `ssl_assert_fingerprint` when using CPython 3.10+
+- Added support for node discovery via "sniffing" using the
+  `sniff_callback` transport parameter
+- Added ability to specify `ssl_version` via `ssl.TLSVersion` enum
+  instead of `ssl.PROTOCOL_TLSvX` for Python 3.7+
+- Added `elastic_transport.client_utils` module to help writing API clients
 
 ### Changed
 
 - Changed `*Connection` classes to use `*Node` terminology
 - Changed `connection_class` to `node_class`
 - Changed `ConnectionPool` to `NodePool`
-- Changed `DummyConnectionPool` to `SingleNodePool`
-- Changed `EmptyConnectionPool` to `EmptyNodePool`
 - Changed `ConnectionSelector` to `NodeSelector`
 - Changed `NodeSelector(randomize_hosts)` parameter to `randomize_nodes`
-- Changed `NodeSelector.get_connection()` method to `get_node()`
+- Changed `NodeSelector.get_connection()` method to `get()`
 - Changed `elastic_transport.connection` logger name to `elastic_transport.node`
 - Changed `Urllib3HttpNode(connections_per_host)` parameter to `connections_per_node`
-- Changed return type of `BaseNode.perform_request()` to `Tuple[HttpResponse, bytes]`
-- Changed return type of `Transport.perform_request()` to `Tuple[HttpResponse, <deserialized>]`
+- Changed return type of `BaseNode.perform_request()` to `Tuple[ApiResponseMeta, bytes]`
+- Changed return type of `Transport.perform_request()` to `Tuple[ApiResponseMeta, <deserialized>]`
+- Changed name of `Deserializer` into `SerializersCollection`
+- Changed `ssl_version` to denote the minimum TLS version instead of the only TLS version
+
+### Removed
+
+- Removed support for Python 2.7
+- Removed `DummyConnectionPool` and `EmptyConnectionPool` in favor of `NodePool`.
+
+## 7.15.0 (2021-09-20)
+
+Release created to be compatible with 7.15 clients
 
 ## 7.14.0 (2021-08-02)
 
