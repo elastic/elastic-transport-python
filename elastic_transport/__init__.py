@@ -17,7 +17,7 @@
 
 """Transport classes and utilities shared among Python Elastic client libraries"""
 
-from ._async_transport import AsyncTransport
+from ._async_transport import AsyncTransport as AsyncTransport
 from ._exceptions import (
     ApiError,
     ConnectionError,
@@ -51,7 +51,7 @@ from ._serializer import (
     SerializerCollection,
     TextSerializer,
 )
-from ._transport import Transport
+from ._transport import Transport as Transport
 from ._version import __version__ as __version__  # noqa
 
 __all__ = [

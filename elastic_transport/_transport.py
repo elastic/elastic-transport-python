@@ -16,6 +16,7 @@
 #  under the License.
 
 import dataclasses
+import logging
 import time
 import warnings
 from platform import python_version
@@ -65,8 +66,10 @@ NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
 # 'errors' for marking a node as dead. These errors typically
 # mean everything is fine server-wise and instead the API call
 # in question responded successfully.
-NOT_DEAD_NODE_HTTP_STATUSES = {None, 400, 402, 401, 403, 404}
+NOT_DEAD_NODE_HTTP_STATUSES = {None, 400, 401, 402, 403, 404}
 DEFAULT_CLIENT_META_SERVICE = ("et", client_meta_version(__version__))
+
+_logger = logging.getLogger("elastic_transport.transport")
 
 
 class Transport:
@@ -236,7 +239,7 @@ class Transport:
         retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
-        client_meta: Union[Tuple[Tuple[str, str], ...]] = DEFAULT,
+        client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, Any]:
         """
         Perform the actual request. Retrieve a node from the node
@@ -304,6 +307,7 @@ class Transport:
             node_failure = False
             last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
             node = self.node_pool.get()
+            start_time = time.time()
             try:
                 meta, raw_data = node.perform_request(
                     method,
@@ -311,6 +315,16 @@ class Transport:
                     body=request_body,
                     headers=request_headers,
                     request_timeout=request_timeout,
+                )
+                _logger.info(
+                    "%s %s%s [status:%s duration:%.3fs]"
+                    % (
+                        method,
+                        node.base_url,
+                        target,
+                        meta.status,
+                        time.time() - start_time,
+                    )
                 )
 
                 if raw_data not in (None, b""):
@@ -325,6 +339,11 @@ class Transport:
                     last_response = (meta, data)
 
             except TransportError as e:
+                _logger.info(
+                    "%s %s%s [status:%s duration:%.3fs]"
+                    % (method, node.base_url, target, "N/A", time.time() - start_time)
+                )
+
                 if isinstance(e, ConnectionTimeout):
                     retry = retry_on_timeout
                     node_failure = True
@@ -357,6 +376,12 @@ class Transport:
                     e.errors = tuple(errors)
                     raise
                 else:
+                    _logger.warning(
+                        "Retrying request after failure (attempt %d of %d)",
+                        attempt,
+                        max_retries,
+                        exc_info=e,
+                    )
                     errors.append(e)
 
             else:
@@ -382,12 +407,20 @@ class Transport:
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
                     return meta, data
+                else:
+                    _logger.warning(
+                        "Retrying request after non-successful status %d (attempt %d of %d)",
+                        meta.status,
+                        attempt,
+                        max_retries,
+                    )
 
     def sniff(self, is_initial_sniff: bool = False) -> None:
         previously_sniffed_at = self._last_sniffed_at
         should_sniff = self._should_sniff(is_initial_sniff)
         try:
             if should_sniff:
+                _logger.info("Started sniffing for additional nodes")
                 self._last_sniffed_at = time.time()
 
                 options = SniffOptions(
@@ -399,12 +432,26 @@ class Transport:
                     raise SniffingError(
                         "No viable nodes were discovered on the initial sniff attempt"
                     )
+
+                prev_node_pool_size = len(self.node_pool)
                 for node_config in node_configs:
                     self.node_pool.add(node_config)
 
+                # Do some math to log which nodes are new/existing
+                sniffed_nodes = len(node_configs)
+                new_nodes = sniffed_nodes - (len(self.node_pool) - prev_node_pool_size)
+                existing_nodes = sniffed_nodes - new_nodes
+                _logger.debug(
+                    "Discovered %d nodes during sniffing (%d new nodes, %d already in pool)",
+                    sniffed_nodes,
+                    new_nodes,
+                    existing_nodes,
+                )
+
         # If sniffing failed for any reason we
         # want to allow retrying immediately.
-        except Exception:
+        except Exception as e:
+            _logger.warning("Encountered an error during sniffing", exc_info=e)
             self._last_sniffed_at = previously_sniffed_at
             raise
 

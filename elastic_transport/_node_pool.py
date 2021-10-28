@@ -41,7 +41,7 @@ from ._node import BaseNode
 if TYPE_CHECKING:
     from typing import Literal
 
-logger = logging.getLogger("elastic_transport.node_pool")
+_logger = logging.getLogger("elastic_transport.node_pool")
 
 
 class NodeSelector:
@@ -128,8 +128,8 @@ class NodePool:
         self,
         node_configs: List[NodeConfig],
         node_class: Type[BaseNode],
-        dead_node_backoff_factor: float = 5.0,
-        max_dead_node_backoff: float = 60.0,
+        dead_node_backoff_factor: float = 1.0,
+        max_dead_node_backoff: float = 30.0,
         node_selector_class: Union[str, Type[NodeSelector]] = RoundRobinSelector,
         randomize_nodes: bool = True,
     ):
@@ -219,21 +219,20 @@ class NodePool:
         try:
             del self.alive_nodes[node.config]
         except KeyError:
-            return
-        else:
-            consecutive_failures = self.dead_consecutive_failures[node.config] + 1
-            self.dead_consecutive_failures[node.config] = consecutive_failures
-            timeout = min(
-                self.dead_node_backoff_factor * (2 ** (consecutive_failures - 1)),
-                self.max_dead_node_backoff,
-            )
-            self.dead_nodes.put((now + timeout, node))
-            logger.warning(
-                "Node %r has failed for %i times in a row, putting on %i second timeout",
-                node,
-                consecutive_failures,
-                timeout,
-            )
+            pass
+        consecutive_failures = self.dead_consecutive_failures[node.config] + 1
+        self.dead_consecutive_failures[node.config] = consecutive_failures
+        timeout = min(
+            self.dead_node_backoff_factor * (2 ** (consecutive_failures - 1)),
+            self.max_dead_node_backoff,
+        )
+        self.dead_nodes.put((now + timeout, node))
+        _logger.warning(
+            "Node %r has failed for %i times in a row, putting on %i second timeout",
+            node,
+            consecutive_failures,
+            timeout,
+        )
 
     def mark_live(self, node: BaseNode) -> None:
         """
@@ -246,6 +245,12 @@ class NodePool:
         except KeyError:
             # race condition, safe to ignore
             pass
+        else:
+            self.alive_nodes.setdefault(node.config, node)
+            _logger.warning(
+                "Node %r has been marked alive after a successful request",
+                node,
+            )
 
     @overload
     def resurrect(self, force: "Literal[True]" = ...) -> BaseNode:
@@ -265,6 +270,8 @@ class NodePool:
             when we have no live nodes). If force is 'True'' resurrect
             always returns a node.
         """
+        node: Optional[BaseNode]
+        mark_node_alive_after: float = 0.0
         try:
             # Try to resurrect a dead node if any.
             mark_node_alive_after, node = self.dead_nodes.get(block=False)
@@ -273,16 +280,17 @@ class NodePool:
                 # If we're being forced to return a node we randomly
                 # pick between alive and dead nodes.
                 return random.choice(list(self.all_nodes.values()))
-            return None
+            node = None
 
-        if not force and mark_node_alive_after > time.time():
+        if node is not None and not force and mark_node_alive_after > time.time():
             # return it back if not eligible and not forced
             self.dead_nodes.put((mark_node_alive_after, node))
-            return None
+            node = None
 
         # either we were forced or the node is eligible to be retried
-        self.alive_nodes[node.config] = node
-        logger.info("Resurrected node %r (force=%s)", node, force)
+        if node is not None:
+            self.alive_nodes[node.config] = node
+            _logger.info("Resurrected node %r (force=%s)", node, force)
         return node
 
     def add(self, node_config: NodeConfig) -> None:
@@ -353,3 +361,6 @@ class NodePool:
 
     def __repr__(self) -> str:
         return "<NodePool>"
+
+    def __len__(self) -> int:
+        return len(self.all_nodes)
