@@ -187,7 +187,7 @@ class TestRequestsHttpNode:
                     "https", "localhost", 443, ca_certs="/ca/certs", verify_certs=False
                 )
             )
-        assert str(e.value) == "You cannot pass CA certificates when verify_ssl=False."
+        assert str(e.value) == "You cannot use 'ca_certs' when 'verify_certs=False'"
 
     def test_client_cert_is_used_as_session_cert(self):
         conn = RequestsHttpNode(
