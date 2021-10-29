@@ -105,9 +105,7 @@ class RequestsHttpNode(BaseNode):
 
         if config.ca_certs:
             if not config.verify_certs:
-                raise ValueError(
-                    "You cannot pass CA certificates when verify_ssl=False."
-                )
+                raise ValueError("You cannot use 'ca_certs' when 'verify_certs=False'")
             self.session.verify = config.ca_certs
 
         if not config.ssl_show_warn:
