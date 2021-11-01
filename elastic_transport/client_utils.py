@@ -52,7 +52,7 @@ def resolve_default(val: Union[DefaultType, T], default: T) -> T:
     """Resolves a value that could be the ``DEFAULT`` sentinel
     into either the given value or the default value.
     """
-    return val if val is not DEFAULT else default  # type: ignore[return-value]
+    return val if val is not DEFAULT else default
 
 
 def create_user_agent(name: str, version: str) -> str:
