@@ -16,9 +16,11 @@
 #  under the License.
 
 import dataclasses
+import enum
 import ssl
 from dataclasses import dataclass, field
 from typing import (
+    TYPE_CHECKING,
     AbstractSet,
     Any,
     Collection,
@@ -26,8 +28,6 @@ from typing import (
     Iterator,
     Mapping,
     MutableMapping,
-    NamedTuple,
-    NoReturn,
     Optional,
     Tuple,
     TypeVar,
@@ -35,23 +35,20 @@ from typing import (
     ValuesView,
 )
 
-#: Sentinel used as a default value when ``None`` has special meaning like timeouts.
-#: The only comparisons that are supported for this type are ``is``.
-DefaultType = NamedTuple("DefaultType", ())
+if TYPE_CHECKING:
+    from typing_extensions import Final
 
 
-def _not_implemented(*_: Any) -> NoReturn:
-    raise NotImplementedError()
+class DefaultType(enum.Enum):
+    """
+    Sentinel used as a default value when ``None`` has special meaning like timeouts.
+    The only comparisons that are supported for this type are ``is``.
+    """
+
+    value = 0
 
 
-DefaultType.__str__ = lambda *_: "DEFAULT"  # type: ignore
-DefaultType.__repr__ = lambda *_: "DEFAULT"  # type: ignore
-DefaultType.__eq__ = _not_implemented  # type: ignore
-DefaultType.__ne__ = _not_implemented  # type: ignore
-DefaultType.__iter__ = _not_implemented  # type: ignore
-DefaultType.__hash__ = _not_implemented  # type: ignore
-
-DEFAULT = DefaultType()
+DEFAULT: "Final[DefaultType]" = DefaultType.value
 
 T = TypeVar("T")
 
