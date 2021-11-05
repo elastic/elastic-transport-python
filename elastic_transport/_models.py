@@ -47,6 +47,12 @@ class DefaultType(enum.Enum):
 
     value = 0
 
+    def __repr__(self) -> str:
+        return "<DEFAULT>"
+
+    def __str__(self) -> str:
+        return "<DEFAULT>"
+
 
 DEFAULT: "Final[DefaultType]" = DefaultType.value
 
