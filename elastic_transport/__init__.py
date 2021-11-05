@@ -52,6 +52,7 @@ from ._serializer import (
     TextSerializer,
 )
 from ._transport import Transport as Transport
+from ._utils import fixup_module_metadata
 from ._version import __version__ as __version__  # noqa
 
 __all__ = [
@@ -91,3 +92,6 @@ __all__ = [
     "TransportWarning",
     "Urllib3HttpNode",
 ]
+
+fixup_module_metadata(__name__, globals())
+del fixup_module_metadata

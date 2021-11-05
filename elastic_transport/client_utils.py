@@ -27,6 +27,7 @@ from urllib3.exceptions import LocationParseError  # type: ignore[import]
 from urllib3.util import parse_url  # type: ignore[import]
 
 from ._models import DEFAULT, DefaultType, NodeConfig
+from ._utils import fixup_module_metadata
 from ._version import __version__
 
 __all__ = [
@@ -212,3 +213,7 @@ def url_to_node_config(url: str) -> NodeConfig:
         path_prefix=path_prefix,
         headers=headers,
     )
+
+
+fixup_module_metadata(__name__, globals())
+del fixup_module_metadata

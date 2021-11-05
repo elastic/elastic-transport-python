@@ -15,26 +15,19 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import pytest
-
-import elastic_transport
-from elastic_transport import client_utils
-
-modules = pytest.mark.parametrize("module", [elastic_transport, client_utils])
+from typing import Any, Dict
 
 
-@modules
-def test__all__sorted(module):
-    print(sorted(module.__all__))
-    assert module.__all__ == sorted(module.__all__)
+def fixup_module_metadata(module_name: str, namespace: Dict[str, Any]) -> None:
+    # Yoinked from python-trio/outcome, thanks Nathaniel! License: MIT
+    def fix_one(obj: Any) -> None:
+        mod = getattr(obj, "__module__", None)
+        if mod is not None and mod.startswith("elastic_transport."):
+            obj.__module__ = module_name
+            if isinstance(obj, type):
+                for attr_value in obj.__dict__.values():
+                    fix_one(attr_value)
 
-
-@modules
-def test__all__is_importable(module):
-    assert {attr for attr in module.__all__ if hasattr(module, attr)} == set(
-        module.__all__
-    )
-
-
-def test_module_rewritten():
-    assert repr(elastic_transport.Transport) == "<class 'elastic_transport.Transport'>"
+    for objname in namespace["__all__"]:
+        obj = namespace[objname]
+        fix_one(obj)
