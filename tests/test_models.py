@@ -74,3 +74,18 @@ def test_headers_frozen():
 
     assert headers.copy() is not headers
     assert headers.copy().frozen is False
+
+
+@pytest.mark.parametrize(
+    ["headers", "string"],
+    [
+        ({"field": "value"}, "{'field': 'value'}"),
+        ({"Authorization": "value"}, "{'Authorization': '<hidden>'}"),
+        ({"authorization": "Basic"}, "{'authorization': '<hidden>'}"),
+        ({"authorization": "Basic abc"}, "{'authorization': 'Basic <hidden>'}"),
+        ({"authorization": "ApiKey abc"}, "{'authorization': 'ApiKey <hidden>'}"),
+        ({"authorization": "Bearer abc"}, "{'authorization': 'Bearer <hidden>'}"),
+    ],
+)
+def test_headers_hide_auth(headers, string):
+    assert repr(HttpHeaders(headers)) == string
