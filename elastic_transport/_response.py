@@ -54,9 +54,11 @@ class ApiResponse(Generic[_RawType, _BodyType]):
         self._body_cls = body_cls
 
     def __repr__(self) -> str:
-        body_repr = self.body
-        if body_repr is None:
-            body_repr = self.raw
+        body_repr: Any = self._raw
+        try:
+            body_repr = self.body
+        except NotImplementedError:
+            pass
         return f"{type(self).__name__}({body_repr!r})"
 
     def __contains__(self, item: Any) -> bool:
@@ -195,7 +197,7 @@ class ObjectApiResponse(
     @property
     def body(self) -> _ObjectBodyType:
         if self._body_cls is None:
-            return None  # type: ignore[return-value]
+            raise NotImplementedError
         return self._body_cls(self.raw)  # type: ignore[call-arg]
 
 
@@ -231,5 +233,5 @@ class ListApiResponse(
     @property
     def body(self) -> List[_ListItemBodyType]:
         if self._body_cls is None:
-            return None  # type: ignore[return-value]
+            raise NotImplementedError
         return [self._body_cls(item) for item in self._raw]  # type: ignore[call-overload]

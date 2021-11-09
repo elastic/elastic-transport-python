@@ -175,39 +175,55 @@ class NodePool:
 
         # Initial set of nodes that the NodePool was initialized with.
         # This set of nodes can never be removed.
-        self.seed_nodes: Tuple[NodeConfig, ...] = tuple(set(node_configs))
-        if len(self.seed_nodes) != len(node_configs):
+        self._seed_nodes: Tuple[NodeConfig, ...] = tuple(set(node_configs))
+        if len(self._seed_nodes) != len(node_configs):
             raise ValueError("Cannot use duplicate NodeConfigs within a NodePool")
 
-        self.node_class = node_class
-        self.selector = node_selector_class(node_configs)
+        self._node_class = node_class
+        self._node_selector = node_selector_class(node_configs)
 
         # Maintain insert order
-        self.all_nodes: Dict[NodeConfig, BaseNode] = ordered_dict()
+        self._all_nodes: Dict[NodeConfig, BaseNode] = ordered_dict()
         for node_config in node_configs:
-            self.all_nodes[node_config] = self.node_class(node_config)
+            self._all_nodes[node_config] = self._node_class(node_config)
 
         # Lock that is used to protect writing to 'all_nodes'
         self._all_nodes_write_lock = Lock()
         # Flag which tells NodePool.get() that there's only one node
         # which allows for optimizations. Setting this flag is also
         # protected by the above write lock.
-        self._all_nodes_len_1 = len(self.all_nodes) == 1
+        self._all_nodes_len_1 = len(self._all_nodes) == 1
 
         # Collection of currently-alive nodes. This is an ordered
         # dict so round-robin actually works.
-        self.alive_nodes: Dict[NodeConfig, BaseNode] = ordered_dict(self.all_nodes)
+        self._alive_nodes: Dict[NodeConfig, BaseNode] = ordered_dict(self._all_nodes)
 
         # PriorityQueue for thread safety and ease of timeout management
-        self.dead_nodes: PriorityQueue[Tuple[float, BaseNode]] = PriorityQueue()
-        self.dead_consecutive_failures: Dict[NodeConfig, int] = defaultdict(lambda: 0)
+        self._dead_nodes: PriorityQueue[Tuple[float, BaseNode]] = PriorityQueue()
+        self._dead_consecutive_failures: Dict[NodeConfig, int] = defaultdict(lambda: 0)
 
         # Nodes that have been marked as 'removed' to be thread-safe.
-        self.removed_nodes: Set[NodeConfig] = set()
+        self._removed_nodes: Set[NodeConfig] = set()
 
         # default timeout after which to try resurrecting a connection
-        self.dead_node_backoff_factor = dead_node_backoff_factor
-        self.max_dead_node_backoff = max_dead_node_backoff
+        self._dead_node_backoff_factor = dead_node_backoff_factor
+        self._max_dead_node_backoff = max_dead_node_backoff
+
+    @property
+    def node_class(self) -> Type[BaseNode]:
+        return self._node_class
+
+    @property
+    def node_selector(self) -> NodeSelector:
+        return self._node_selector
+
+    @property
+    def dead_node_backoff_factor(self) -> float:
+        return self._dead_node_backoff_factor
+
+    @property
+    def max_dead_node_backoff(self) -> float:
+        return self._max_dead_node_backoff
 
     def mark_dead(self, node: BaseNode, _now: Optional[float] = None) -> None:
         """
@@ -217,16 +233,16 @@ class NodePool:
         """
         now: float = _now if _now is not None else time.time()
         try:
-            del self.alive_nodes[node.config]
+            del self._alive_nodes[node.config]
         except KeyError:
             pass
-        consecutive_failures = self.dead_consecutive_failures[node.config] + 1
-        self.dead_consecutive_failures[node.config] = consecutive_failures
+        consecutive_failures = self._dead_consecutive_failures[node.config] + 1
+        self._dead_consecutive_failures[node.config] = consecutive_failures
         timeout = min(
-            self.dead_node_backoff_factor * (2 ** (consecutive_failures - 1)),
-            self.max_dead_node_backoff,
+            self._dead_node_backoff_factor * (2 ** (consecutive_failures - 1)),
+            self._max_dead_node_backoff,
         )
-        self.dead_nodes.put((now + timeout, node))
+        self._dead_nodes.put((now + timeout, node))
         _logger.warning(
             "Node %r has failed for %i times in a row, putting on %i second timeout",
             node,
@@ -241,12 +257,12 @@ class NodePool:
         :arg node: The ``BaseNode`` instance to mark as alive.
         """
         try:
-            del self.dead_consecutive_failures[node.config]
+            del self._dead_consecutive_failures[node.config]
         except KeyError:
             # race condition, safe to ignore
             pass
         else:
-            self.alive_nodes.setdefault(node.config, node)
+            self._alive_nodes.setdefault(node.config, node)
             _logger.warning(
                 "Node %r has been marked alive after a successful request",
                 node,
@@ -274,28 +290,28 @@ class NodePool:
         mark_node_alive_after: float = 0.0
         try:
             # Try to resurrect a dead node if any.
-            mark_node_alive_after, node = self.dead_nodes.get(block=False)
+            mark_node_alive_after, node = self._dead_nodes.get(block=False)
         except Empty:  # No dead nodes.
             if force:
                 # If we're being forced to return a node we randomly
                 # pick between alive and dead nodes.
-                return random.choice(list(self.all_nodes.values()))
+                return random.choice(list(self._all_nodes.values()))
             node = None
 
         if node is not None and not force and mark_node_alive_after > time.time():
             # return it back if not eligible and not forced
-            self.dead_nodes.put((mark_node_alive_after, node))
+            self._dead_nodes.put((mark_node_alive_after, node))
             node = None
 
         # either we were forced or the node is eligible to be retried
         if node is not None:
-            self.alive_nodes[node.config] = node
+            self._alive_nodes[node.config] = node
             _logger.info("Resurrected node %r (force=%s)", node, force)
         return node
 
     def add(self, node_config: NodeConfig) -> None:
         try:  # If the node was previously removed we mark it as "in the pool"
-            self.removed_nodes.remove(node_config)
+            self._removed_nodes.remove(node_config)
         except KeyError:
             pass
 
@@ -303,9 +319,9 @@ class NodePool:
             # We don't error when trying to add a duplicate node
             # to the pool because threading+sniffing can call
             # .add() on the same NodeConfig.
-            if node_config not in self.all_nodes:
-                node = self.node_class(node_config)
-                self.all_nodes[node.config] = node
+            if node_config not in self._all_nodes:
+                node = self._node_class(node_config)
+                self._all_nodes[node.config] = node
 
                 # Update the flag to disable optimizations. Also ensures that
                 # .resurrect() starts getting called so our added node makes
@@ -314,13 +330,13 @@ class NodePool:
 
                 # Start the node as dead because 'dead_nodes' is thread-safe.
                 # The node will be resurrected on the next call to .get()
-                self.dead_consecutive_failures[node.config] = 0
-                self.dead_nodes.put((time.time(), node))
+                self._dead_consecutive_failures[node.config] = 0
+                self._dead_nodes.put((time.time(), node))
 
     def remove(self, node_config: NodeConfig) -> None:
         # Can't mark a seed node as removed.
-        if node_config not in self.seed_nodes:
-            self.removed_nodes.add(node_config)
+        if node_config not in self._seed_nodes:
+            self._removed_nodes.add(node_config)
 
     def get(self) -> BaseNode:
         """
@@ -338,13 +354,13 @@ class NodePool:
         # The only way this flag can be set to 'True' is if there were only
         # one node defined within 'seed_nodes' so we know this good to do.
         if self._all_nodes_len_1:
-            return self.all_nodes[self.seed_nodes[0]]
+            return self._all_nodes[self._seed_nodes[0]]
 
         # Filter nodes in 'alive_nodes' to ones not marked as removed.
         nodes = [
             node
-            for node_config, node in self.alive_nodes.items()
-            if node_config not in self.removed_nodes
+            for node_config, node in self._alive_nodes.items()
+            if node_config not in self._removed_nodes
         ]
 
         # No live nodes, resurrect one by force and return it
@@ -353,14 +369,14 @@ class NodePool:
 
         # Only call selector if we have a choice to make
         if len(nodes) > 1:
-            return self.selector.select(nodes)
+            return self._node_selector.select(nodes)
         return nodes[0]
 
     def all(self) -> List[BaseNode]:
-        return list(self.all_nodes.values())
+        return list(self._all_nodes.values())
 
     def __repr__(self) -> str:
         return "<NodePool>"
 
     def __len__(self) -> int:
-        return len(self.all_nodes)
+        return len(self._all_nodes)

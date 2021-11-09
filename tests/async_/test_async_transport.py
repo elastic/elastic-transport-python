@@ -211,7 +211,7 @@ async def test_retry_on_status():
     assert meta.status == 555
 
     # Assert that every node is called once
-    node_calls = [len(node.calls) for node in t.node_pool.all_nodes.values()]
+    node_calls = [len(node.calls) for node in t.node_pool.all()]
     assert node_calls == [
         1,
         1,
@@ -242,8 +242,8 @@ async def test_failed_connection_will_be_marked_as_dead():
 
     with pytest.raises(ConnectionError) as e:
         await t.perform_request("GET", "/")
-    assert 0 == len(t.node_pool.alive_nodes)
-    assert 2 == len(t.node_pool.dead_nodes.queue)
+    assert 0 == len(t.node_pool._alive_nodes)
+    assert 2 == len(t.node_pool._dead_nodes.queue)
     assert len(e.value.errors) == 3
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
@@ -263,9 +263,9 @@ async def test_resurrected_connection_will_be_marked_as_live_on_success():
         t.node_pool.mark_dead(node2)
 
         await t.perform_request(method, "/")
-        assert 1 == len(t.node_pool.alive_nodes)
-        assert 1 == len(t.node_pool.dead_consecutive_failures)
-        assert 1 == len(t.node_pool.dead_nodes.queue)
+        assert 1 == len(t.node_pool._alive_nodes)
+        assert 1 == len(t.node_pool._dead_consecutive_failures)
+        assert 1 == len(t.node_pool._dead_nodes.queue)
 
 
 async def test_mark_dead_error_doesnt_raise():
@@ -278,7 +278,7 @@ async def test_mark_dead_error_doesnt_raise():
         node_class=AsyncDummyNode,
         randomize_nodes_in_pool=False,
     )
-    bad_node = t.node_pool.all_nodes[NodeConfig("http", "localhost", 80)]
+    bad_node = t.node_pool._all_nodes[NodeConfig("http", "localhost", 80)]
     with mock.patch.object(t.node_pool, "mark_dead") as mark_dead, mock.patch.object(
         t, "sniff"
     ) as sniff:
@@ -319,7 +319,7 @@ async def test_head_response_false():
     assert meta.status == 404
     assert resp is None
     # 404s don't count as a dead node status.
-    assert 0 == len(t.node_pool.dead_nodes.queue)
+    assert 0 == len(t.node_pool._dead_nodes.queue)
 
 
 @pytest.mark.parametrize(
@@ -514,7 +514,7 @@ async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
         sniff_before_requests=True,
         sniff_callback=sniff_callback,
     )
-    assert len(t.node_pool.all_nodes) == 1
+    assert len(t.node_pool) == 1
 
     request_at = loop.time()
     await t.perform_request("GET", "/")
@@ -526,8 +526,9 @@ async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
 
     # The node pool knows when nodes are already in the pool
     # so we shouldn't get duplicates after sniffing.
-    assert len(t.node_pool.all_nodes) == 2
-    assert set(sniffed_nodes) == set(t.node_pool.all_nodes)
+    assert len(t.node_pool.all()) == 2
+    assert len(t.node_pool) == 2
+    assert set(sniffed_nodes) == {node.config for node in t.node_pool.all()}
 
 
 async def test_sniff_error_resets_lock_and_last_sniffed_at():
