@@ -31,10 +31,12 @@ from elastic_transport import (
     ConnectionError,
     ConnectionTimeout,
     NodeConfig,
+    RequestsHttpNode,
     SniffingError,
     SniffOptions,
     TransportError,
     TransportWarning,
+    Urllib3HttpNode,
 )
 from elastic_transport._compat import get_running_loop
 from elastic_transport._node._base import DEFAULT_USER_AGENT
@@ -343,6 +345,18 @@ async def test_transport_client_meta_node_class(node_class):
     )
     assert t._transport_client_meta[3][0] == "ai"
     assert [x[0] for x in t._transport_client_meta[:3]] == ["es", "py", "t"]
+
+
+@pytest.mark.parametrize(
+    "node_class",
+    ["urllib3", "requests", Urllib3HttpNode, RequestsHttpNode],
+)
+def test_transport_and_node_are_async(node_class):
+    with pytest.raises(ValueError) as e:
+        AsyncTransport([NodeConfig("http", "localhost", 80)], node_class=node_class)
+    assert (
+        str(e.value) == "Specified 'node_class' is not async, should be async instead"
+    )
 
 
 async def test_sniff_on_start():
