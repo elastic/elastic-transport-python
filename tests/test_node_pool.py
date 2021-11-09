@@ -56,7 +56,7 @@ def test_node_pool_remove_seed_node():
     pool = NodePool([node_config], node_class=Urllib3HttpNode)
 
     pool.remove(node_config)  # Calling .remove() on a seed node is a no-op
-    assert len(pool.removed_nodes) == 0
+    assert len(pool._removed_nodes) == 0
 
 
 def test_node_pool_add_and_remove_non_seed_node():
@@ -68,7 +68,7 @@ def test_node_pool_add_and_remove_non_seed_node():
     assert any(pool.get().config is node_config2 for _ in range(10))
 
     pool.remove(node_config2)
-    assert len(pool.removed_nodes) == 1
+    assert len(pool._removed_nodes) == 1
 
     # We never return a 'removed' node
     assert all(pool.get().config is node_config1 for _ in range(10))
@@ -114,11 +114,11 @@ def test_all_dead_nodes_still_gets_node(node_configs):
 
     for _ in node_configs:
         pool.mark_dead(pool.get())
-    assert len(pool.alive_nodes) == 0
+    assert len(pool._alive_nodes) == 0
 
     node = pool.get()
     assert node.config in node_configs
-    assert len(pool.alive_nodes) < 2
+    assert len(pool._alive_nodes) < 2
 
 
 def test_unknown_selector_class():
@@ -171,32 +171,32 @@ def test_dead_node_backoff_calculation():
     node = pool.get()
     pool.mark_dead(node, _now=0)
 
-    assert pool.dead_consecutive_failures == {node.config: 1}
-    assert pool.dead_nodes.queue == [(0.5, node)]
+    assert pool._dead_consecutive_failures == {node.config: 1}
+    assert pool._dead_nodes.queue == [(0.5, node)]
 
     assert pool.get() is node
     pool.mark_dead(node, _now=0)
 
-    assert pool.dead_consecutive_failures == {node.config: 2}
-    assert pool.dead_nodes.queue == [(1.0, node)]
+    assert pool._dead_consecutive_failures == {node.config: 2}
+    assert pool._dead_nodes.queue == [(1.0, node)]
 
     assert pool.get() is node
     pool.mark_dead(node, _now=0)
 
-    assert pool.dead_consecutive_failures == {node.config: 3}
-    assert pool.dead_nodes.queue == [(2.0, node)]
+    assert pool._dead_consecutive_failures == {node.config: 3}
+    assert pool._dead_nodes.queue == [(2.0, node)]
 
     assert pool.get() is node
     pool.mark_dead(node, _now=0)
 
-    assert pool.dead_consecutive_failures == {node.config: 4}
-    assert pool.dead_nodes.queue == [(3.5, node)]
+    assert pool._dead_consecutive_failures == {node.config: 4}
+    assert pool._dead_nodes.queue == [(3.5, node)]
 
     assert pool.get() is node
     pool.mark_live(node)
 
-    assert pool.dead_consecutive_failures == {}
-    assert pool.dead_nodes.queue == []
+    assert pool._dead_consecutive_failures == {}
+    assert pool._dead_nodes.queue == []
 
 
 def test_add_node_after_sniffing():

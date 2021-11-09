@@ -89,7 +89,9 @@ def test_list_response():
     assert list(resp) == [1, 2, 3]
     assert resp.raw == [1, 2, 3]
     assert resp[1] == 2
-    assert resp.body is None
+
+    with pytest.raises(NotImplementedError):
+        _ = resp.body
 
     resp._body_cls = str
     assert resp.body == ["1", "2", "3"]
@@ -102,7 +104,9 @@ def test_list_object_response():
     assert set(resp.keys()) == {"k1", "k2"}
     assert resp["k2"] == 2
     assert resp.raw == {"k1": 1, "k2": 2}
-    assert resp.body is None
+
+    with pytest.raises(NotImplementedError):
+        _ = resp.body
 
     assert repr(resp) == "ObjectApiResponse({'k1': 1, 'k2': 2})"
 
