@@ -16,6 +16,7 @@
 #  under the License.
 
 import dataclasses
+import inspect
 import logging
 import time
 import warnings
@@ -156,6 +157,16 @@ class Transport:
                     f"Available options are: '{options}'"
                 )
             node_class = NODE_CLASS_NAMES[node_class]
+
+        # Verify that the node_class we're passed is
+        # async/sync the same as the transport is.
+        is_transport_async = inspect.iscoroutinefunction(self.perform_request)
+        is_node_async = inspect.iscoroutinefunction(node_class.perform_request)
+        if is_transport_async != is_node_async:
+            raise ValueError(
+                f"Specified 'node_class' {'is' if is_node_async else 'is not'} async, "
+                f"should be {'async' if is_transport_async else 'sync'} instead"
+            )
 
         validate_sniffing_options(
             node_configs=node_configs,

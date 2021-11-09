@@ -25,6 +25,7 @@ from unittest import mock
 import pytest
 
 from elastic_transport import (
+    AiohttpHttpNode,
     ConnectionError,
     ConnectionTimeout,
     NodeConfig,
@@ -352,6 +353,16 @@ def test_transport_client_meta_node_class(node_class):
     t = Transport([NodeConfig("http", "localhost", 80)])
     assert t._transport_client_meta[3][0] == "ur"
     assert [x[0] for x in t._transport_client_meta[:3]] == ["et", "py", "t"]
+
+
+@pytest.mark.parametrize(
+    "node_class",
+    ["aiohttp", AiohttpHttpNode],
+)
+def test_transport_and_node_are_sync(node_class):
+    with pytest.raises(ValueError) as e:
+        Transport([NodeConfig("http", "localhost", 80)], node_class=node_class)
+    assert str(e.value) == "Specified 'node_class' is async, should be sync instead"
 
 
 def test_client_meta_header():
