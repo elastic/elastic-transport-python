@@ -17,6 +17,7 @@
 
 import dataclasses
 import enum
+import re
 import ssl
 from dataclasses import dataclass, field
 from typing import (
@@ -119,10 +120,10 @@ class HttpHeaders(MutableMapping[str, str]):
         return isinstance(item, str) and self._normalize_key(item) in self._internal
 
     def __repr__(self) -> str:
-        return repr(dict(self.items()))
+        return repr(self._dict_hide_auth())
 
     def __str__(self) -> str:
-        return str(dict(self.items()))
+        return str(self._dict_hide_auth())
 
     def __hash__(self) -> int:
         if not self._frozen:
@@ -157,6 +158,19 @@ class HttpHeaders(MutableMapping[str, str]):
 
     def _normalize_key(self, key: str) -> str:
         return key.lower() if hasattr(key, "lower") else key
+
+    def _dict_hide_auth(self) -> Dict[str, str]:
+        def hide_auth(val: str) -> str:
+            # Hides only the authentication value, not the method.
+            match = re.match(r"^(ApiKey|Basic|Bearer) ", val)
+            if match:
+                return f"{match.group(1)} <hidden>"
+            return "<hidden>"
+
+        return {
+            key: hide_auth(val) if key.lower() == "authorization" else val
+            for key, val in self.items()
+        }
 
 
 @dataclass
