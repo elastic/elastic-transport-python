@@ -338,7 +338,7 @@ class Transport:
                     )
                 )
 
-                if raw_data not in (None, b""):
+                if method != "HEAD":
                     data = self.serializers.loads(raw_data, meta.mimetype)
                 else:
                     data = None
