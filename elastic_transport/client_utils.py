@@ -156,7 +156,7 @@ _QUOTE_ALWAYS_SAFE = frozenset(
 
 
 def percent_encode(
-    string: str,
+    string: Union[bytes, str],
     safe: str = "/",
     encoding: Optional[str] = None,
     errors: Optional[str] = None,
@@ -165,7 +165,7 @@ def percent_encode(
     # Redefines 'urllib.parse.quote()' to always have the '~' character
     # within the 'ALWAYS_SAFE' list. The character was added in Python 3.7
     safe = "".join(_QUOTE_ALWAYS_SAFE.union(set(safe)))
-    return _quote(string, safe, encoding=encoding, errors=errors)
+    return _quote(string, safe, encoding=encoding, errors=errors)  # type: ignore[arg-type]
 
 
 def basic_auth_to_header(basic_auth: Tuple[str, str]) -> str:

@@ -172,7 +172,7 @@ class RequestsHttpNode(BaseNode):
             )
         )
         try:
-            response = self.session.send(prepared_request, **send_kwargs)
+            response = self.session.send(prepared_request, **send_kwargs)  # type: ignore[arg-type]
             data = response.content
             duration = time.time() - start
             response_headers = HttpHeaders(response.headers)
