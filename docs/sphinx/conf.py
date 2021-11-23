@@ -32,7 +32,6 @@ release = __version__
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
-    "furo",
     "sphinx_autodoc_typehints",
 ]
 
