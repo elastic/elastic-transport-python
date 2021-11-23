@@ -141,12 +141,15 @@ class AiohttpHttpNode(BaseAsyncNode):
         if headers:
             request_headers.update(headers)
 
+        body_to_send: Optional[bytes]
         if body:
             if self._http_compress:
-                body = gzip.compress(body)
+                body_to_send = gzip.compress(body)
                 request_headers["content-encoding"] = "gzip"
+            else:
+                body_to_send = body
         else:
-            body = None
+            body_to_send = None
 
         kwargs = {}
         if self._ssl_assert_fingerprint:
@@ -157,7 +160,7 @@ class AiohttpHttpNode(BaseAsyncNode):
             async with self.session.request(
                 method,
                 url,
-                data=body,
+                data=body_to_send,
                 headers=request_headers,
                 timeout=aiohttp_timeout,
                 **kwargs,
@@ -173,26 +176,45 @@ class AiohttpHttpNode(BaseAsyncNode):
         except RERAISE_EXCEPTIONS:
             raise
         except Exception as e:
+            err: Exception
             if isinstance(
                 e, (asyncio.TimeoutError, aiohttp_exceptions.ServerTimeoutError)
             ):
-                raise ConnectionTimeout(
+                err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
-                ) from None
+                )
             elif isinstance(e, (ssl.SSLError, aiohttp_exceptions.ClientSSLError)):
-                raise TlsError(str(e), errors=(e,)) from None
+                err = TlsError(str(e), errors=(e,))
             elif isinstance(e, BUILTIN_EXCEPTIONS):
                 raise
-            raise ConnectionError(str(e), errors=(e,)) from None
+            else:
+                err = ConnectionError(str(e), errors=(e,))
+            self._log_request(
+                method="HEAD" if is_head else method,
+                target=target,
+                headers=request_headers,
+                body=body,
+                exception=err,
+            )
+            raise err from None
 
+        meta = ApiResponseMeta(
+            node=self.config,
+            duration=duration,
+            http_version="1.1",
+            status=response.status,
+            headers=HttpHeaders(response.headers),
+        )
+        self._log_request(
+            method="HEAD" if is_head else method,
+            target=target,
+            headers=request_headers,
+            body=body,
+            meta=meta,
+            response=raw_data,
+        )
         return (
-            ApiResponseMeta(
-                node=self.config,
-                duration=duration,
-                http_version="1.1",
-                status=response.status,
-                headers=HttpHeaders(response.headers),
-            ),
+            meta,
             raw_data,
         )
 

@@ -19,13 +19,14 @@ import asyncio
 import logging
 import os
 import ssl
-from typing import ClassVar, Optional, Tuple, Union
+from typing import Any, ClassVar, List, Optional, Tuple, Union
 
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from .._version import __version__
 from ..client_utils import DEFAULT, DefaultType
 
-logger = logging.getLogger("elastic_transport.node")
+_logger = logging.getLogger("elastic_transport.node")
+_logger.propagate = False  # This logger is very verbose so disable propogation.
 
 DEFAULT_CA_CERTS: Optional[str] = None
 DEFAULT_USER_AGENT = f"elastic-transport-python/{__version__}"
@@ -43,6 +44,36 @@ BUILTIN_EXCEPTIONS = (
     SystemError,
     TypeError,
 )
+HTTP_STATUS_REASONS = {
+    200: "OK",
+    201: "Created",
+    202: "Accepted",
+    204: "No Content",
+    205: "Reset Content",
+    206: "Partial Content",
+    400: "Bad Request",
+    401: "Unauthorized",
+    402: "Payment Required",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    406: "Not Acceptable",
+    407: "Proxy Authentication Required",
+    408: "Request Timeout",
+    409: "Conflict",
+    410: "Gone",
+    411: "Length Required",
+    412: "Precondition Failed",
+    413: "Content Too Large",
+    414: "URI Too Long",
+    415: "Unsupported Media Type",
+    429: "Too Many Requests",
+    500: "Internal Server Error",
+    501: "Not Implemented",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+}
 
 try:
     import certifi
@@ -145,55 +176,54 @@ class BaseNode:
     def close(self) -> None:  # pragma: nocover
         pass
 
-    def log_request_success(self, method, url, body, status, response, duration):  # type: ignore
-        """Log a successful API call"""
-        # body has already been serialized to utf-8, deserialize it for logging
-        # TODO: find a better way to avoid (de)encoding the body back and forth
-        if body:
-            try:
-                body = body.decode("utf-8", "ignore")
-            except AttributeError:
-                pass
-
-        logger.info("%s %s [status:%s request:%.3fs]", method, url, status, duration)
-        logger.debug("> %s", body)
-        logger.debug("< %s", response)
-
-    def log_request_fail(  # type: ignore
+    def _log_request(
         self,
-        method,
-        url,
-        body,
-        duration,
-        status=None,
-        response=None,
-        exception=None,
-    ):
-        """Log an unsuccessful API call"""
-        # do not log 404s on HEAD requests
-        if method == "HEAD" and status == 404:
-            return
-        logger.warning(
-            "%s %s [status:%s request:%.3fs]",
-            method,
-            url,
-            status or "N/A",
-            duration,
-            exc_info=exception is not None,
-        )
+        method: str,
+        target: str,
+        headers: Optional[HttpHeaders],
+        body: Optional[bytes],
+        meta: Optional[ApiResponseMeta] = None,
+        response: Optional[bytes] = None,
+        exception: Optional[Exception] = None,
+    ) -> None:
+        if _logger.hasHandlers():
+            http_version = meta.http_version if meta else "?.?"
+            lines = ["> %s %s HTTP/%s"]
+            log_args: List[Any] = [method, target, http_version]
+            if headers:
+                for header, value in sorted(headers._dict_hide_auth().items()):
+                    lines.append(f"> {header.title()}: {value}")
+            if body is not None:
+                try:
+                    body_encoded = body.decode("utf-8", "surrogatepass")
+                except UnicodeError:
+                    body_encoded = repr(body)
+                log_args.append(body_encoded)
+                lines.append("> %s")
 
-        # body has already been serialized to utf-8, deserialize it for logging
-        # TODO: find a better way to avoid (de)encoding the body back and forth
-        if body:
-            try:
-                body = body.decode("utf-8", "ignore")
-            except AttributeError:
-                pass
+            if meta is not None:
+                reason = HTTP_STATUS_REASONS.get(meta.status, None)
+                if reason:
+                    lines.append("< HTTP/%s %d %s")
+                    log_args.extend((http_version, meta.status, reason))
+                else:
+                    lines.append("< HTTP/%s %d")
+                    log_args.extend((http_version, meta.status))
+                if meta.headers:
+                    for header, value in sorted(meta.headers.items()):
+                        lines.append(f"< {header.title()}: {value}")
+                if response:
+                    try:
+                        response_decoded = response.decode("utf-8", "surrogatepass")
+                    except UnicodeError:
+                        response_decoded = repr(response)
+                    log_args.append(response_decoded)
+                    lines.append("< %s")
 
-        logger.debug("> %s", body)
-
-        if response is not None:
-            logger.debug("< %s", response)
+            if exception is not None:
+                _logger.debug("\n".join(lines), *log_args, exc_info=exception)
+            else:
+                _logger.debug("\n".join(lines), *log_args)
 
 
 _HAS_TLS_VERSION = hasattr(ssl, "TLSVersion")
