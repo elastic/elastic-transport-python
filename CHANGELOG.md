@@ -1,6 +1,6 @@
 # Changelog
 
-## 8.0.0-alpha1 (2021-10-28)
+## 8.0.0-alpha6
 
 ### Added
 
@@ -15,6 +15,8 @@
 - Added ability to specify `ssl_version` via `ssl.TLSVersion` enum
   instead of `ssl.PROTOCOL_TLSvX` for Python 3.7+
 - Added `elastic_transport.client_utils` module to help writing API clients
+- Added `elastic_transport.debug_logging` method to enable all logging for debugging purposes
+- Added option to set `requests.Session.auth` within `RequestsHttpNode` via `NodeConfig._extras['requests.session.auth']`
 
 ### Changed
 
