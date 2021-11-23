@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import urllib3  # type: ignore[import]
 from urllib3.exceptions import (  # type: ignore[import]
     ConnectTimeoutError,
+    NewConnectionError,
     ReadTimeoutError,
 )
 from urllib3.util.retry import Retry  # type: ignore[import]
@@ -128,17 +129,20 @@ class Urllib3HttpNode(BaseNode):
             if headers:
                 request_headers.update(headers)
 
+            body_to_send: Optional[bytes]
             if body:
                 if self._http_compress:
-                    body = gzip.compress(body)
+                    body_to_send = gzip.compress(body)
                     request_headers["content-encoding"] = "gzip"
+                else:
+                    body_to_send = body
             else:
-                body = None
+                body_to_send = None
 
             response = self.pool.urlopen(
                 method,
                 target,
-                body=body,
+                body=body_to_send,
                 retries=Retry(False),
                 headers=request_headers,
                 **kw,
@@ -150,24 +154,45 @@ class Urllib3HttpNode(BaseNode):
         except RERAISE_EXCEPTIONS:
             raise
         except Exception as e:
-            if isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
-                raise ConnectionTimeout(
+            err: Exception
+            if isinstance(e, NewConnectionError):
+                err = ConnectionError(str(e), errors=(e,))
+            elif isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
+                err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
-                ) from None
+                )
             elif isinstance(e, (ssl.SSLError, urllib3.exceptions.SSLError)):
-                raise TlsError(str(e), errors=(e,)) from None
+                err = TlsError(str(e), errors=(e,))
             elif isinstance(e, BUILTIN_EXCEPTIONS):
                 raise
-            raise ConnectionError(str(e), errors=(e,)) from None
+            else:
+                err = ConnectionError(str(e), errors=(e,))
+            self._log_request(
+                method=method,
+                target=target,
+                headers=request_headers,
+                body=body,
+                exception=err,
+            )
+            raise err from None
 
+        meta = ApiResponseMeta(
+            node=self.config,
+            duration=duration,
+            http_version="1.1",
+            status=response.status,
+            headers=response_headers,
+        )
+        self._log_request(
+            method=method,
+            target=target,
+            headers=request_headers,
+            body=body,
+            meta=meta,
+            response=data,
+        )
         return (
-            ApiResponseMeta(
-                node=self.config,
-                duration=duration,
-                http_version="1.1",
-                status=response.status,
-                headers=response_headers,
-            ),
+            meta,
             data,
         )
 

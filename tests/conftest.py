@@ -16,6 +16,7 @@
 #  under the License.
 
 import hashlib
+import logging
 import socket
 import ssl
 
@@ -90,3 +91,11 @@ def httpbin_node_config() -> NodeConfig:
     return NodeConfig(
         "https", "httpbin.org", 443, verify_certs=False, ssl_show_warn=False
     )
+
+
+@pytest.fixture(scope="function", autouse=True)
+def elastic_transport_logging():
+    for name in ("node", "node_pool", "transport"):
+        logger = logging.getLogger(f"elastic_transport.{name}")
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
