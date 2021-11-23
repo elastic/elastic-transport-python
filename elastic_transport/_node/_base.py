@@ -171,6 +171,24 @@ class BaseNode:
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
+        """Constructs and sends an HTTP request and parses the HTTP response.
+
+        :param method: HTTP method
+        :param target: HTTP request target, typically path+query
+        :param body: Optional HTTP request body encoded as bytes
+        :param headers: Optional HTTP headers to send in addition to
+            the headers already configured.
+        :param request_timeout: Amount of time to wait for the first
+            response bytes to arrive before raising a
+            :class:`elastic_transport.ConnectionTimeout` error.
+        :raises:
+            :class:`elastic_transport.ConnectionError`,
+            :class:`elastic_transport.ConnectionTimeout`,
+            :class:`elastic_transport.TlsError`
+        :rtype: Tuple[ApiResponseMeta, bytes]
+        :returns: Metadata about the request+response and the raw
+            decompressed bytes from the HTTP response body.
+        """
         raise NotImplementedError()
 
     def close(self) -> None:  # pragma: nocover
