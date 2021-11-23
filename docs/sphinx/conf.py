@@ -45,4 +45,5 @@ html_static_path = []
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
+    "requests": ("https://docs.python-requests.org/en/master", None),
 }

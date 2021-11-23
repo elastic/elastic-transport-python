@@ -37,6 +37,7 @@ from ._base import (
 try:
     import requests
     from requests.adapters import HTTPAdapter
+    from requests.auth import AuthBase
 
     _REQUESTS_AVAILABLE = True
     _REQUESTS_META_VERSION = client_meta_version(requests.__version__)
@@ -79,7 +80,12 @@ except ImportError:  # pragma: nocover
 
 
 class RequestsHttpNode(BaseNode):
-    """Synchronous node using the ``requests`` library communicating via HTTP"""
+    """Synchronous node using the ``requests`` library communicating via HTTP.
+
+    Supports setting :attr:`requests.Session.auth` via the
+    :attr:`elastic_transport.NodeConfig._extras`
+    using the ``requests.session.auth`` key.
+    """
 
     _CLIENT_META_HTTP_CLIENT = ("rq", _REQUESTS_META_VERSION)
 
@@ -95,6 +101,16 @@ class RequestsHttpNode(BaseNode):
         self.session = requests.Session()
         self.session.headers.clear()  # Empty out all the default session headers
         self.session.verify = config.verify_certs
+
+        # Requests supports setting 'session.auth' via _extras['requests.session.auth'] = ...
+        try:
+            requests_session_auth: Optional[AuthBase] = config._extras.pop(
+                "requests.session.auth", None
+            )
+        except AttributeError:
+            requests_session_auth = None
+        if requests_session_auth is not None:
+            self.session.auth = requests_session_auth
 
         # Client certificates
         if config.client_cert:

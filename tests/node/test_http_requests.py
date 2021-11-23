@@ -22,13 +22,14 @@ import warnings
 import pytest
 import requests
 from mock import Mock, patch
+from requests.auth import HTTPBasicAuth
 
 from elastic_transport import NodeConfig, RequestsHttpNode
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 
 class TestRequestsHttpNode:
-    def _get_mode_node(self, node_config, response_body=b"{}"):
+    def _get_mock_node(self, node_config, response_body=b"{}"):
         node = RequestsHttpNode(node_config)
 
         def _dummy_send(*args, **kwargs):
@@ -69,7 +70,7 @@ class TestRequestsHttpNode:
         assert adapter.poolmanager.connection_pool_kw["ssl_context"] is ctx
 
     def test_merge_headers(self):
-        node = self._get_mode_node(
+        node = self._get_mock_node(
             NodeConfig("http", "localhost", 80, headers={"h1": "v1", "h2": "v2"})
         )
         req = self._get_request(node, "GET", "/", headers={"h2": "v2p", "h3": "v3"})
@@ -78,7 +79,7 @@ class TestRequestsHttpNode:
         assert req.headers["h3"] == "v3"
 
     def test_default_headers(self):
-        node = self._get_mode_node(NodeConfig("http", "localhost", 80))
+        node = self._get_mock_node(NodeConfig("http", "localhost", 80))
         req = self._get_request(node, "GET", "/")
         assert req.headers == {
             "connection": "keep-alive",
@@ -86,7 +87,7 @@ class TestRequestsHttpNode:
         }
 
     def test_no_http_compression(self):
-        node = self._get_mode_node(
+        node = self._get_mock_node(
             NodeConfig("http", "localhost", 80, http_compress=False)
         )
         assert not node.config.http_compress
@@ -108,7 +109,7 @@ class TestRequestsHttpNode:
 
     @pytest.mark.parametrize("empty_body", [None, b""])
     def test_http_compression(self, empty_body):
-        node = self._get_mode_node(
+        node = self._get_mock_node(
             NodeConfig("http", "localhost", 80, http_compress=True)
         )
         assert node.config.http_compress is True
@@ -135,7 +136,7 @@ class TestRequestsHttpNode:
 
     @pytest.mark.parametrize("request_timeout", [None, 15])
     def test_timeout_override_default(self, request_timeout):
-        node = self._get_mode_node(
+        node = self._get_mock_node(
             NodeConfig("http", "localhost", 80, request_timeout=request_timeout)
         )
         assert node.config.request_timeout == request_timeout
@@ -214,8 +215,23 @@ class TestRequestsHttpNode:
 
     def test_surrogatepass_into_bytes(self):
         data = b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
-        con = self._get_mode_node(
+        node = self._get_mock_node(
             NodeConfig("http", "localhost", 80), response_body=data
         )
-        _, data = con.perform_request("GET", "/")
+        _, data = node.perform_request("GET", "/")
         assert b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa" == data
+
+    @pytest.mark.parametrize("_extras", [None, {}, {"requests.session.auth": None}])
+    def test_requests_no_session_auth(self, _extras):
+        node = self._get_mock_node(NodeConfig("http", "localhost", 80, _extras=_extras))
+        assert node.session.auth is None
+
+    def test_requests_custom_auth(self):
+        auth = HTTPBasicAuth("username", "password")
+        node = self._get_mock_node(
+            NodeConfig("http", "localhost", 80, _extras={"requests.session.auth": auth})
+        )
+        assert node.session.auth is auth
+        node.perform_request("GET", "/")
+        (request,), _ = node.session.send.call_args
+        assert request.headers["authorization"] == "Basic dXNlcm5hbWU6cGFzc3dvcmQ="
