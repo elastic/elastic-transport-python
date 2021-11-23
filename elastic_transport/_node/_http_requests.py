@@ -165,16 +165,19 @@ class RequestsHttpNode(BaseNode):
         if headers:
             request_headers.update(headers)
 
+        body_to_send: Optional[bytes]
         if body:
             if self._http_compress:
-                body = gzip.compress(body)
+                body_to_send = gzip.compress(body)
                 request_headers["content-encoding"] = "gzip"
+            else:
+                body_to_send = body
         else:
-            body = None
+            body_to_send = None
 
         start = time.time()
         request = requests.Request(
-            method=method, headers=request_headers, url=url, data=body
+            method=method, headers=request_headers, url=url, data=body_to_send
         )
         prepared_request = self.session.prepare_request(request)
         send_kwargs = {
@@ -196,24 +199,43 @@ class RequestsHttpNode(BaseNode):
         except RERAISE_EXCEPTIONS:
             raise
         except Exception as e:
+            err: Exception
             if isinstance(e, requests.Timeout):
-                raise ConnectionTimeout(
+                err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
-                ) from None
+                )
             elif isinstance(e, (ssl.SSLError, requests.exceptions.SSLError)):
-                raise TlsError(str(e), errors=(e,)) from None
+                err = TlsError(str(e), errors=(e,))
             elif isinstance(e, BUILTIN_EXCEPTIONS):
                 raise
-            raise ConnectionError(str(e), errors=(e,)) from None
+            else:
+                err = ConnectionError(str(e), errors=(e,))
+            self._log_request(
+                method=method,
+                target=target,
+                headers=request_headers,
+                body=body,
+                exception=err,
+            )
+            raise err from None
 
+        meta = ApiResponseMeta(
+            node=self.config,
+            duration=duration,
+            http_version="1.1",
+            status=response.status_code,
+            headers=response_headers,
+        )
+        self._log_request(
+            method=method,
+            target=target,
+            headers=request_headers,
+            body=body,
+            meta=meta,
+            response=data,
+        )
         return (
-            ApiResponseMeta(
-                node=self.config,
-                duration=duration,
-                http_version="1.1",
-                status=response.status_code,
-                headers=response_headers,
-            ),
+            meta,
             data,
         )
 

@@ -17,6 +17,8 @@
 
 """Transport classes and utilities shared among Python Elastic client libraries"""
 
+import logging
+
 from ._async_transport import AsyncTransport as AsyncTransport
 from ._exceptions import (
     ApiError,
@@ -93,5 +95,28 @@ __all__ = [
     "Urllib3HttpNode",
 ]
 
+_logger = logging.getLogger("elastic_transport")
+_logger.addHandler(logging.NullHandler())
+del _logger
+
 fixup_module_metadata(__name__, globals())
 del fixup_module_metadata
+
+
+def debug_logging() -> None:
+    """Enables logging on all ``elastic_transport.*`` loggers and attaches a
+    :class:`logging.StreamHandler` instance to each. This is an easy way to
+    visualize the network activity occurring on the client or debug a client issue.
+    """
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(message)s", datefmt="%Y-%m-%dT%H:%M:%S"
+    )
+    handler.setFormatter(formatter)
+    for logger in (
+        logging.getLogger("elastic_transport.node"),
+        logging.getLogger("elastic_transport.node_pool"),
+        logging.getLogger("elastic_transport.transport"),
+    ):
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)

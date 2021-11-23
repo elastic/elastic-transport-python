@@ -70,6 +70,8 @@ except ImportError:
 class HttpHeaders(MutableMapping[str, str]):
     """HTTP headers"""
 
+    __slots__ = ("_internal", "_frozen")
+
     def __init__(
         self,
         initial: Optional[Union[Mapping[str, str], Collection[Tuple[str, str]]]] = None,
@@ -157,7 +159,10 @@ class HttpHeaders(MutableMapping[str, str]):
         return HttpHeaders(self.items())
 
     def _normalize_key(self, key: str) -> str:
-        return key.lower() if hasattr(key, "lower") else key
+        try:
+            return key.lower()
+        except AttributeError:
+            return key
 
     def _dict_hide_auth(self) -> Dict[str, str]:
         def hide_auth(val: str) -> str:
