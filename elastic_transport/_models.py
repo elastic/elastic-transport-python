@@ -232,7 +232,7 @@ class NodeConfig:
     connections_per_node: int = 10
 
     #: Number of seconds to wait before a request should timeout.
-    request_timeout: Optional[int] = 10
+    request_timeout: Optional[float] = 10.0
 
     #: Set to ``True`` to enable HTTP compression
     #: of request and response bodies via gzip.
@@ -278,10 +278,10 @@ class NodeConfig:
     #: issued when using ``verify_certs=False``.
     ssl_show_warn: bool = True
 
-    # Extras that can be set to anything, typically used
-    # for annotating this node with additional information for
-    # future decisions like sniffing, instance roles, etc.
-    # Third-party keys should start with an underscore and prefix.
+    #: Extras that can be set to anything, typically used
+    #: for annotating this node with additional information for
+    #: future decisions like sniffing, instance roles, etc.
+    #: Third-party keys should start with an underscore and prefix.
     _extras: Dict[str, Any] = field(default_factory=dict, hash=False)
 
     def replace(self, **kwargs: Any) -> "NodeConfig":
