@@ -73,7 +73,6 @@ try:
             super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)  # type: ignore [no-untyped-call]
             self.poolmanager.pool_classes_by_scheme["https"] = HTTPSConnectionPool
 
-
 except ImportError:  # pragma: nocover
     _REQUESTS_AVAILABLE = False
     _REQUESTS_META_VERSION = ""

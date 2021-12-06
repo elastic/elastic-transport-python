@@ -15,6 +15,8 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import pytest
+
 from elastic_transport import ApiError, ApiResponseMeta, TransportError
 
 
@@ -43,3 +45,21 @@ def test_api_error_status_repr():
         == "ApiError({'errors': [{'status': 500}]}, meta=ApiResponseMeta(status=500, http_version='1.1', headers={}, duration=0.0, node=None), body={})"
     )
     assert str(e) == "[500] {'errors': [{'status': 500}]}"
+
+
+def test_api_error_is_not_transport_error():
+    with pytest.raises(ApiError):
+        try:
+            raise ApiError("", None, None)
+        except TransportError:
+            pass
+
+
+def test_transport_error_is_not_api_error():
+    with pytest.raises(TransportError):
+        try:
+            raise TransportError(
+                "",
+            )
+        except ApiError:
+            pass
