@@ -91,7 +91,7 @@ class ConnectionTimeout(TransportError):
         return "Connection timed out"
 
 
-class ApiError(TransportError):
+class ApiError(Exception):
     """Base-class for clients that raise errors due to a response such as '404 Not Found'"""
 
     def __init__(
@@ -101,7 +101,9 @@ class ApiError(TransportError):
         body: Any,
         errors: Tuple[Exception, ...] = (),
     ):
-        super().__init__(message=message, errors=errors)
+        super().__init__(message)
+        self.message = message
+        self.errors = errors
         self.meta = meta
         self.body = body
 
