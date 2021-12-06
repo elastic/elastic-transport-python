@@ -43,7 +43,10 @@ class TestAiohttpHttpNode:
                     pass
 
                 async def read(self):
-                    return response_body
+                    return response_body if args[0] != "HEAD" else b""
+
+                async def release(self):
+                    return None
 
             dummy_response = DummyResponse()
             dummy_response.headers = CIMultiDict()
@@ -249,6 +252,33 @@ class TestAiohttpHttpNode:
             "h3": "v3",
             "user-agent": DEFAULT_USER_AGENT,
         }
+
+    @pytest.mark.parametrize("aiohttp_fixed_head_bug", [True, False])
+    async def test_head_workaround(self, aiohttp_fixed_head_bug):
+        from elastic_transport._node import _http_aiohttp
+
+        prev = _http_aiohttp._AIOHTTP_FIXED_HEAD_BUG
+        try:
+            _http_aiohttp._AIOHTTP_FIXED_HEAD_BUG = aiohttp_fixed_head_bug
+
+            node = await self._get_mock_node(
+                NodeConfig(
+                    scheme="https",
+                    host="localhost",
+                    port=443,
+                )
+            )
+            resp, data = await node.perform_request("HEAD", "/anything")
+
+            method, url = node.session.request.call_args[0]
+            assert method == "HEAD" if aiohttp_fixed_head_bug else "GET"
+            assert url == "https://localhost:443/anything"
+
+            assert resp.status == 200
+            assert data == b""
+
+        finally:
+            _http_aiohttp._AIOHTTP_FIXED_HEAD_BUG = prev
 
 
 async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
