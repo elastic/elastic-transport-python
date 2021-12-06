@@ -27,7 +27,7 @@ from typing import Optional, Tuple, Union
 from .._compat import get_running_loop, warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
-from ..client_utils import DEFAULT, DefaultType, client_meta_version, resolve_default
+from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
     DEFAULT_CA_CERTS,
@@ -42,9 +42,14 @@ try:
 
     _AIOHTTP_AVAILABLE = True
     _AIOHTTP_META_VERSION = client_meta_version(aiohttp.__version__)
+    _AIOHTTP_SEMVER_VERSION = tuple(int(x) for x in aiohttp.__version__.split(".")[:3])
+
+    # See aio-libs/aiohttp#1769 and #5012
+    _AIOHTTP_FIXED_HEAD_BUG = _AIOHTTP_SEMVER_VERSION >= (3, 7, 0)
 except ImportError:  # pragma: nocover
     _AIOHTTP_AVAILABLE = False
     _AIOHTTP_META_VERSION = ""
+    _AIOHTTP_FIXED_HEAD_BUG = False
 
 
 class AiohttpHttpNode(BaseAsyncNode):
@@ -117,22 +122,27 @@ class AiohttpHttpNode(BaseAsyncNode):
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> Tuple[ApiResponseMeta, bytes]:
+        global _AIOHTTP_FIXED_HEAD_BUG
         if self.session is None:
             self._create_aiohttp_session()
         assert self.session is not None
 
         url = self.base_url + target
 
-        # There is a bug in aiohttp that disables the re-use
+        is_head = False
+        # There is a bug in aiohttp<3.7 that disables the re-use
         # of the connection in the pool when method=HEAD.
         # See: aio-libs/aiohttp#1769
-        is_head = False
-        if method == "HEAD":
+        if method == "HEAD" and not _AIOHTTP_FIXED_HEAD_BUG:
             method = "GET"
             is_head = True
 
         # total=0 means no timeout for aiohttp
-        resolved_timeout = resolve_default(request_timeout, self.config.request_timeout)
+        resolved_timeout: Optional[float] = (
+            self.config.request_timeout
+            if request_timeout is DEFAULT
+            else request_timeout
+        )
         aiohttp_timeout = aiohttp.ClientTimeout(
             total=resolved_timeout if resolved_timeout is not None else 0
         )
