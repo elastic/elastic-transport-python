@@ -22,11 +22,11 @@ import ssl
 from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
-    AbstractSet,
     Any,
     Collection,
     Dict,
     Iterator,
+    KeysView,
     Mapping,
     MutableMapping,
     Optional,
@@ -135,7 +135,7 @@ class HttpHeaders(MutableMapping[str, str]):
     def get(self, key: str, default: Optional[str] = None) -> Optional[str]:  # type: ignore[override]
         return self._internal.get(self._normalize_key(key), (None, default))[1]
 
-    def keys(self) -> AbstractSet[str]:
+    def keys(self) -> KeysView[str]:
         return self._internal.keys()
 
     def values(self) -> ValuesView[str]:

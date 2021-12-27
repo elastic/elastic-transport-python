@@ -299,7 +299,7 @@ def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
     if hasattr(ctx, "keylog_filename"):
         sslkeylogfile = os.environ.get("SSLKEYLOGFILE", "")
         if sslkeylogfile:
-            ctx.keylog_filename = sslkeylogfile  # type: ignore[attr-defined]
+            ctx.keylog_filename = sslkeylogfile
 
     # Apply the 'ssl_version' if given, otherwise default to TLSv1.2+
     ssl_version = node_config.ssl_version
