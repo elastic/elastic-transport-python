@@ -37,21 +37,20 @@ meta = ApiResponseMeta(
     [TextApiResponse, BinaryApiResponse, ObjectApiResponse, ListApiResponse],
 )
 def test_response_meta(response_cls):
-    resp = response_cls(meta=meta, raw=None)
+    resp = response_cls(meta=meta, body=None)
     assert resp.meta is meta
 
     assert resp == resp
-    assert resp.raw == resp
-    assert resp == resp.raw
+    assert resp.body == resp
+    assert resp == resp.body
     assert not resp != resp
-    assert not (resp != resp.raw)
+    assert not (resp != resp.body)
 
 
 def test_head_response():
     resp = HeadApiResponse(meta=meta)
 
     assert resp
-    assert resp.raw is True
     assert resp.body is True
     assert bool(resp) is True
     assert resp.meta is meta
@@ -60,8 +59,7 @@ def test_head_response():
 
 
 def test_text_response():
-    resp = TextApiResponse(raw="Hello, world", meta=meta)
-    assert resp.raw == "Hello, world"
+    resp = TextApiResponse(body="Hello, world", meta=meta)
     assert resp.body == "Hello, world"
     assert len(resp) == 12
     assert resp.lower() == "hello, world"
@@ -71,8 +69,7 @@ def test_text_response():
 
 
 def test_binary_response():
-    resp = BinaryApiResponse(raw=b"Hello, world", meta=meta)
-    assert resp.raw == b"Hello, world"
+    resp = BinaryApiResponse(body=b"Hello, world", meta=meta)
     assert resp.body == b"Hello, world"
     assert len(resp) == 12
     assert resp[0] == 72
@@ -85,36 +82,60 @@ def test_binary_response():
 
 
 def test_list_response():
-    resp = ListApiResponse(raw=[1, 2, 3], meta=meta)
+    resp = ListApiResponse(body=[1, 2, 3], meta=meta)
     assert list(resp) == [1, 2, 3]
-    assert resp.raw == [1, 2, 3]
+    assert resp.body == [1, 2, 3]
     assert resp[1] == 2
 
-    with pytest.raises(NotImplementedError):
-        _ = resp.body
-
-    resp._body_cls = str
-    assert resp.body == ["1", "2", "3"]
-
-    assert repr(resp) == "ListApiResponse(['1', '2', '3'])"
+    assert repr(resp) == "ListApiResponse([1, 2, 3])"
 
 
 def test_list_object_response():
-    resp = ObjectApiResponse(raw={"k1": 1, "k2": 2}, meta=meta)
+    resp = ObjectApiResponse(body={"k1": 1, "k2": 2}, meta=meta)
     assert set(resp.keys()) == {"k1", "k2"}
     assert resp["k2"] == 2
-    assert resp.raw == {"k1": 1, "k2": 2}
-
-    with pytest.raises(NotImplementedError):
-        _ = resp.body
+    assert resp.body == {"k1": 1, "k2": 2}
 
     assert repr(resp) == "ObjectApiResponse({'k1': 1, 'k2': 2})"
 
-    resp._body_cls = set
-    assert resp.body == {"k1", "k2"}
 
-    # Sets are unordered
-    assert (
-        repr(resp) == "ObjectApiResponse({'k1', 'k2'})"
-        or repr(resp) == "ObjectApiResponse({'k2', 'k1'})"
-    )
+@pytest.mark.parametrize(
+    "resp_cls", [ObjectApiResponse, ListApiResponse, TextApiResponse, BinaryApiResponse]
+)
+@pytest.mark.parametrize(
+    ["args", "kwargs"],
+    [
+        ((), {}),
+        ((1,), {}),
+        ((1,), {"raw": 1}),
+        ((1,), {"body": 1}),
+        ((1,), {"meta": 1}),
+        ((), {"raw": 1, "body": 1}),
+        ((), {"raw": 1, "body": 1, "meta": 1}),
+        ((1,), {"raw": 1, "meta": 1}),
+        ((1,), {"meta": 1, "body": 1}),
+        ((1, 1), {"meta": 1, "body": 1}),
+        ((), {"meta": 1, "body": 1, "unk": 1}),
+    ],
+)
+def test_constructor_type_errors(resp_cls, args, kwargs):
+    with pytest.raises(TypeError) as e:
+        resp_cls(*args, **kwargs)
+    assert str(e.value) == "Must pass 'meta' and 'body' to ApiResponse"
+
+
+def test_constructor_allowed():
+    resp = HeadApiResponse(meta)
+    resp = HeadApiResponse(meta=meta)
+
+    resp = ObjectApiResponse({}, meta)
+    assert resp == {}
+
+    resp = ObjectApiResponse(meta=meta, raw={})
+    assert resp == {}
+
+    resp = ObjectApiResponse(meta=meta, raw={}, body_cls=int)
+    assert resp == {}
+
+    resp = ObjectApiResponse(meta=meta, body={}, body_cls=int)
+    assert resp == {}

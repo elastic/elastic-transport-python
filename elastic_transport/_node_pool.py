@@ -92,7 +92,7 @@ class RoundRobinSelector(NodeSelector):
 
     def select(self, nodes: Sequence[BaseNode]) -> BaseNode:
         self._thread_local.rr = (getattr(self._thread_local, "rr", -1) + 1) % len(nodes)
-        return nodes[self._thread_local.rr]  # type: ignore[no-any-return]
+        return nodes[self._thread_local.rr]
 
 
 _SELECTOR_CLASS_NAMES: Dict[str, Type[NodeSelector]] = {
