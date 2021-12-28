@@ -1,6 +1,6 @@
 # Changelog
 
-## 8.0.0-alpha6
+## 8.0.0-alpha7
 
 ### Added
 
@@ -32,11 +32,17 @@
 - Changed return type of `Transport.perform_request()` to `Tuple[ApiResponseMeta, <deserialized>]`
 - Changed name of `Deserializer` into `SerializersCollection`
 - Changed `ssl_version` to denote the minimum TLS version instead of the only TLS version
+- Changed the base class for `ApiError` to be `Exception` instead of `TransportError`.
+  `TransportError` is now only for errors that occur at the transport layer.
 
 ### Removed
 
 - Removed support for Python 2.7
 - Removed `DummyConnectionPool` and `EmptyConnectionPool` in favor of `NodePool`.
+
+### Fixed
+
+- Fixed a work-around with `AiohttpHttpNode` where `method="HEAD"` requests wouldn't mark the internal connection as reusable. This work-around is no longer needed when `aiohttp>=3.7.0` is installed.
 
 ## 7.15.0 (2021-09-20)
 
