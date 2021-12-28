@@ -239,7 +239,7 @@ class Transport:
         if sniff_on_start:
             self.sniff(True)
 
-    def perform_request(  # type: ignore[override,return]
+    def perform_request(  # type: ignore[return]
         self,
         method: str,
         target: str,
