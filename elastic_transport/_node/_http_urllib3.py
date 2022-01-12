@@ -21,13 +21,9 @@ import time
 import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
-import urllib3  # type: ignore[import]
-from urllib3.exceptions import (  # type: ignore[import]
-    ConnectTimeoutError,
-    NewConnectionError,
-    ReadTimeoutError,
-)
-from urllib3.util.retry import Retry  # type: ignore[import]
+import urllib3
+from urllib3.exceptions import ConnectTimeoutError, NewConnectionError, ReadTimeoutError
+from urllib3.util.retry import Retry
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -44,7 +40,7 @@ from ._base import (
 try:
     from ._urllib3_chain_certs import HTTPSConnectionPool
 except (ImportError, AttributeError):
-    HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[misc]
+    HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[assignment,misc]
 
 
 class Urllib3HttpNode(BaseNode):
@@ -99,7 +95,7 @@ class Urllib3HttpNode(BaseNode):
                         category=SecurityWarning,
                     )
                 else:
-                    urllib3.disable_warnings()
+                    urllib3.disable_warnings()  # type: ignore[no-untyped-call]
 
         self.pool = pool_class(
             config.host,
@@ -139,7 +135,7 @@ class Urllib3HttpNode(BaseNode):
             else:
                 body_to_send = None
 
-            response = self.pool.urlopen(
+            response = self.pool.urlopen(  # type: ignore[no-untyped-call]
                 method,
                 target,
                 body=body_to_send,
@@ -200,4 +196,4 @@ class Urllib3HttpNode(BaseNode):
         """
         Explicitly closes connection
         """
-        self.pool.close()
+        self.pool.close()  # type: ignore[no-untyped-call]
