@@ -23,8 +23,8 @@ from platform import python_version
 from typing import Optional, Tuple, TypeVar, Union
 from urllib.parse import quote as _quote
 
-from urllib3.exceptions import LocationParseError  # type: ignore[import]
-from urllib3.util import parse_url  # type: ignore[import]
+from urllib3.exceptions import LocationParseError
+from urllib3.util import parse_url
 
 from ._models import DEFAULT, DefaultType, NodeConfig
 from ._utils import fixup_module_metadata
@@ -187,7 +187,7 @@ def url_to_node_config(url: str) -> NodeConfig:
     'Authorization' header.
     """
     try:
-        parsed_url = parse_url(url)
+        parsed_url = parse_url(url)  # type: ignore[no-untyped-call]
     except LocationParseError:
         raise ValueError(f"Could not parse URL {url!r}") from None
 
