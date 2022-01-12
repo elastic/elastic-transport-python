@@ -21,7 +21,7 @@ import time
 import warnings
 from typing import Any, Optional, Tuple, Union
 
-import urllib3  # type: ignore[import]
+import urllib3
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -46,7 +46,7 @@ try:
     try:
         from ._urllib3_chain_certs import HTTPSConnectionPool
     except (ImportError, AttributeError):
-        HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[misc]
+        HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[assignment,misc]
 
     class _ElasticHTTPAdapter(HTTPAdapter):
         def __init__(self, node_config: NodeConfig, **kwargs: Any) -> None:
@@ -124,7 +124,7 @@ class RequestsHttpNode(BaseNode):
             self.session.verify = config.ca_certs
 
         if not config.ssl_show_warn:
-            urllib3.disable_warnings()
+            urllib3.disable_warnings()  # type: ignore[no-untyped-call]
 
         if (
             config.scheme == "https"
