@@ -20,6 +20,7 @@ import base64
 import functools
 import gzip
 import os
+import re
 import ssl
 import warnings
 from typing import Optional, Tuple, Union
@@ -42,7 +43,14 @@ try:
 
     _AIOHTTP_AVAILABLE = True
     _AIOHTTP_META_VERSION = client_meta_version(aiohttp.__version__)
-    _AIOHTTP_SEMVER_VERSION = tuple(int(x) for x in aiohttp.__version__.split(".")[:3])
+
+    _version_parts = []
+    for _version_part in aiohttp.__version__.split(".")[:3]:
+        try:
+            _version_parts.append(int(re.search(r"^([0-9]+)", _version_part).group(1)))  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            break
+    _AIOHTTP_SEMVER_VERSION = tuple(_version_parts)
 
     # See aio-libs/aiohttp#1769 and #5012
     _AIOHTTP_FIXED_HEAD_BUG = _AIOHTTP_SEMVER_VERSION >= (3, 7, 0)
