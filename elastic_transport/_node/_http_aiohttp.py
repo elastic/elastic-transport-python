@@ -255,7 +255,7 @@ class AiohttpHttpNode(BaseAsyncNode):
             loop=self._loop,
             cookie_jar=aiohttp.DummyCookieJar(),
             connector=aiohttp.TCPConnector(
-                limit=self._connections_per_node,
+                limit_per_host=self._connections_per_node,
                 use_dns_cache=True,
                 ssl=self._ssl_context,
             ),
