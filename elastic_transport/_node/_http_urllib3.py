@@ -102,7 +102,7 @@ class Urllib3HttpNode(BaseNode):
             port=config.port,
             timeout=urllib3.Timeout(total=config.request_timeout),
             maxsize=config.connections_per_node,
-            block=False,
+            block=True,
             **kw,
         )
 
