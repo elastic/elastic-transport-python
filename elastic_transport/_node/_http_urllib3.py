@@ -19,7 +19,7 @@ import gzip
 import ssl
 import time
 import warnings
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Union
 
 import urllib3
 from urllib3.exceptions import ConnectTimeoutError, NewConnectionError, ReadTimeoutError
@@ -34,6 +34,7 @@ from ._base import (
     DEFAULT_CA_CERTS,
     RERAISE_EXCEPTIONS,
     BaseNode,
+    NodeApiResponse,
     ssl_context_from_node_config,
 )
 
@@ -113,7 +114,7 @@ class Urllib3HttpNode(BaseNode):
         body: Optional[bytes] = None,
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
-    ) -> Tuple[ApiResponseMeta, bytes]:
+    ) -> NodeApiResponse:
 
         start = time.time()
         try:
@@ -187,7 +188,7 @@ class Urllib3HttpNode(BaseNode):
             meta=meta,
             response=data,
         )
-        return (
+        return NodeApiResponse(
             meta,
             data,
         )

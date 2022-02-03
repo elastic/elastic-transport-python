@@ -23,6 +23,7 @@ import ssl
 import pytest
 
 from elastic_transport import ApiResponseMeta, BaseNode, HttpHeaders, NodeConfig
+from elastic_transport._node import NodeApiResponse
 
 
 class DummyNode(BaseNode):
@@ -38,14 +39,14 @@ class DummyNode(BaseNode):
         self.calls.append((args, kwargs))
         if self.exception:
             raise self.exception
-        response = ApiResponseMeta(
+        meta = ApiResponseMeta(
             node=self.config,
             duration=0.0,
             http_version="1.1",
             status=self.status,
             headers=HttpHeaders(self._headers),
         )
-        return response, self.body
+        return NodeApiResponse(meta, self.body)
 
 
 class AsyncDummyNode(DummyNode):
@@ -53,14 +54,14 @@ class AsyncDummyNode(DummyNode):
         self.calls.append((args, kwargs))
         if self.exception:
             raise self.exception
-        response = ApiResponseMeta(
+        meta = ApiResponseMeta(
             node=self.config,
             duration=0.0,
             http_version="1.1",
             status=self.status,
             headers=HttpHeaders(self._headers),
         )
-        return response, self.body
+        return NodeApiResponse(meta, self.body)
 
 
 @pytest.fixture(scope="session", params=[True, False])

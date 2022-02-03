@@ -15,11 +15,11 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
-from .._models import ApiResponseMeta, HttpHeaders
+from .._models import HttpHeaders
 from ..client_utils import DEFAULT, DefaultType
-from ._base import BaseNode
+from ._base import BaseNode, NodeApiResponse
 
 
 class BaseAsyncNode(BaseNode):
@@ -32,7 +32,7 @@ class BaseAsyncNode(BaseNode):
         body: Optional[bytes] = None,
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
-    ) -> Tuple[ApiResponseMeta, bytes]:
+    ) -> NodeApiResponse:
         raise NotImplementedError()  # pragma: nocover
 
     async def close(self) -> None:  # type: ignore[override]

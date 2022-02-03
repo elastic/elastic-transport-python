@@ -641,3 +641,10 @@ def test_threading_test(pool_size):
     [thread.join() for thread in threads]
 
     assert sum(thread.successful_requests for thread in threads) >= 1000
+
+
+def test_httpbin(httpbin_node_config):
+    t = Transport([httpbin_node_config])
+    resp = t.perform_request("GET", "/anything")
+    assert resp.meta.status == 200
+    assert isinstance(resp.body, dict)

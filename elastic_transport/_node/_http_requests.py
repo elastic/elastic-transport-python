@@ -19,7 +19,7 @@ import gzip
 import ssl
 import time
 import warnings
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 import urllib3
 
@@ -31,6 +31,7 @@ from ._base import (
     BUILTIN_EXCEPTIONS,
     RERAISE_EXCEPTIONS,
     BaseNode,
+    NodeApiResponse,
     ssl_context_from_node_config,
 )
 
@@ -156,7 +157,7 @@ class RequestsHttpNode(BaseNode):
         body: Optional[bytes] = None,
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
-    ) -> Tuple[ApiResponseMeta, bytes]:
+    ) -> NodeApiResponse:
         url = self.base_url + target
         headers = HttpHeaders(headers or ())
 
@@ -233,7 +234,7 @@ class RequestsHttpNode(BaseNode):
             meta=meta,
             response=data,
         )
-        return (
+        return NodeApiResponse(
             meta,
             data,
         )
