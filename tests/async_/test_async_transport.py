@@ -627,3 +627,10 @@ async def test_multiple_tasks_test(pool_size):
 
     tasks = [loop.create_task(run_requests()) for _ in range(pool_size * 2)]
     assert sum([await task for task in tasks]) >= 1000
+
+
+async def test_httpbin(httpbin_node_config):
+    t = AsyncTransport([httpbin_node_config])
+    resp = await t.perform_request("GET", "/anything")
+    assert resp.meta.status == 200
+    assert isinstance(resp.body, dict)

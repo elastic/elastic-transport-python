@@ -23,7 +23,7 @@ import os
 import re
 import ssl
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 from .._compat import get_running_loop, warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -33,6 +33,7 @@ from ._base import (
     BUILTIN_EXCEPTIONS,
     DEFAULT_CA_CERTS,
     RERAISE_EXCEPTIONS,
+    NodeApiResponse,
     ssl_context_from_node_config,
 )
 from ._base_async import BaseAsyncNode
@@ -129,7 +130,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         body: Optional[bytes] = None,
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
-    ) -> Tuple[ApiResponseMeta, bytes]:
+    ) -> NodeApiResponse:
         global _AIOHTTP_FIXED_HEAD_BUG
         if self.session is None:
             self._create_aiohttp_session()
@@ -231,7 +232,7 @@ class AiohttpHttpNode(BaseAsyncNode):
             meta=meta,
             response=raw_data,
         )
-        return (
+        return NodeApiResponse(
             meta,
             raw_data,
         )

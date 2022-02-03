@@ -28,6 +28,7 @@ from typing import (
     Dict,
     List,
     Mapping,
+    NamedTuple,
     Optional,
     Tuple,
     Type,
@@ -71,6 +72,11 @@ NOT_DEAD_NODE_HTTP_STATUSES = {None, 400, 401, 402, 403, 404}
 DEFAULT_CLIENT_META_SERVICE = ("et", client_meta_version(__version__))
 
 _logger = logging.getLogger("elastic_transport.transport")
+
+
+class TransportApiResponse(NamedTuple):
+    meta: ApiResponseMeta
+    body: Any
 
 
 class Transport:
@@ -251,7 +257,7 @@ class Transport:
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
-    ) -> Tuple[ApiResponseMeta, Any]:
+    ) -> TransportApiResponse:
         """
         Perform the actual request. Retrieve a node from the node
         pool, pass all the information to it's perform_request method and
@@ -316,7 +322,7 @@ class Transport:
 
             retry = False
             node_failure = False
-            last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
+            last_response: Optional[TransportApiResponse] = None
             node = self.node_pool.get()
             start_time = time.time()
             try:
@@ -347,7 +353,7 @@ class Transport:
                     retry = True
                     # Keep track of the last response we see so we can return
                     # it in case the retried request returns with a transport error.
-                    last_response = (meta, data)
+                    last_response = TransportApiResponse(meta, data)
 
             except TransportError as e:
                 _logger.info(
@@ -417,7 +423,7 @@ class Transport:
                 # We either got a response we're happy with or
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
-                    return meta, data
+                    return TransportApiResponse(meta, data)
                 else:
                     _logger.warning(
                         "Retrying request after non-successful status %d (attempt %d of %d)",
