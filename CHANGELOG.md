@@ -1,6 +1,6 @@
 # Changelog
 
-## 8.0.0-alpha7
+## 8.0.0-beta1
 
 ### Added
 
@@ -28,12 +28,13 @@
 - Changed `NodeSelector.get_connection()` method to `get()`
 - Changed `elastic_transport.connection` logger name to `elastic_transport.node`
 - Changed `Urllib3HttpNode(connections_per_host)` parameter to `connections_per_node`
-- Changed return type of `BaseNode.perform_request()` to `Tuple[ApiResponseMeta, bytes]`
-- Changed return type of `Transport.perform_request()` to `Tuple[ApiResponseMeta, <deserialized>]`
+- Changed return type of `BaseNode.perform_request()` to `NamedTuple(meta=ApiResponseMeta, body=bytes)`
+- Changed return type of `Transport.perform_request()` to `NamedTuple(meta=ApiResponseMeta, body=Any)`
 - Changed name of `Deserializer` into `SerializersCollection`
 - Changed `ssl_version` to denote the minimum TLS version instead of the only TLS version
 - Changed the base class for `ApiError` to be `Exception` instead of `TransportError`.
   `TransportError` is now only for errors that occur at the transport layer.
+- Changed `Urllib3HttpNode` to block on new connections when the internal connection pool is exhausted
 
 ### Removed
 
@@ -43,6 +44,7 @@
 ### Fixed
 
 - Fixed a work-around with `AiohttpHttpNode` where `method="HEAD"` requests wouldn't mark the internal connection as reusable. This work-around is no longer needed when `aiohttp>=3.7.0` is installed.
+- Fixed logic for splitting `aiohttp.__version__` when determining if `HEAD` bug is fixed.
 
 ## 7.15.0 (2021-09-20)
 

@@ -84,7 +84,7 @@ def test_dist(dist):
             (
                 venv_python,
                 "-c",
-                "from elastic_transport import Transport, Urllib3HttpConnection, RequestsHttpConnection",
+                "from elastic_transport import Transport, Urllib3HttpNode, RequestsHttpNode",
             )
         )
 
