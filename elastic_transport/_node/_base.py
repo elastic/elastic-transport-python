@@ -19,7 +19,7 @@ import asyncio
 import logging
 import os
 import ssl
-from typing import Any, ClassVar, List, Optional, Tuple, Union
+from typing import Any, ClassVar, List, NamedTuple, Optional, Tuple, Union
 
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from .._version import __version__
@@ -81,6 +81,11 @@ try:
     DEFAULT_CA_CERTS = certifi.where()
 except ImportError:  # pragma: nocover
     pass
+
+
+class NodeApiResponse(NamedTuple):
+    meta: ApiResponseMeta
+    body: bytes
 
 
 class BaseNode:
@@ -170,7 +175,7 @@ class BaseNode:
         body: Optional[bytes] = None,
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
-    ) -> Tuple[ApiResponseMeta, bytes]:  # pragma: nocover
+    ) -> NodeApiResponse:  # pragma: nocover
         """Constructs and sends an HTTP request and parses the HTTP response.
 
         :param method: HTTP method

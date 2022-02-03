@@ -15,7 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-from ._base import BaseNode
+from ._base import BaseNode, NodeApiResponse
 from ._base_async import BaseAsyncNode
 from ._http_aiohttp import AiohttpHttpNode
 from ._http_requests import RequestsHttpNode
@@ -25,6 +25,7 @@ __all__ = [
     "AiohttpHttpNode",
     "BaseNode",
     "BaseAsyncNode",
+    "NodeApiResponse",
     "RequestsHttpNode",
     "Urllib3HttpNode",
 ]

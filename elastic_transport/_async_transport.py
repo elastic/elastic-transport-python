@@ -30,8 +30,6 @@ from typing import (
     Union,
 )
 
-from elastic_transport.client_utils import resolve_default
-
 from ._compat import await_if_coro, get_running_loop
 from ._exceptions import (
     ConnectionError,
@@ -39,14 +37,7 @@ from ._exceptions import (
     SniffingError,
     TransportError,
 )
-from ._models import (
-    DEFAULT,
-    ApiResponseMeta,
-    DefaultType,
-    HttpHeaders,
-    NodeConfig,
-    SniffOptions,
-)
+from ._models import DEFAULT, DefaultType, HttpHeaders, NodeConfig, SniffOptions
 from ._node import AiohttpHttpNode, BaseAsyncNode
 from ._node_pool import NodePool, NodeSelector
 from ._serializer import Serializer
@@ -54,8 +45,10 @@ from ._transport import (
     DEFAULT_CLIENT_META_SERVICE,
     NOT_DEAD_NODE_HTTP_STATUSES,
     Transport,
+    TransportApiResponse,
     validate_sniffing_options,
 )
+from .client_utils import resolve_default
 
 _logger = logging.getLogger("elastic_transport.transport")
 
@@ -192,7 +185,7 @@ class AsyncTransport(Transport):
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
-    ) -> Tuple[ApiResponseMeta, Any]:
+    ) -> TransportApiResponse:
         """
         Perform the actual request. Retrieve a node from the node
         pool, pass all the information to it's perform_request method and
@@ -259,11 +252,11 @@ class AsyncTransport(Transport):
 
             retry = False
             node_failure = False
-            last_response: Optional[Tuple[ApiResponseMeta, Any]] = None
+            last_response: Optional[TransportApiResponse] = None
             node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
             start_time = self._loop.time()
             try:
-                meta, raw_data = await node.perform_request(
+                resp = await node.perform_request(
                     method,
                     target,
                     body=request_body,
@@ -276,21 +269,21 @@ class AsyncTransport(Transport):
                         method,
                         node.base_url,
                         target,
-                        meta.status,
+                        resp.meta.status,
                         self._loop.time() - start_time,
                     )
                 )
 
                 if method != "HEAD":
-                    data = self.serializers.loads(raw_data, meta.mimetype)
+                    body = self.serializers.loads(resp.body, resp.meta.mimetype)
                 else:
-                    data = None
+                    body = None
 
-                if meta.status in retry_on_status:
+                if resp.meta.status in retry_on_status:
                     retry = True
                     # Keep track of the last response we see so we can return
                     # it in case the retried request returns with a transport error.
-                    last_response = (meta, data)
+                    last_response = TransportApiResponse(resp.meta, body)
 
             except TransportError as e:
                 _logger.info(
@@ -348,8 +341,8 @@ class AsyncTransport(Transport):
                 # If we got back a response we need to check if that status
                 # is indicative of a healthy node even if it's a non-2XX status
                 if (
-                    200 <= meta.status < 299
-                    or meta.status in NOT_DEAD_NODE_HTTP_STATUSES
+                    200 <= resp.meta.status < 299
+                    or resp.meta.status in NOT_DEAD_NODE_HTTP_STATUSES
                 ):
                     self.node_pool.mark_live(node)
                 else:
@@ -366,11 +359,11 @@ class AsyncTransport(Transport):
                 # We either got a response we're happy with or
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
-                    return meta, data
+                    return TransportApiResponse(resp.meta, body)
                 else:
                     _logger.warning(
                         "Retrying request after non-successful status %d (attempt %d of %d)",
-                        meta.status,
+                        resp.meta.status,
                         attempt,
                         max_retries,
                     )
