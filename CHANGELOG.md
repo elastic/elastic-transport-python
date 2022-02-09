@@ -1,6 +1,6 @@
 # Changelog
 
-## 8.0.0-beta1
+## 8.0.0
 
 ### Added
 
