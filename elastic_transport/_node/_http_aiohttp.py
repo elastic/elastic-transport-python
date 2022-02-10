@@ -258,6 +258,7 @@ class AiohttpHttpNode(BaseAsyncNode):
             connector=aiohttp.TCPConnector(
                 limit_per_host=self._connections_per_node,
                 use_dns_cache=True,
+                enable_cleanup_closed=True,
                 ssl=self._ssl_context,
             ),
         )
