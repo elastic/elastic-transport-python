@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.0.1
+
+### Fixed
+
+- Fixed `AiohttpHttpNode` to close TLS connections that aren't properly shutdown by the server instead of leaking them
+- Fixed `Urllib3HttpNode` to respect `path_prefix` setting in `NodeConfig`
+
 ## 8.0.0
 
 ### Added
