@@ -116,6 +116,9 @@ class Urllib3HttpNode(BaseNode):
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> NodeApiResponse:
 
+        if self.path_prefix:
+            target = f"{self.path_prefix}{target}"
+
         start = time.time()
         try:
             kw = {}
