@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.0.1
+
+### Fixed
+
+- Fixed `AiohttpHttpNode` to close TLS connections that aren't properly shutdown by the server instead of leaking them
+- Fixed `Urllib3HttpNode` to respect `path_prefix` setting in `NodeConfig`
+
 ## 8.0.0
 
 ### Added
@@ -45,11 +52,6 @@
 
 - Fixed a work-around with `AiohttpHttpNode` where `method="HEAD"` requests wouldn't mark the internal connection as reusable. This work-around is no longer needed when `aiohttp>=3.7.0` is installed.
 - Fixed logic for splitting `aiohttp.__version__` when determining if `HEAD` bug is fixed.
-
-
-## 7.16.0 (2021-12-13)
-
-Release created to be compatible with 7.16 clients
 
 ## 7.15.0 (2021-09-20)
 
