@@ -66,10 +66,22 @@ try:
                 ssl_context = ssl_context_from_node_config(self._node_config)
                 pool_kwargs.setdefault("ssl_context", ssl_context)
 
-            if self._node_config.ssl_assert_fingerprint:
-                pool_kwargs.setdefault(
-                    "assert_fingerprint", self._node_config.ssl_assert_fingerprint
-                )
+                # Fingerprint verification doesn't require CA certificates being loaded.
+                # We also want to disable other verification methods as we only care
+                # about the fingerprint of the certificates, not whether they form
+                # a verified chain to a trust anchor.
+                if self._node_config.ssl_assert_fingerprint:
+
+                    # Manually disable these in the right order on the SSLContext
+                    # so urllib3 won't think we want conflicting things.
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+
+                    pool_kwargs[
+                        "assert_fingerprint"
+                    ] = self._node_config.ssl_assert_fingerprint
+                    pool_kwargs["cert_reqs"] = "CERT_NONE"
+                    pool_kwargs["assert_hostname"] = False
 
             super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)  # type: ignore [no-untyped-call]
             self.poolmanager.pool_classes_by_scheme["https"] = HTTPSConnectionPool
@@ -100,7 +112,38 @@ class RequestsHttpNode(BaseNode):
         # Initialize Session so .headers works before calling super().__init__().
         self.session = requests.Session()
         self.session.headers.clear()  # Empty out all the default session headers
-        self.session.verify = config.verify_certs
+
+        if config.scheme == "https":
+            # If we're using ssl_assert_fingerprint we don't want
+            # to verify certificates the typical way. Instead we
+            # rely on the custom ElasticHTTPAdapter and urllib3.
+            if config.ssl_assert_fingerprint:
+                self.session.verify = False
+
+            # Otherwise we go the traditional route of verifying certs.
+            else:
+                if config.ca_certs:
+                    if not config.verify_certs:
+                        raise ValueError(
+                            "You cannot use 'ca_certs' when 'verify_certs=False'"
+                        )
+                    self.session.verify = config.ca_certs
+                else:
+                    self.session.verify = config.verify_certs
+
+                if not config.ssl_show_warn:
+                    urllib3.disable_warnings()  # type: ignore[no-untyped-call]
+
+                if (
+                    config.scheme == "https"
+                    and not config.verify_certs
+                    and config.ssl_show_warn
+                ):
+                    warnings.warn(
+                        f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
+                        stacklevel=warn_stacklevel(),
+                        category=SecurityWarning,
+                    )
 
         # Requests supports setting 'session.auth' via _extras['requests.session.auth'] = ...
         try:
@@ -118,25 +161,6 @@ class RequestsHttpNode(BaseNode):
                 self.session.cert = (config.client_cert, config.client_key)
             else:
                 self.session.cert = config.client_cert
-
-        if config.ca_certs:
-            if not config.verify_certs:
-                raise ValueError("You cannot use 'ca_certs' when 'verify_certs=False'")
-            self.session.verify = config.ca_certs
-
-        if not config.ssl_show_warn:
-            urllib3.disable_warnings()  # type: ignore[no-untyped-call]
-
-        if (
-            config.scheme == "https"
-            and not config.verify_certs
-            and config.ssl_show_warn
-        ):
-            warnings.warn(
-                f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
-                stacklevel=warn_stacklevel(),
-                category=SecurityWarning,
-            )
 
         # Create and mount custom adapter for constraining number of connections
         adapter = _ElasticHTTPAdapter(
