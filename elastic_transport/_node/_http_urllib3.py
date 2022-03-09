@@ -58,45 +58,67 @@ class Urllib3HttpNode(BaseNode):
         if config.scheme == "https":
             pool_class = HTTPSConnectionPool
             ssl_context = ssl_context_from_node_config(config)
+            kw["ssl_context"] = ssl_context
 
-            kw.update(
-                {
-                    "ssl_context": ssl_context,
-                    "assert_hostname": config.ssl_assert_hostname,
-                    "assert_fingerprint": config.ssl_assert_fingerprint,
-                }
-            )
+            if config.ssl_assert_hostname and config.ssl_assert_fingerprint:
+                raise ValueError(
+                    "Can't specify both 'ssl_assert_hostname' and 'ssl_assert_fingerprint'"
+                )
 
-            # Convert all sentinel values to their actual default
-            # values if not using an SSLContext.
-            ca_certs = DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
-            if config.verify_certs:
-                if not ca_certs:
-                    raise ValueError(
-                        "Root certificates are missing for certificate "
-                        "validation. Either pass them in using the ca_certs parameter or "
-                        "install certifi to use it automatically."
-                    )
+            # Fingerprint verification doesn't require CA certificates being loaded.
+            # We also want to disable other verification methods as we only care
+            # about the fingerprint of the certificates, not whether they form
+            # a verified chain to a trust anchor.
+            elif config.ssl_assert_fingerprint:
+
+                # Manually disable these in the right order on the SSLContext
+                # so urllib3 won't think we want conflicting things.
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
 
                 kw.update(
                     {
-                        "cert_reqs": "CERT_REQUIRED",
-                        "ca_certs": ca_certs,
-                        "cert_file": config.client_cert,
-                        "key_file": config.client_key,
+                        "assert_fingerprint": config.ssl_assert_fingerprint,
+                        "assert_hostname": False,
+                        "cert_reqs": "CERT_NONE",
                     }
                 )
-            else:
-                kw["cert_reqs"] = "CERT_NONE"
 
-                if config.ssl_show_warn:
-                    warnings.warn(
-                        f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
-                        stacklevel=warn_stacklevel(),
-                        category=SecurityWarning,
+            else:
+                kw["assert_hostname"] = config.ssl_assert_hostname
+
+                # Convert all sentinel values to their actual default
+                # values if not using an SSLContext.
+                ca_certs = (
+                    DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
+                )
+                if config.verify_certs:
+                    if not ca_certs:
+                        raise ValueError(
+                            "Root certificates are missing for certificate "
+                            "validation. Either pass them in using the ca_certs parameter or "
+                            "install certifi to use it automatically."
+                        )
+
+                    kw.update(
+                        {
+                            "cert_reqs": "CERT_REQUIRED",
+                            "ca_certs": ca_certs,
+                            "cert_file": config.client_cert,
+                            "key_file": config.client_key,
+                        }
                     )
                 else:
-                    urllib3.disable_warnings()  # type: ignore[no-untyped-call]
+                    kw["cert_reqs"] = "CERT_NONE"
+
+                    if config.ssl_show_warn:
+                        warnings.warn(
+                            f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
+                            stacklevel=warn_stacklevel(),
+                            category=SecurityWarning,
+                        )
+                    else:
+                        urllib3.disable_warnings()  # type: ignore[no-untyped-call]
 
         self.pool = pool_class(
             config.host,
