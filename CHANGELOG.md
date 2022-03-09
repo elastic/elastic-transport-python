@@ -1,5 +1,11 @@
 # Changelog
 
+## 8.1.0
+
+### Fixed
+
+- Fixed `Urllib3HttpNode` and `RequestsHttpNode` to never require a valid certificate chain when using `ssl_assert_fingerprint`. Instead the internal HTTP client libraries will explicitly disable verifying the certificate chain and instead rely only on the certificate fingerprint for verification.
+
 ## 8.0.1
 
 ### Fixed
