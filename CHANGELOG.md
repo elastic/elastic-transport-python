@@ -1,5 +1,11 @@
 # Changelog
 
+## 8.1.1
+
+### Fixed
+
+- Fixed `JsonSerializer` to return `None` if a response using `Content-Type: application/json` is empty instead of raising an error.
+
 ## 8.1.0
 
 ### Fixed
