@@ -101,7 +101,7 @@ class ApiResponse(Generic[_BodyType]):
         return len(self._body)
 
     def __iter__(self) -> Iterable[Any]:
-        return iter(self._body)
+        return iter(self._body)  # type: ignore[no-any-return]
 
     def __str__(self) -> str:
         return str(self._body)
