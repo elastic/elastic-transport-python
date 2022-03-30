@@ -62,8 +62,6 @@ def test_raises_serialization_error_on_load_error():
     with pytest.raises(SerializationError):
         JsonSerializer().loads(object())
     with pytest.raises(SerializationError):
-        JsonSerializer().loads(b"")
-    with pytest.raises(SerializationError):
         JsonSerializer().loads(b"{{")
 
 

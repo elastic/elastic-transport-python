@@ -89,6 +89,26 @@ def test_body_bytes_get_passed_untouched():
     assert kwargs["body"] == b"\xe4\xbd\xa0\xe5\xa5\xbd"
 
 
+def test_empty_response_with_content_type():
+    t = Transport(
+        [
+            NodeConfig(
+                "http",
+                "localhost",
+                80,
+                _extras={"body": b"", "headers": {"Content-Type": "application/json"}},
+            )
+        ],
+        node_class=DummyNode,
+    )
+
+    resp = t.perform_request("GET", "/", headers={"Accept": "application/json"})
+
+    # Empty body is deserialized as 'None' instead of an error.
+    assert resp.meta.status == 200
+    assert resp.body is None
+
+
 def test_kwargs_passed_on_to_node_pool():
     dt = object()
     t = Transport(

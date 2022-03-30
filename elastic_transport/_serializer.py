@@ -81,6 +81,11 @@ class JsonSerializer(Serializer):
         ).encode("utf-8", "surrogatepass")
 
     def json_loads(self, data: bytes) -> Any:
+        # Sometimes responses use Content-Type: json but actually
+        # don't contain any data. We should return something instead
+        # of erroring in these cases.
+        if data == b"":
+            return None
         return json.loads(data)
 
     def loads(self, data: bytes) -> Any:
