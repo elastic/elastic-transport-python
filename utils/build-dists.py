@@ -98,7 +98,10 @@ def test_dist(dist):
 
 def main():
     run(("rm", "-rf", "build/", "dist/", "*.egg-info", ".eggs"))
-    run(("python", "setup.py", "sdist", "bdist_wheel"))
+
+    # Install and run python-build to create sdist/wheel
+    run(("python", "-m", "pip", "install", "-U", "build"))
+    run(("python", "-m", "build"))
 
     for dist in os.listdir(os.path.join(base_dir, "dist")):
         test_dist(os.path.join(base_dir, "dist", dist))
