@@ -15,34 +15,20 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import warnings
+
 import pytest
 
-from elastic_transport import (
-    AiohttpHttpNode,
-    NodeConfig,
-    RequestsHttpNode,
-    Urllib3HttpNode,
-)
-from elastic_transport._node._base import ssl_context_from_node_config
+from elastic_transport import Transport
 
 
-@pytest.mark.parametrize(
-    "node_cls", [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode]
-)
-def test_unknown_parameter(node_cls):
-    with pytest.raises(TypeError):
-        node_cls(unknown_option=1)
+@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
+def test_simple_request(node_class, https_server_ip_node_config):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
 
+        t = Transport([https_server_ip_node_config], node_class=node_class)
 
-@pytest.mark.parametrize(
-    "host, check_hostname",
-    [
-        ("127.0.0.1", False),
-        ("::1", False),
-        ("localhost", True),
-    ],
-)
-def test_ssl_context_from_node_config(host, check_hostname):
-    node_config = NodeConfig("https", host, 443)
-    ctx = ssl_context_from_node_config(node_config)
-    assert ctx.check_hostname == check_hostname
+        resp, data = t.perform_request("GET", "/foobar")
+        assert resp.status == 200
+        assert data == {"foo": "bar"}
