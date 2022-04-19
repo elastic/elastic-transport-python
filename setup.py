@@ -61,6 +61,8 @@ setup(
             "pytest-cov",
             "pytest-mock",
             "pytest-asyncio",
+            "pytest-httpserver",
+            "trustme",
             "mock",
             "requests",
             "aiohttp",
