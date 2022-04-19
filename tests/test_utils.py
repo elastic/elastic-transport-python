@@ -17,32 +17,39 @@
 
 import pytest
 
-from elastic_transport import (
-    AiohttpHttpNode,
-    NodeConfig,
-    RequestsHttpNode,
-    Urllib3HttpNode,
-)
-from elastic_transport._node._base import ssl_context_from_node_config
+from elastic_transport._utils import is_ipaddress
 
 
 @pytest.mark.parametrize(
-    "node_cls", [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode]
-)
-def test_unknown_parameter(node_cls):
-    with pytest.raises(TypeError):
-        node_cls(unknown_option=1)
-
-
-@pytest.mark.parametrize(
-    "host, check_hostname",
+    "addr",
     [
-        ("127.0.0.1", False),
-        ("::1", False),
-        ("localhost", True),
+        # IPv6
+        "::1",
+        "::",
+        "FE80::8939:7684:D84b:a5A4%251",
+        # IPv4
+        "127.0.0.1",
+        "8.8.8.8",
+        b"127.0.0.1",
+        # IPv6 w/ Zone IDs
+        "FE80::8939:7684:D84b:a5A4%251",
+        b"FE80::8939:7684:D84b:a5A4%251",
+        "FE80::8939:7684:D84b:a5A4%19",
+        b"FE80::8939:7684:D84b:a5A4%19",
     ],
 )
-def test_ssl_context_from_node_config(host, check_hostname):
-    node_config = NodeConfig("https", host, 443)
-    ctx = ssl_context_from_node_config(node_config)
-    assert ctx.check_hostname == check_hostname
+def test_is_ipaddress(addr):
+    assert is_ipaddress(addr)
+
+
+@pytest.mark.parametrize(
+    "addr",
+    [
+        "www.python.org",
+        b"www.python.org",
+        "v2.sg.media-imdb.com",
+        b"v2.sg.media-imdb.com",
+    ],
+)
+def test_is_not_ipaddress(addr):
+    assert not is_ipaddress(addr)
