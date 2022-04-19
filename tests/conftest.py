@@ -21,6 +21,8 @@ import socket
 import ssl
 
 import pytest
+import trustme
+from pytest_httpserver import HTTPServer
 
 from elastic_transport import ApiResponseMeta, BaseNode, HttpHeaders, NodeConfig
 from elastic_transport._node import NodeApiResponse
@@ -100,3 +102,28 @@ def elastic_transport_logging():
         logger = logging.getLogger(f"elastic_transport.{name}")
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
+
+
+@pytest.fixture(scope="session")
+def https_server_ip_node_config(tmp_path_factory: pytest.TempPathFactory) -> NodeConfig:
+    ca = trustme.CA()
+    tmpdir = tmp_path_factory.mktemp("certs")
+    ca_cert_path = str(tmpdir / "ca.pem")
+    ca.cert_pem.write_to_path(ca_cert_path)
+
+    localhost_cert = ca.issue_cert("127.0.0.1")
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+
+    crt = localhost_cert.cert_chain_pems[0]
+    key = localhost_cert.private_key_pem
+    with crt.tempfile() as crt_file, key.tempfile() as key_file:
+        context.load_cert_chain(crt_file, key_file)
+
+    server = HTTPServer(ssl_context=context)
+    server.expect_request("/foobar").respond_with_json({"foo": "bar"})
+
+    server.start()
+    yield NodeConfig("https", "127.0.0.1", server.port, ca_certs=ca_cert_path)
+    server.clear()
+    if server.is_running():
+        server.stop()

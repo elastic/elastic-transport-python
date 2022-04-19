@@ -22,6 +22,7 @@ import ssl
 from typing import Any, ClassVar, List, NamedTuple, Optional, Tuple, Union
 
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
+from .._utils import is_ipaddress
 from .._version import __version__
 from ..client_utils import DEFAULT, DefaultType
 
@@ -295,7 +296,7 @@ def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
         # step if the user doesn't pass a preconfigured SSLContext.
         if node_config.verify_certs:
             ctx.verify_mode = ssl.CERT_REQUIRED
-            ctx.check_hostname = True
+            ctx.check_hostname = not is_ipaddress(node_config.host)
         else:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
