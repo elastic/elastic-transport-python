@@ -1,5 +1,11 @@
 # Changelog
 
+## 8.1.2
+
+### Fixed
+
+- Fixed issue when connecting to an IP address with HTTPS enabled would result in a `ValueError` for a mismatch between `check_hostname` and `server_hostname`.
+
 ## 8.1.1
 
 ### Fixed
