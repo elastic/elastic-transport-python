@@ -198,6 +198,19 @@ def test_url_to_node_config_error_missing_component(url):
     )
 
 
+@pytest.mark.parametrize(
+    ["url", "port"],
+    [
+        ("http://127.0.0.1", 80),
+        ("http://[::1]", 80),
+        ("HTTPS://localhost", 443),
+        ("https://localhost/url-prefix", 443),
+    ],
+)
+def test_url_to_node_config_use_default_ports_for_scheme(url, port):
+    node_config = url_to_node_config(url, use_default_ports_for_scheme=True)
+    assert node_config.port == port
+
 def test_url_with_auth_into_authorization():
     node_config = url_to_node_config("http://localhost:9200")
     assert node_config.headers == {}
