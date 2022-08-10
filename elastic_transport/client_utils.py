@@ -181,7 +181,9 @@ def basic_auth_to_header(basic_auth: Tuple[str, str]) -> str:
     return f"Basic {base64.b64encode((b':'.join(to_bytes(x) for x in basic_auth))).decode()}"
 
 
-def url_to_node_config(url: str, use_default_ports_for_scheme: bool=False) -> NodeConfig:
+def url_to_node_config(
+    url: str, use_default_ports_for_scheme: bool = False
+) -> NodeConfig:
     """Constructs a :class:`elastic_transport.NodeConfig` instance from a URL.
     If a username/password are specified in the URL they are converted to an
     'Authorization' header.
@@ -190,14 +192,18 @@ def url_to_node_config(url: str, use_default_ports_for_scheme: bool=False) -> No
     :param use_default_ports_for_scheme: If 'True' will resolve default ports for the given scheme.
     """
     try:
-        parsed_url = parse_url(url)  # type: ignore[no-untyped-call]
+        parsed_url = parse_url(url)
     except LocationParseError:
         raise ValueError(f"Could not parse URL {url!r}") from None
 
     # Only fill in a default port for HTTP and HTTPS
     # when we know the scheme is one of those two.
-    parsed_port: Optional[int] = parsed_url.port
-    if parsed_url.port is None and parsed_url.scheme is not None and use_default_ports_for_scheme is True:
+    parsed_port: Optional[int] = parsed_url.port  # type: ignore[assignment]
+    if (
+        parsed_url.port is None
+        and parsed_url.scheme is not None
+        and use_default_ports_for_scheme is True
+    ):
         if parsed_url.scheme == "https":
             parsed_port = 443
         elif parsed_url.scheme == "http":
@@ -210,6 +216,9 @@ def url_to_node_config(url: str, use_default_ports_for_scheme: bool=False) -> No
         raise ValueError(
             "URL must include a 'scheme', 'host', and 'port' component (ie 'https://localhost:9200')"
         )
+    assert parsed_url.scheme is not None
+    assert parsed_url.host is not None
+    assert parsed_port is not None
 
     headers = {}
     if parsed_url.auth:
@@ -217,7 +226,11 @@ def url_to_node_config(url: str, use_default_ports_for_scheme: bool=False) -> No
         headers["authorization"] = basic_auth_to_header((username, password))
 
     host = parsed_url.host.strip("[]")
-    path_prefix = "" if parsed_url.path in (None, "", "/") else parsed_url.path
+    if not parsed_url.path or parsed_url.path == "/":
+        path_prefix = ""
+    else:
+        path_prefix = parsed_url.path
+
     return NodeConfig(
         scheme=parsed_url.scheme,
         host=host,
