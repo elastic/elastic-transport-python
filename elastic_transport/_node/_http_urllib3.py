@@ -118,7 +118,7 @@ class Urllib3HttpNode(BaseNode):
                             category=SecurityWarning,
                         )
                     else:
-                        urllib3.disable_warnings()  # type: ignore[no-untyped-call]
+                        urllib3.disable_warnings()
 
         self.pool = pool_class(
             config.host,
@@ -222,4 +222,4 @@ class Urllib3HttpNode(BaseNode):
         """
         Explicitly closes connection
         """
-        self.pool.close()  # type: ignore[no-untyped-call]
+        self.pool.close()
