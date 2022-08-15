@@ -132,7 +132,7 @@ class RequestsHttpNode(BaseNode):
                     self.session.verify = config.verify_certs
 
                 if not config.ssl_show_warn:
-                    urllib3.disable_warnings()  # type: ignore[no-untyped-call]
+                    urllib3.disable_warnings()
 
                 if (
                     config.scheme == "https"
@@ -210,7 +210,7 @@ class RequestsHttpNode(BaseNode):
             else self.config.request_timeout
         }
         send_kwargs.update(
-            self.session.merge_environment_settings(  # type: ignore[no-untyped-call]
+            self.session.merge_environment_settings(  # type: ignore[arg-type]
                 prepared_request.url, {}, None, None, None
             )
         )
