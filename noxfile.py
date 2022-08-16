@@ -50,7 +50,7 @@ def lint(session):
     session.run("mypy", "--strict", "--show-error-codes", "elastic_transport/")
 
 
-@nox.session(python=["3.6", "3.7", "3.8", "3.9", "3.10"])
+@nox.session(python=["3.6", "3.7", "3.8", "3.9", "3.10", "3.11"])
 def test(session):
     session.install(".[develop]")
     session.run(
