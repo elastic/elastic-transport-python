@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9, "3.10"]
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11-dev"]
         experimental: [false]
 
     runs-on: ubuntu-latest
@@ -67,3 +67,10 @@ jobs:
         run: "nox -rs test-${PYTHON_VERSION%-dev}"
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
+          # TEMPORARY for 3.11
+          # https://github.com/aio-libs/aiohttp/issues/6600
+          AIOHTTP_NO_EXTENSIONS: 1
+          # https://github.com/aio-libs/frozenlist/issues/285
+          FROZENLIST_NO_EXTENSIONS: 1
+          # https://github.com/aio-libs/yarl/issues/680
+          YARL_NO_EXTENSIONS: 1
