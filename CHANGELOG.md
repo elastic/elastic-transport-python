@@ -1,5 +1,11 @@
 # Changelog
 
+## 8.4.0
+
+### Added
+
+- Added method for clients to use default ports for URL scheme.
+
 ## 8.1.2
 
 ### Fixed
