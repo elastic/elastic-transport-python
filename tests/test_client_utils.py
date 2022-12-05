@@ -159,7 +159,6 @@ def test_invalid_cloud_id(cloud_id):
             "/url-prefix",
         ),
         ("http://[::1]:3002/url-prefix", "http://[::1]:3002/url-prefix", "/url-prefix"),
-        ("https://[::1]:0/", "https://[::1]:0", ""),
     ],
 )
 def test_url_to_node_config(url, node_base_url, path_prefix):
