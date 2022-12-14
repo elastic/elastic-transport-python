@@ -260,14 +260,14 @@ class Transport:
     ) -> TransportApiResponse:
         """
         Perform the actual request. Retrieve a node from the node
-        pool, pass all the information to it's perform_request method and
+        pool, pass all the information to its perform_request method, and
         return the data.
 
         If an exception was raised, mark the node as failed and retry (up
         to ``max_retries`` times).
 
         If the operation was successful and the node used was previously
-        marked as dead, mark it as live, resetting it's failure count.
+        marked as dead, mark it as live, resetting its failure count.
 
         :arg method: HTTP method to use
         :arg target: HTTP request target
