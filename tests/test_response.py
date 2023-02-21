@@ -15,6 +15,8 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import pickle
+
 import pytest
 
 from elastic_transport import (
@@ -139,3 +141,19 @@ def test_constructor_allowed():
 
     resp = ObjectApiResponse(meta=meta, body={}, body_cls=int)
     assert resp == {}
+
+
+@pytest.mark.parametrize(
+    "response_cls, body",
+    [
+        (TextApiResponse, "Hello World"),
+        (BinaryApiResponse, b"Hello World"),
+        (ObjectApiResponse, {"Hello": "World"}),
+        (ListApiResponse, ["Hello", "World"]),
+    ],
+)
+def test_pickle(response_cls, body):
+    resp = response_cls(meta=meta, body=body)
+    pickled_resp = pickle.loads(pickle.dumps(resp))
+    assert pickled_resp == resp
+    assert pickled_resp.meta == resp.meta

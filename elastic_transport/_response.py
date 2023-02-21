@@ -23,6 +23,7 @@ from typing import (
     Iterator,
     List,
     NoReturn,
+    Tuple,
     TypeVar,
     Union,
     overload,
@@ -96,6 +97,12 @@ class ApiResponse(Generic[_BodyType]):
 
     def __getattr__(self, attr: str) -> Any:
         return getattr(self._body, attr)
+
+    def __getstate__(self) -> Tuple[_BodyType, ApiResponseMeta]:
+        return self._body, self._meta
+
+    def __setstate__(self, state: Tuple[_BodyType, ApiResponseMeta]) -> None:
+        self._body, self._meta = state
 
     def __len__(self) -> int:
         return len(self._body)
