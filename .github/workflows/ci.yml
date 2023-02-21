@@ -59,11 +59,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set up Python 3.7 to run nox
-        if: matrix.python-version != '3.7'
+      - name: Set up Python 3.x to run nox
         uses: actions/setup-python@v2
         with:
-          python-version: 3.7
+          python-version: 3.x
 
       - name: Install Dependencies
         run: python -m pip install --upgrade nox
@@ -72,3 +71,7 @@ jobs:
         run: "nox -rs test-${PYTHON_VERSION%-dev}"
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
+          # Required for development versions of Python
+          AIOHTTP_NO_EXTENSIONS: 1
+          FROZENLIST_NO_EXTENSIONS: 1
+          YARL_NO_EXTENSIONS: 1
