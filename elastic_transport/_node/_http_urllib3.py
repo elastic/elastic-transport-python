@@ -70,7 +70,6 @@ class Urllib3HttpNode(BaseNode):
             # about the fingerprint of the certificates, not whether they form
             # a verified chain to a trust anchor.
             elif config.ssl_assert_fingerprint:
-
                 # Manually disable these in the right order on the SSLContext
                 # so urllib3 won't think we want conflicting things.
                 ssl_context.check_hostname = False
@@ -137,7 +136,6 @@ class Urllib3HttpNode(BaseNode):
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> NodeApiResponse:
-
         if self.path_prefix:
             target = f"{self.path_prefix}{target}"
 
