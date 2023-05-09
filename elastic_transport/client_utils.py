@@ -198,7 +198,7 @@ def url_to_node_config(
 
     # Only fill in a default port for HTTP and HTTPS
     # when we know the scheme is one of those two.
-    parsed_port: Optional[int] = parsed_url.port  # type: ignore[assignment]
+    parsed_port: Optional[int] = parsed_url.port
     if (
         parsed_url.port is None
         and parsed_url.scheme is not None

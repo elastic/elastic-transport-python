@@ -61,7 +61,6 @@ try:
             block: bool = False,
             **pool_kwargs: Any,
         ) -> None:
-
             if self._node_config.scheme == "https":
                 ssl_context = ssl_context_from_node_config(self._node_config)
                 pool_kwargs.setdefault("ssl_context", ssl_context)
@@ -71,7 +70,6 @@ try:
                 # about the fingerprint of the certificates, not whether they form
                 # a verified chain to a trust anchor.
                 if self._node_config.ssl_assert_fingerprint:
-
                     # Manually disable these in the right order on the SSLContext
                     # so urllib3 won't think we want conflicting things.
                     ssl_context.check_hostname = False

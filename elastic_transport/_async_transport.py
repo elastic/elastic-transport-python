@@ -244,7 +244,6 @@ class AsyncTransport(Transport):
         errors: List[Exception] = []
 
         for attempt in range(max_retries + 1):
-
             # If we sniff before requests are made we want to do so before
             # 'node_pool.get()' is called so our sniffed nodes show up in the pool.
             if self._sniff_before_requests:
