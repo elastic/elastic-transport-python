@@ -30,7 +30,7 @@ SOURCE_FILES = (
 @nox.session()
 def format(session):
     session.install("black~=23.0", "isort", "pyupgrade")
-    session.run("black", "--target-version=py36", *SOURCE_FILES)
+    session.run("black", "--target-version=py37", *SOURCE_FILES)
     session.run("isort", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "fix", *SOURCE_FILES)
 
@@ -49,14 +49,14 @@ def lint(session):
         "types-certifi",
     )
     session.install(".[develop]")
-    session.run("black", "--check", "--target-version=py36", *SOURCE_FILES)
+    session.run("black", "--check", "--target-version=py37", *SOURCE_FILES)
     session.run("isort", "--check", *SOURCE_FILES)
     session.run("flake8", "--ignore=E501,W503,E203", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "check", *SOURCE_FILES)
     session.run("mypy", "--strict", "--show-error-codes", "elastic_transport/")
 
 
-@nox.session(python=["3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12"])
+@nox.session(python=["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"])
 def test(session):
     session.install(".[develop]")
     session.run(
