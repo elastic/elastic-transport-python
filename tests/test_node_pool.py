@@ -193,6 +193,11 @@ def test_dead_node_backoff_calculation():
     assert pool._dead_nodes.queue == [(3.5, node)]
 
     assert pool.get() is node
+    pool._dead_consecutive_failures = {node.config: 13292}
+    pool.mark_dead(node, _now=0)
+    assert pool._dead_nodes.queue == [(3.5, node)]
+
+    assert pool.get() is node
     pool.mark_live(node)
 
     assert pool._dead_consecutive_failures == {}
