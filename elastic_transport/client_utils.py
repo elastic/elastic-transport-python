@@ -136,7 +136,7 @@ def parse_cloud_id(cloud_id: str) -> CloudId:
 def to_str(
     value: Union[str, bytes], encoding: str = "utf-8", errors: str = "strict"
 ) -> str:
-    if type(value) == bytes:
+    if isinstance(value, bytes):
         return value.decode(encoding, errors)
     return value  # type: ignore[return-value]
 
@@ -144,7 +144,7 @@ def to_str(
 def to_bytes(
     value: Union[str, bytes], encoding: str = "utf-8", errors: str = "strict"
 ) -> bytes:
-    if type(value) == str:
+    if isinstance(value, str):
         return value.encode(encoding, errors)
     return value  # type: ignore[return-value]
 
