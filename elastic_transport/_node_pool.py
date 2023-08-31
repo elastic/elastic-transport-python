@@ -238,10 +238,13 @@ class NodePool:
             pass
         consecutive_failures = self._dead_consecutive_failures[node.config] + 1
         self._dead_consecutive_failures[node.config] = consecutive_failures
-        timeout = min(
-            self._dead_node_backoff_factor * (2 ** (consecutive_failures - 1)),
-            self._max_dead_node_backoff,
-        )
+        try:
+            timeout = min(
+                self._dead_node_backoff_factor * (2 ** (consecutive_failures - 1)),
+                self._max_dead_node_backoff,
+            )
+        except OverflowError:
+            timeout = self._max_dead_node_backoff
         self._dead_nodes.put((now + timeout, node))
         _logger.warning(
             "Node %r has failed for %i times in a row, putting on %i second timeout",
