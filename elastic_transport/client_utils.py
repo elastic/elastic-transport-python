@@ -138,7 +138,7 @@ def to_str(
 ) -> str:
     if isinstance(value, bytes):
         return value.decode(encoding, errors)
-    return value  # type: ignore[return-value]
+    return value
 
 
 def to_bytes(
@@ -146,7 +146,7 @@ def to_bytes(
 ) -> bytes:
     if isinstance(value, str):
         return value.encode(encoding, errors)
-    return value  # type: ignore[return-value]
+    return value
 
 
 # Python 3.7 added '~' to the safe list for urllib.parse.quote()
