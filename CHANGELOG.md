@@ -1,5 +1,9 @@
 # Changelog
 
+## 8.4.1
+
+- Fixed an issue where a large number of consecutive failures to connect to a node would raise an `OverflowError`.
+
 ## 8.4.0
 
 ### Added
