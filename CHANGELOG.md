@@ -1,5 +1,10 @@
 # Changelog
 
+## 8.4.1
+
+- Fixed an issue where a large number of consecutive failures to connect to a node would raise an `OverflowError`.
+- Fixed an issue to ensure that `ApiResponse` can be pickled.
+
 ## 8.4.0
 
 ### Added
