@@ -64,6 +64,10 @@ setup(
             "mock",
             "requests",
             "aiohttp",
+            # Override Read the Docs default (sphinx<2)
+            "sphinx>2",
+            "furo",
+            "sphinx-autodoc-typehints",
         ],
     },
     classifiers=[
