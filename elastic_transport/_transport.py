@@ -68,7 +68,7 @@ NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
 # 'errors' for marking a node as dead. These errors typically
 # mean everything is fine server-wise and instead the API call
 # in question responded successfully.
-NOT_DEAD_NODE_HTTP_STATUSES = {None, 400, 401, 402, 403, 404}
+NOT_DEAD_NODE_HTTP_STATUSES = {None, 400, 401, 402, 403, 404, 409}
 DEFAULT_CLIENT_META_SERVICE = ("et", client_meta_version(__version__))
 
 _logger = logging.getLogger("elastic_transport.transport")
