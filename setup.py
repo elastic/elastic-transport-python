@@ -51,6 +51,7 @@ setup(
         "urllib3>=1.26.2, <3",
         "certifi",
         "dataclasses; python_version<'3.7'",
+        "importlib-metadata; python_version<'3.8'",
     ],
     python_requires=">=3.6",
     extras_require={
