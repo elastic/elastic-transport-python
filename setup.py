@@ -28,7 +28,7 @@ with open(os.path.join(base_dir, "README.md")) as f:
     long_description = f.read()
 
 packages = [
-    package for package in find_packages() if package.startswith("elastic_transport")
+    package for package in find_packages(exclude=['tests']) if package.startswith("elastic_transport")
 ]
 
 setup(
