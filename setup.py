@@ -48,9 +48,10 @@ setup(
     package_data={"elastic_transport": ["py.typed"]},
     packages=packages,
     install_requires=[
-        "urllib3>=1.26.2, <2",
+        "urllib3>=1.26.2, <3",
         "certifi",
         "dataclasses; python_version<'3.7'",
+        "importlib-metadata; python_version<'3.8'",
     ],
     python_requires=">=3.6",
     extras_require={
