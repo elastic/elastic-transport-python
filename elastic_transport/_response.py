@@ -19,7 +19,6 @@ from typing import (
     Any,
     Dict,
     Generic,
-    Iterable,
     Iterator,
     List,
     NoReturn,
