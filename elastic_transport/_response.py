@@ -107,7 +107,7 @@ class ApiResponse(Generic[_BodyType]):
     def __len__(self) -> int:
         return len(self._body)
 
-    def __iter__(self) -> Iterable[Any]:
+    def __iter__(self) -> Iterator[Any]:
         return iter(self._body)  # type: ignore[no-any-return]
 
     def __str__(self) -> str:
@@ -134,7 +134,7 @@ class ApiResponse(Generic[_BodyType]):
 class TextApiResponse(ApiResponse[str]):
     """API responses which are text such as 'text/plain' or 'text/csv'"""
 
-    def __iter__(self) -> Iterable[str]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self.body)
 
     def __getitem__(self, item: Union[int, slice]) -> str:
@@ -148,7 +148,7 @@ class TextApiResponse(ApiResponse[str]):
 class BinaryApiResponse(ApiResponse[bytes]):
     """API responses which are a binary response such as Mapbox vector tiles"""
 
-    def __iter__(self) -> Iterable[int]:
+    def __iter__(self) -> Iterator[int]:
         return iter(self.body)
 
     @overload
@@ -214,7 +214,7 @@ class ListApiResponse(
     ) -> Union[_ListItemBodyType, List[_ListItemBodyType]]:
         return self.body[item]
 
-    def __iter__(self) -> Iterable[_ListItemBodyType]:
+    def __iter__(self) -> Iterator[_ListItemBodyType]:
         return iter(self.body)
 
     @property
