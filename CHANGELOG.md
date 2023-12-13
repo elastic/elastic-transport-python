@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.11.0
+
+- Always set default HTTPS port to 443 (#127)
+- Drop support for Python 3.6 (#109)
+- Include tests in sdist (#122, contributed by @parona-source)
+- Fix `__iter__` return type to Iterator (#129, contributed by @altescy)
+
 ## 8.10.0
 
 - Support urllib3 2.x in addition to urllib3 1.26.x ([#121](https://github.com/elastic/elastic-transport-python/pull/121))
