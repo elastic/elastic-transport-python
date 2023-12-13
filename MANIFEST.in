@@ -6,6 +6,5 @@ include setup.py
 include elastic_transport/py.typed
 
 prune docs/_build
-prune tests
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
