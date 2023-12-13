@@ -37,10 +37,8 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     version=version,
-    author="Elastic",
-    author_email="support@elastic.co",
-    maintainer="Clients Team",
-    maintainer_email="clients-team@elastic.co",
+    author="Elastic Client Library Maintainers",
+    author_email="client-libs@elastic.co",
     url="https://github.com/elastic/elastic-transport-python",
     project_urls={
         "Source Code": "https://github.com/elastic/elastic-transport-python",
@@ -50,9 +48,10 @@ setup(
     package_data={"elastic_transport": ["py.typed"]},
     packages=packages,
     install_requires=[
-        "urllib3>=1.26.2, <2",
+        "urllib3>=1.26.2, <3",
         "certifi",
         "dataclasses; python_version<'3.7'",
+        "importlib-metadata; python_version<'3.8'",
     ],
     python_requires=">=3.7",
     extras_require={
@@ -66,6 +65,10 @@ setup(
             "mock",
             "requests",
             "aiohttp",
+            # Override Read the Docs default (sphinx<2)
+            "sphinx>2",
+            "furo",
+            "sphinx-autodoc-typehints",
         ],
     },
     classifiers=[

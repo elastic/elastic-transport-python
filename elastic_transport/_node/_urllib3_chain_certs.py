@@ -36,7 +36,21 @@ _HASHES_BY_LENGTH = {32: hashlib.md5, 40: hashlib.sha1, 64: hashlib.sha256}
 __all__ = ["HTTPSConnectionPool"]
 
 
+class HTTPSConnection(urllib3.connection.HTTPSConnection):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._elastic_assert_fingerprint: Optional[str] = None
+        super().__init__(*args, **kwargs)
+
+    def connect(self) -> None:
+        super().connect()
+        # Hack to prevent a warning within HTTPSConnectionPool._validate_conn()
+        if self._elastic_assert_fingerprint:
+            self.is_verified = True
+
+
 class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
+    ConnectionCls = HTTPSConnection
+
     """HTTPSConnectionPool implementation which supports ``assert_fingerprint``
     on certificates within the chain instead of only the leaf cert using private
     APIs in CPython 3.10+
@@ -60,18 +74,26 @@ class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
                 f", should be one of '{valid_lengths}'"
             )
 
-        if assert_fingerprint:
-            # Falsey but not None. This is a hack to skip fingerprinting by urllib3
-            # but still set 'is_verified=True' within HTTPSConnectionPool._validate_conn()
-            kwargs["assert_fingerprint"] = ""
+        if self._elastic_assert_fingerprint:
+            # Skip fingerprinting by urllib3 as we'll do it ourselves
+            kwargs["assert_fingerprint"] = None
 
         super().__init__(*args, **kwargs)
 
-    def _validate_conn(self, conn: urllib3.connection.HTTPSConnection) -> None:
+    def _new_conn(self) -> HTTPSConnection:
+        """
+        Return a fresh :class:`urllib3.connection.HTTPSConnection`.
+        """
+        conn: HTTPSConnection = super()._new_conn()  # type: ignore[assignment]
+        # Tell our custom connection if we'll assert fingerprint ourselves
+        conn._elastic_assert_fingerprint = self._elastic_assert_fingerprint
+        return conn
+
+    def _validate_conn(self, conn: HTTPSConnection) -> None:  # type: ignore[override]
         """
         Called right before a request is made, after the socket is created.
         """
-        super(HTTPSConnectionPool, self)._validate_conn(conn)  # type: ignore[misc]
+        super(HTTPSConnectionPool, self)._validate_conn(conn)
 
         if self._elastic_assert_fingerprint:
             hash_func = _HASHES_BY_LENGTH[len(self._elastic_assert_fingerprint)]
@@ -89,7 +111,7 @@ class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
                 # See: https://github.com/python/cpython/pull/25467
                 fingerprints = [
                     hash_func(cert.public_bytes(_ENCODING_DER)).digest()
-                    for cert in conn.sock._sslobj.get_verified_chain()
+                    for cert in conn.sock._sslobj.get_verified_chain()  # type: ignore[union-attr]
                 ]
             except RERAISE_EXCEPTIONS:  # pragma: nocover
                 raise
@@ -100,7 +122,7 @@ class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
 
             # Only add the peercert in front of the chain if it's not there for some reason.
             # This is to make sure old behavior of 'ssl_assert_fingerprint' still works.
-            peercert_fingerprint = hash_func(conn.sock.getpeercert(True)).digest()
+            peercert_fingerprint = hash_func(conn.sock.getpeercert(True)).digest()  # type: ignore[union-attr]
             if peercert_fingerprint not in fingerprints:  # pragma: nocover
                 fingerprints.insert(0, peercert_fingerprint)
 

@@ -72,7 +72,7 @@ async def test_debug_logging(node_class, httpbin_node_config):
         "< HTTP/1.1 200 OK",
         "< Access-Control-Allow-Credentials: true",
         "< Access-Control-Allow-Origin: *",
-        "< Connection: keep-alive",
+        "< Connection: close",
         "< Content-Type: application/json",
         "< {",
         '  "args": {}, ',

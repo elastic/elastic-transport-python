@@ -43,10 +43,13 @@ def lint(session):
         "flake8",
         "black~=23.0",
         "isort",
-        "mypy==1.0.1",
-        "types-urllib3",
+        "mypy==1.5.1",
         "types-requests",
         "types-certifi",
+    )
+    # https://github.com/python/typeshed/issues/10786
+    session.run(
+        "python", "-m", "pip", "uninstall", "--yes", "types-urllib3", silent=True
     )
     session.install(".[develop]")
     session.run("black", "--check", "--target-version=py37", *SOURCE_FILES)

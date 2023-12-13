@@ -145,6 +145,7 @@ def test_invalid_cloud_id(cloud_id):
 @pytest.mark.parametrize(
     ["url", "node_base_url", "path_prefix"],
     [
+        ("https://localhost", "https://localhost:443", ""),
         ("http://localhost:3002", "http://localhost:3002", ""),
         ("http://127.0.0.1:3002", "http://127.0.0.1:3002", ""),
         ("http://127.0.0.1:3002/", "http://127.0.0.1:3002", ""),
@@ -156,6 +157,11 @@ def test_invalid_cloud_id(cloud_id):
         (
             "http://localhost:3002/url-prefix/",
             "http://localhost:3002/url-prefix",
+            "/url-prefix",
+        ),
+        (
+            "https://localhost/url-prefix",
+            "https://localhost:443/url-prefix",
             "/url-prefix",
         ),
         ("http://[::1]:3002/url-prefix", "http://[::1]:3002/url-prefix", "/url-prefix"),
