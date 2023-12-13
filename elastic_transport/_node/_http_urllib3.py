@@ -21,6 +21,11 @@ import time
 import warnings
 from typing import Any, Dict, Optional, Union
 
+try:
+    from importlib import metadata
+except ImportError:
+    import importlib_metadata as metadata  # type: ignore[import,no-redef]
+
 import urllib3
 from urllib3.exceptions import ConnectTimeoutError, NewConnectionError, ReadTimeoutError
 from urllib3.util.retry import Retry
@@ -47,7 +52,7 @@ except (ImportError, AttributeError):
 class Urllib3HttpNode(BaseNode):
     """Default synchronous node class using the ``urllib3`` library via HTTP"""
 
-    _CLIENT_META_HTTP_CLIENT = ("ur", client_meta_version(urllib3.__version__))
+    _CLIENT_META_HTTP_CLIENT = ("ur", client_meta_version(metadata.version("urllib3")))
 
     def __init__(self, config: NodeConfig):
         super().__init__(config)
@@ -159,13 +164,13 @@ class Urllib3HttpNode(BaseNode):
             else:
                 body_to_send = None
 
-            response = self.pool.urlopen(  # type: ignore[no-untyped-call]
+            response = self.pool.urlopen(
                 method,
                 target,
                 body=body_to_send,
                 retries=Retry(False),
                 headers=request_headers,
-                **kw,
+                **kw,  # type: ignore[arg-type]
             )
             response_headers = HttpHeaders(response.headers)
             data = response.data

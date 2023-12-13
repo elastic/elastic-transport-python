@@ -186,27 +186,23 @@ def url_to_node_config(
 ) -> NodeConfig:
     """Constructs a :class:`elastic_transport.NodeConfig` instance from a URL.
     If a username/password are specified in the URL they are converted to an
-    'Authorization' header.
+    'Authorization' header. Always fills in a default port for HTTPS.
 
     :param url: URL to transform into a NodeConfig.
-    :param use_default_ports_for_scheme: If 'True' will resolve default ports for the given scheme.
+    :param use_default_ports_for_scheme: If 'True' will resolve default ports for HTTP.
     """
     try:
         parsed_url = parse_url(url)
     except LocationParseError:
         raise ValueError(f"Could not parse URL {url!r}") from None
 
-    # Only fill in a default port for HTTP and HTTPS
-    # when we know the scheme is one of those two.
     parsed_port: Optional[int] = parsed_url.port
-    if (
-        parsed_url.port is None
-        and parsed_url.scheme is not None
-        and use_default_ports_for_scheme is True
-    ):
+    if parsed_url.port is None and parsed_url.scheme is not None:
+        # Always fill in a default port for HTTPS
         if parsed_url.scheme == "https":
             parsed_port = 443
-        elif parsed_url.scheme == "http":
+        # Only fill HTTP default port when asked to explicitly
+        elif parsed_url.scheme == "http" and use_default_ports_for_scheme:
             parsed_port = 80
 
     if any(

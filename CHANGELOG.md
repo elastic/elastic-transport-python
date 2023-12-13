@@ -1,5 +1,10 @@
 # Changelog
 
+## 8.10.0
+
+- Support urllib3 2.x in addition to urllib3 1.26.x ([#121](https://github.com/elastic/elastic-transport-python/pull/121))
+- Add 409 to `NOT_DEAD_NODE_HTTP_STATUSES` ([#120](https://github.com/elastic/elastic-transport-python/pull/120))
+
 ## 8.4.1
 
 - Fixed an issue where a large number of consecutive failures to connect to a node would raise an `OverflowError`.

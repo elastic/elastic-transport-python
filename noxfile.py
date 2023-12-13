@@ -30,7 +30,7 @@ SOURCE_FILES = (
 @nox.session()
 def format(session):
     session.install("black~=23.0", "isort", "pyupgrade")
-    session.run("black", "--target-version=py36", *SOURCE_FILES)
+    session.run("black", "--target-version=py37", *SOURCE_FILES)
     session.run("isort", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "fix", *SOURCE_FILES)
 
@@ -43,20 +43,23 @@ def lint(session):
         "flake8",
         "black~=23.0",
         "isort",
-        "mypy==1.0.1",
-        "types-urllib3",
+        "mypy==1.5.1",
         "types-requests",
         "types-certifi",
     )
+    # https://github.com/python/typeshed/issues/10786
+    session.run(
+        "python", "-m", "pip", "uninstall", "--yes", "types-urllib3", silent=True
+    )
     session.install(".[develop]")
-    session.run("black", "--check", "--target-version=py36", *SOURCE_FILES)
+    session.run("black", "--check", "--target-version=py37", *SOURCE_FILES)
     session.run("isort", "--check", *SOURCE_FILES)
     session.run("flake8", "--ignore=E501,W503,E203", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "check", *SOURCE_FILES)
     session.run("mypy", "--strict", "--show-error-codes", "elastic_transport/")
 
 
-@nox.session(python=["3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12"])
+@nox.session(python=["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"])
 def test(session):
     session.install(".[develop]")
     session.run(
