@@ -43,7 +43,7 @@ def lint(session):
         "flake8",
         "black~=23.0",
         "isort",
-        "mypy==1.5.1",
+        "mypy==1.7.1",
         "types-requests",
         "types-certifi",
     )
