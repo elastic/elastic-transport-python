@@ -21,15 +21,15 @@ import respx
 import ssl
 import warnings
 
-from elastic_transport import HttpxNode, NodeConfig
+from elastic_transport import HttpxAsyncNode, NodeConfig
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 
 def create_node(node_config: NodeConfig):
-    return HttpxNode(node_config)
+    return HttpxAsyncNode(node_config)
 
 
-class TestHttpxNodeCreation:
+class TestHttpxAsyncNodeCreation:
     def test_ssl_context(self):
         ssl_context = ssl.create_default_context()
         with warnings.catch_warnings(record=True) as w:
@@ -86,7 +86,7 @@ class TestHttpxNodeCreation:
 
 
 @pytest.mark.asyncio
-class TestHttpxNode:
+class TestHttpxAsyncNode:
     @respx.mock
     async def test_simple_request(self):
         node = create_node(

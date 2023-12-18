@@ -38,7 +38,7 @@ from ._node import (
     BaseNode,
     RequestsHttpNode,
     Urllib3HttpNode,
-    HttpxNode,
+    HttpxAsyncNode,
 )
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
 from ._response import ApiResponse as ApiResponse
@@ -94,7 +94,7 @@ __all__ = [
     "TransportError",
     "TransportWarning",
     "Urllib3HttpNode",
-    "HttpxNode",
+    "HttpxAsyncNode",
 ]
 
 _logger = logging.getLogger("elastic_transport")

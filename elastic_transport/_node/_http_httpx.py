@@ -42,7 +42,7 @@ except ImportError:
     _HTTPX_AVAILABLE = False
     _HTTPX_META_VERSION = ""
 
-class HttpxNode(BaseAsyncNode):
+class HttpxAsyncNode(BaseAsyncNode):
     def __init__(self, config: NodeConfig):
         if not _HTTPX_AVAILABLE:  # pragma: nocover
             raise ValueError(
