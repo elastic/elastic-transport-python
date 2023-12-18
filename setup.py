@@ -67,6 +67,8 @@ setup(
             "mock",
             "requests",
             "aiohttp",
+            "httpx",
+            "respx",
             # Override Read the Docs default (sphinx<2)
             "sphinx>2",
             "furo",
