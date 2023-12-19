@@ -16,10 +16,11 @@
 #  under the License.
 
 import gzip
-import pytest
-import respx
 import ssl
 import warnings
+
+import pytest
+import respx
 
 from elastic_transport import HttpxAsyncNode, NodeConfig
 from elastic_transport._node._base import DEFAULT_USER_AGENT

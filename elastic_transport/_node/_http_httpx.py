@@ -16,15 +16,16 @@
 #  under the License.
 
 import gzip
+import ssl
 import time
 import warnings
+from typing import Optional, Tuple, Union
 
-from .._exceptions import ConnectionTimeout
+from .._exceptions import ConnectionError, ConnectionTimeout
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
-    DEFAULT_CA_CERTS,
     RERAISE_EXCEPTIONS,
     NodeApiResponse,
     ssl_context_from_node_config,
@@ -41,13 +42,25 @@ except ImportError:
     _HTTPX_META_VERSION = ""
 
 
+# https://github.com/encode/httpx/blob/b4b27ff6777c8906c2b31dd879bd4cc1d9e4f6ce/httpx/_types.py#L67-L75
+CertTypes = Union[
+    # certfile
+    str,
+    # (certfile, keyfile)
+    Tuple[str, Optional[str]],
+    # (certfile, keyfile, password)
+    Tuple[str, Optional[str], Optional[str]],
+]
+VerifyTypes = Union[str, bool, ssl.SSLContext]
+
+
 class HttpxAsyncNode(BaseAsyncNode):
     def __init__(self, config: NodeConfig):
         if not _HTTPX_AVAILABLE:  # pragma: nocover
             raise ValueError("You must have 'httpx' installed to use HttpxNode")
         super().__init__(config)
 
-        verify = False
+        verify: VerifyTypes = False
         if config.scheme == "https":
             if config.ssl_context is not None:
                 verify = ssl_context_from_node_config(config)
@@ -58,7 +71,7 @@ class HttpxAsyncNode(BaseAsyncNode):
                             "You cannot use 'ca_certs' when 'verify_certs=False'"
                         )
                     verify = config.ca_certs
-                else:
+                elif config.verify_certs is not None:
                     verify = config.verify_certs
 
                 if not config.verify_certs and config.ssl_show_warn:
@@ -66,7 +79,7 @@ class HttpxAsyncNode(BaseAsyncNode):
                         f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure"
                     )
 
-        cert = None
+        cert: Optional[CertTypes] = None
         if config.client_cert:
             if config.client_key:
                 cert = (config.client_cert, config.client_key)
@@ -81,7 +94,7 @@ class HttpxAsyncNode(BaseAsyncNode):
             timeout=config.request_timeout,
         )
 
-    async def perform_request(
+    async def perform_request(  # type: ignore[override]
         self,
         method: str,
         target: str,
@@ -144,7 +157,7 @@ class HttpxAsyncNode(BaseAsyncNode):
         meta = ApiResponseMeta(
             resp.status_code,
             resp.http_version,
-            resp.headers,
+            HttpHeaders(resp.headers),
             duration,
             self.config,
         )
@@ -160,5 +173,5 @@ class HttpxAsyncNode(BaseAsyncNode):
 
         return NodeApiResponse(meta, response_body)
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # type: ignore[override]
         await self.client.aclose()
