@@ -15,7 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import asyncio
 import gzip
 import time
 import warnings
@@ -41,6 +40,7 @@ try:
 except ImportError:
     _HTTPX_AVAILABLE = False
     _HTTPX_META_VERSION = ""
+
 
 class HttpxAsyncNode(BaseAsyncNode):
     def __init__(self, config: NodeConfig):
@@ -129,7 +129,7 @@ class HttpxAsyncNode(BaseAsyncNode):
             raise
         except Exception as exc:
             resolved_exc: Exception
-            if isinstance(exc, (asyncio.TimeoutError, httpx.TimeoutException)):
+            if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
                 resolved_exc = ConnectionTimeout(
                     'Connection timed out during request', errors=(exc,)
                 )
