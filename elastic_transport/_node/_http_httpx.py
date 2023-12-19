@@ -98,9 +98,9 @@ class HttpxAsyncNode(BaseAsyncNode):
         self,
         method: str,
         target: str,
-        body: bytes | None = None,
-        headers: HttpHeaders | None = None,
-        request_timeout: DefaultType | (float | None) = DEFAULT,
+        body: Optional[bytes] = None,
+        headers: Optional[HttpHeaders] = None,
+        request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> NodeApiResponse:
         resolved_headers = self._headers.copy()
         if headers:
