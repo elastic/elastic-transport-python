@@ -54,7 +54,7 @@ CertTypes = Union[
 VerifyTypes = Union[str, bool, ssl.SSLContext]
 
 
-class HttpxAsyncNode(BaseAsyncNode):
+class HttpxAsyncHttpNode(BaseAsyncNode):
     def __init__(self, config: NodeConfig):
         if not _HTTPX_AVAILABLE:  # pragma: nocover
             raise ValueError("You must have 'httpx' installed to use HttpxNode")

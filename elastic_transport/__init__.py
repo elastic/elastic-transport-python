@@ -36,7 +36,7 @@ from ._node import (
     AiohttpHttpNode,
     BaseAsyncNode,
     BaseNode,
-    HttpxAsyncNode,
+    HttpxAsyncHttpNode,
     RequestsHttpNode,
     Urllib3HttpNode,
 )
@@ -71,7 +71,7 @@ __all__ = [
     "ConnectionTimeout",
     "HeadApiResponse",
     "HttpHeaders",
-    "HttpxAsyncNode",
+    "HttpxAsyncHttpNode",
     "JsonSerializer",
     "ListApiResponse",
     "NdjsonSerializer",

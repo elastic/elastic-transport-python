@@ -22,12 +22,12 @@ import warnings
 import pytest
 import respx
 
-from elastic_transport import HttpxAsyncNode, NodeConfig
+from elastic_transport import HttpxAsyncHttpNode, NodeConfig
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 
 def create_node(node_config: NodeConfig):
-    return HttpxAsyncNode(node_config)
+    return HttpxAsyncHttpNode(node_config)
 
 
 class TestHttpxAsyncNodeCreation:
