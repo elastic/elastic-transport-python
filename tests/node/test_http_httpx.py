@@ -35,8 +35,8 @@ class TestHttpxAsyncNodeCreation:
         with warnings.catch_warnings(record=True) as w:
             node = create_node(
                 NodeConfig(
-                    scheme='https',
-                    host='localhost',
+                    scheme="https",
+                    host="localhost",
                     port=80,
                     ssl_context=ssl_context,
                 )
@@ -46,21 +46,18 @@ class TestHttpxAsyncNodeCreation:
 
     def test_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:
-            _ = create_node(
-                NodeConfig('https', 'localhost', 443, verify_certs=False)
-            )
+            _ = create_node(NodeConfig("https", "localhost", 443, verify_certs=False))
         assert (
-                str(w[0].message)
-                == "Connecting to 'https://localhost:443' using TLS with verify_certs=False is insecure"
+            str(w[0].message)
+            == "Connecting to 'https://localhost:443' using TLS with verify_certs=False is insecure"
         )
-
 
     def test_no_warn_when_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:
             _ = create_node(
                 NodeConfig(
-                    'https',
-                    'localhost',
+                    "https",
+                    "localhost",
                     443,
                     verify_certs=False,
                     ssl_show_warn=False,
@@ -72,16 +69,15 @@ class TestHttpxAsyncNodeCreation:
         with pytest.raises(ValueError) as exc:
             create_node(
                 NodeConfig(
-                    'https',
-                    'localhost',
+                    "https",
+                    "localhost",
                     443,
-                    ca_certs='/ca/certs',
+                    ca_certs="/ca/certs",
                     verify_certs=False,
                 )
             )
             assert (
-                    str(exc.value)
-                    == "You cannot use 'ca_certs' when 'verify_certs=False'"
+                str(exc.value) == "You cannot use 'ca_certs' when 'verify_certs=False'"
             )
 
 
@@ -89,72 +85,60 @@ class TestHttpxAsyncNodeCreation:
 class TestHttpxAsyncNode:
     @respx.mock
     async def test_simple_request(self):
-        node = create_node(
-            NodeConfig(scheme='http', host='localhost', port=80)
-        )
-        respx.get('http://localhost/index')
+        node = create_node(NodeConfig(scheme="http", host="localhost", port=80))
+        respx.get("http://localhost/index")
         await node.perform_request(
-            'GET', '/index', b'hello world', headers={'key': 'value'}
+            "GET", "/index", b"hello world", headers={"key": "value"}
         )
         request = respx.calls.last.request
-        assert request.content == b'hello world'
+        assert request.content == b"hello world"
         assert {
-                   'key': 'value',
-                   'connection': 'keep-alive',
-                   'user-agent': DEFAULT_USER_AGENT,
-               }.items() <= request.headers.items()
+            "key": "value",
+            "connection": "keep-alive",
+            "user-agent": DEFAULT_USER_AGENT,
+        }.items() <= request.headers.items()
 
     @respx.mock
     async def test_compression(self):
         node = create_node(
-            NodeConfig(
-                scheme='http', host='localhost', port=80, http_compress=True
-            )
+            NodeConfig(scheme="http", host="localhost", port=80, http_compress=True)
         )
-        respx.get('http://localhost/index')
-        await node.perform_request('GET', '/index', b'hello world')
+        respx.get("http://localhost/index")
+        await node.perform_request("GET", "/index", b"hello world")
         request = respx.calls.last.request
-        assert gzip.decompress(request.content) == b'hello world'
-        assert {'content-encoding': 'gzip'}.items() <= request.headers.items()
+        assert gzip.decompress(request.content) == b"hello world"
+        assert {"content-encoding": "gzip"}.items() <= request.headers.items()
 
     @respx.mock
     async def test_default_timeout(self):
         node = create_node(
-            NodeConfig(
-                scheme='http', host='localhost', port=80, request_timeout=10
-            )
+            NodeConfig(scheme="http", host="localhost", port=80, request_timeout=10)
         )
-        respx.get('http://localhost/index')
-        await node.perform_request('GET', '/index', b'hello world')
+        respx.get("http://localhost/index")
+        await node.perform_request("GET", "/index", b"hello world")
         request = respx.calls.last.request
-        assert request.extensions['timeout']['connect'] == 10
+        assert request.extensions["timeout"]["connect"] == 10
 
     @respx.mock
     async def test_overwritten_timeout(self):
         node = create_node(
-            NodeConfig(
-                scheme='http', host='localhost', port=80, request_timeout=10
-            )
+            NodeConfig(scheme="http", host="localhost", port=80, request_timeout=10)
         )
-        respx.get('http://localhost/index')
-        await node.perform_request(
-            'GET', '/index', b'hello world', request_timeout=15
-        )
+        respx.get("http://localhost/index")
+        await node.perform_request("GET", "/index", b"hello world", request_timeout=15)
         request = respx.calls.last.request
-        assert request.extensions['timeout']['connect'] == 15
+        assert request.extensions["timeout"]["connect"] == 15
 
     @respx.mock
     async def test_merge_headers(self):
         node = create_node(
-            NodeConfig(
-                'http', 'localhost', 80, headers={'h1': 'v1', 'h2': 'v2'}
-            )
+            NodeConfig("http", "localhost", 80, headers={"h1": "v1", "h2": "v2"})
         )
-        respx.get('http://localhost/index')
+        respx.get("http://localhost/index")
         await node.perform_request(
-            'GET', '/index', b'hello world', headers={'h2': 'v2p', 'h3': 'v3'}
+            "GET", "/index", b"hello world", headers={"h2": "v2p", "h3": "v3"}
         )
         request = respx.calls.last.request
-        assert request.headers['h1'] == 'v1'
-        assert request.headers['h2'] == 'v2p'
-        assert request.headers['h3'] == 'v3'
+        assert request.headers["h1"] == "v1"
+        assert request.headers["h2"] == "v2p"
+        assert request.headers["h3"] == "v3"

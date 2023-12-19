@@ -36,9 +36,9 @@ from ._node import (
     AiohttpHttpNode,
     BaseAsyncNode,
     BaseNode,
+    HttpxAsyncNode,
     RequestsHttpNode,
     Urllib3HttpNode,
-    HttpxAsyncNode,
 )
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
 from ._response import ApiResponse as ApiResponse
@@ -71,6 +71,7 @@ __all__ = [
     "ConnectionTimeout",
     "HeadApiResponse",
     "HttpHeaders",
+    "HttpxAsyncNode",
     "JsonSerializer",
     "ListApiResponse",
     "NdjsonSerializer",
@@ -94,7 +95,6 @@ __all__ = [
     "TransportError",
     "TransportWarning",
     "Urllib3HttpNode",
-    "HttpxAsyncNode",
 ]
 
 _logger = logging.getLogger("elastic_transport")

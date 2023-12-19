@@ -31,7 +31,6 @@ from ._base import (
 )
 from ._base_async import BaseAsyncNode
 
-
 try:
     import httpx
 
@@ -45,13 +44,11 @@ except ImportError:
 class HttpxAsyncNode(BaseAsyncNode):
     def __init__(self, config: NodeConfig):
         if not _HTTPX_AVAILABLE:  # pragma: nocover
-            raise ValueError(
-                "You must have 'httpx' installed to use HttpxNode"
-            )
+            raise ValueError("You must have 'httpx' installed to use HttpxNode")
         super().__init__(config)
 
         verify = False
-        if config.scheme == 'https':
+        if config.scheme == "https":
             if config.ssl_context is not None:
                 verify = ssl_context_from_node_config(config)
             else:
@@ -66,7 +63,7 @@ class HttpxAsyncNode(BaseAsyncNode):
 
                 if not config.verify_certs and config.ssl_show_warn:
                     warnings.warn(
-                        f'Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure'
+                        f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure"
                     )
 
         cert = None
@@ -77,7 +74,7 @@ class HttpxAsyncNode(BaseAsyncNode):
                 cert = config.client_cert
 
         self.client = httpx.AsyncClient(
-            base_url=f'{config.scheme}://{config.host}:{config.port}',
+            base_url=f"{config.scheme}://{config.host}:{config.port}",
             limits=httpx.Limits(max_connections=config.connections_per_node),
             verify=verify,
             cert=cert,
@@ -85,12 +82,12 @@ class HttpxAsyncNode(BaseAsyncNode):
         )
 
     async def perform_request(
-            self,
-            method: str,
-            target: str,
-            body: bytes | None = None,
-            headers: HttpHeaders | None = None,
-            request_timeout: DefaultType | (float | None) = DEFAULT,
+        self,
+        method: str,
+        target: str,
+        body: bytes | None = None,
+        headers: HttpHeaders | None = None,
+        request_timeout: DefaultType | (float | None) = DEFAULT,
     ) -> NodeApiResponse:
         resolved_headers = self._headers.copy()
         if headers:
@@ -99,7 +96,7 @@ class HttpxAsyncNode(BaseAsyncNode):
         if body:
             if self._http_compress:
                 resolved_body = gzip.compress(body)
-                resolved_headers['content-encoding'] = 'gzip'
+                resolved_headers["content-encoding"] = "gzip"
             else:
                 resolved_body = body
         else:
@@ -131,7 +128,7 @@ class HttpxAsyncNode(BaseAsyncNode):
             resolved_exc: Exception
             if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
                 resolved_exc = ConnectionTimeout(
-                    'Connection timed out during request', errors=(exc,)
+                    "Connection timed out during request", errors=(exc,)
                 )
             else:
                 resolved_exc = ConnectionError(str(exc), errors=(exc,))
