@@ -60,6 +60,11 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
             raise ValueError("You must have 'httpx' installed to use HttpxNode")
         super().__init__(config)
 
+        if config.ssl_assert_fingerprint:
+            raise ValueError(
+                "httpx does not support certificate pinning. https://github.com/encode/httpx/issues/761"
+            )
+
         verify: VerifyTypes = False
         if config.scheme == "https":
             if config.ssl_context is not None:
