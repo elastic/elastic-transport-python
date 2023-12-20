@@ -30,6 +30,7 @@ from elastic_transport import (
     AsyncTransport,
     ConnectionError,
     ConnectionTimeout,
+    HttpxAsyncHttpNode,
     NodeConfig,
     RequestsHttpNode,
     SniffingError,
@@ -293,11 +294,14 @@ async def test_node_class_as_string():
     t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class="aiohttp")
     assert isinstance(t.node_pool.get(), AiohttpHttpNode)
 
+    t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class="httpxasync")
+    assert isinstance(t.node_pool.get(), HttpxAsyncHttpNode)
+
     with pytest.raises(ValueError) as e:
         AsyncTransport([NodeConfig("http", "localhost", 80)], node_class="huh?")
     assert str(e.value) == (
         "Unknown option for node_class: 'huh?'. "
-        "Available options are: 'aiohttp', 'requests', 'urllib3'"
+        "Available options are: 'aiohttp', 'httpxasync', 'requests', 'urllib3'"
     )
 
 
@@ -325,20 +329,27 @@ async def test_head_response_false():
 
 
 @pytest.mark.parametrize(
-    "node_class",
-    ["aiohttp", AiohttpHttpNode],
+    "node_class, client_short_name",
+    [
+        ("aiohttp", "ai"),
+        (AiohttpHttpNode, "ai"),
+        ("httpxasync", "hx"),
+        (HttpxAsyncHttpNode, "hx"),
+    ],
 )
-async def test_transport_client_meta_node_class(node_class):
+async def test_transport_client_meta_node_class(node_class, client_short_name):
     t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class=node_class)
     assert (
         t._transport_client_meta[3] == t.node_pool.node_class._CLIENT_META_HTTP_CLIENT
     )
-    assert t._transport_client_meta[3][0] == "ai"
+    assert t._transport_client_meta[3][0] == client_short_name
     assert re.match(
-        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,ai=[0-9.]+p?$",
+        rf"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,{client_short_name}=[0-9.]+p?$",
         ",".join(f"{k}={v}" for k, v in t._transport_client_meta),
     )
 
+
+async def test_transport_default_client_meta_node_class():
     # Defaults to aiohttp
     t = AsyncTransport(
         [NodeConfig("http", "localhost", 80)], client_meta_service=("es", "8.0.0p")

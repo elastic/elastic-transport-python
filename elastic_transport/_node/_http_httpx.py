@@ -55,6 +55,8 @@ VerifyTypes = Union[str, bool, ssl.SSLContext]
 
 
 class HttpxAsyncHttpNode(BaseAsyncNode):
+    _CLIENT_META_HTTP_CLIENT = ("hx", _HTTPX_META_VERSION)
+
     def __init__(self, config: NodeConfig):
         if not _HTTPX_AVAILABLE:  # pragma: nocover
             raise ValueError("You must have 'httpx' installed to use HttpxNode")
