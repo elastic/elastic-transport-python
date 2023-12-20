@@ -143,21 +143,21 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
         except RERAISE_EXCEPTIONS + BUILTIN_EXCEPTIONS:
             raise
         except Exception as e:
-            exc: Exception
+            err: Exception
             if isinstance(e, (TimeoutError, httpx.TimeoutException)):
-                exc = ConnectionTimeout(
+                err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
             else:
-                exc = ConnectionError(str(e), errors=(e,))
+                err = ConnectionError(str(e), errors=(e,))
             self._log_request(
                 method=method,
                 target=target,
                 headers=resolved_headers,
                 body=body,
-                exception=exc,
+                exception=err,
             )
-            raise exc from None
+            raise err from None
 
         meta = ApiResponseMeta(
             resp.status_code,
