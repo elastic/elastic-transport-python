@@ -16,16 +16,19 @@
 #  under the License.
 
 import gzip
+import os.path
 import ssl
 import time
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
-from .._exceptions import ConnectionError, ConnectionTimeout
+from .._compat import warn_stacklevel
+from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
+    DEFAULT_CA_CERTS,
     RERAISE_EXCEPTIONS,
     NodeApiResponse,
     ssl_context_from_node_config,
@@ -42,18 +45,6 @@ except ImportError:
     _HTTPX_META_VERSION = ""
 
 
-# https://github.com/encode/httpx/blob/b4b27ff6777c8906c2b31dd879bd4cc1d9e4f6ce/httpx/_types.py#L67-L75
-CertTypes = Union[
-    # certfile
-    str,
-    # (certfile, keyfile)
-    Tuple[str, Optional[str]],
-    # (certfile, keyfile, password)
-    Tuple[str, Optional[str], Optional[str]],
-]
-VerifyTypes = Union[str, bool, ssl.SSLContext]
-
-
 class HttpxAsyncHttpNode(BaseAsyncNode):
     _CLIENT_META_HTTP_CLIENT = ("hx", _HTTPX_META_VERSION)
 
@@ -67,37 +58,57 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                 "httpx does not support certificate pinning. https://github.com/encode/httpx/issues/761"
             )
 
-        verify: VerifyTypes = False
+        # TODO switch to Literal[False] when dropping Python 3.7 support
+        ssl_context: Union[ssl.SSLContext, bool] = False
         if config.scheme == "https":
             if config.ssl_context is not None:
-                verify = ssl_context_from_node_config(config)
+                ssl_context = ssl_context_from_node_config(config)
             else:
-                if config.ca_certs is not None:
-                    if not config.verify_certs:
+                ssl_context = ssl_context_from_node_config(config)
+
+                if config.ca_certs is not None and not config.verify_certs:
+                    raise ValueError("Cannot set 'ca_certs' when 'verify_certs=False'")
+
+                ca_certs = (
+                    DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
+                )
+                if config.verify_certs:
+                    if not ca_certs:
                         raise ValueError(
-                            "You cannot use 'ca_certs' when 'verify_certs=False'"
+                            "Root certificates are missing for certificate "
+                            "validation. Either pass them in using the ca_certs parameter or "
+                            "install certifi to use it automatically."
                         )
-                    verify = config.ca_certs
-                elif config.verify_certs is not None:
-                    verify = config.verify_certs
+                else:
+                    if config.ssl_show_warn:
+                        warnings.warn(
+                            f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure",
+                            stacklevel=warn_stacklevel(),
+                            category=SecurityWarning,
+                        )
 
-                if not config.verify_certs and config.ssl_show_warn:
-                    warnings.warn(
-                        f"Connecting to {self.base_url!r} using TLS with verify_certs=False is insecure"
-                    )
+                if ca_certs is not None:
+                    if os.path.isfile(ca_certs):
+                        ssl_context.load_verify_locations(cafile=ca_certs)
+                    elif os.path.isdir(ca_certs):
+                        ssl_context.load_verify_locations(capath=ca_certs)
+                    else:
+                        raise ValueError("ca_certs parameter is not a path")
 
-        cert: Optional[CertTypes] = None
-        if config.client_cert:
-            if config.client_key:
-                cert = (config.client_cert, config.client_key)
-            else:
-                cert = config.client_cert
+                # Use client_cert and client_key variables for SSL certificate configuration.
+                if config.client_cert and not os.path.isfile(config.client_cert):
+                    raise ValueError("client_cert is not a path to a file")
+                if config.client_key and not os.path.isfile(config.client_key):
+                    raise ValueError("client_key is not a path to a file")
+                if config.client_cert and config.client_key:
+                    ssl_context.load_cert_chain(config.client_cert, config.client_key)
+                elif config.client_cert:
+                    ssl_context.load_cert_chain(config.client_cert)
 
         self.client = httpx.AsyncClient(
             base_url=f"{config.scheme}://{config.host}:{config.port}",
             limits=httpx.Limits(max_connections=config.connections_per_node),
-            verify=verify,
-            cert=cert,
+            verify=ssl_context or False,
             timeout=config.request_timeout,
         )
 
@@ -150,6 +161,8 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
+            elif isinstance(e, ssl.SSLError):
+                err = TlsError(str(e), errors=(e,))
             else:
                 err = ConnectionError(str(e), errors=(e,))
             self._log_request(
