@@ -21,9 +21,8 @@ import pytest
 
 from elastic_transport import AsyncTransport
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 async def test_simple_request(https_server_ip_node_config):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
