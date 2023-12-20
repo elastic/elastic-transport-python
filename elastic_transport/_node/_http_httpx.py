@@ -137,22 +137,22 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
             duration = time.perf_counter() - start
         except RERAISE_EXCEPTIONS + BUILTIN_EXCEPTIONS:
             raise
-        except Exception as exc:
-            resolved_exc: Exception
-            if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
-                resolved_exc = ConnectionTimeout(
-                    "Connection timed out during request", errors=(exc,)
+        except Exception as e:
+            exc: Exception
+            if isinstance(e, (TimeoutError, httpx.TimeoutException)):
+                exc = ConnectionTimeout(
+                    "Connection timed out during request", errors=(e,)
                 )
             else:
-                resolved_exc = ConnectionError(str(exc), errors=(exc,))
+                exc = ConnectionError(str(e), errors=(e,))
             self._log_request(
                 method=method,
                 target=target,
                 headers=resolved_headers,
                 body=body,
-                exception=resolved_exc,
+                exception=exc,
             )
-            raise resolved_exc from None
+            raise exc from None
 
         meta = ApiResponseMeta(
             resp.status_code,
