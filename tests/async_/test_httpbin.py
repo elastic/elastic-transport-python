@@ -25,9 +25,8 @@ from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 from ..test_httpbin import parse_httpbin
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 async def test_simple_request(httpbin_node_config):
     t = AsyncTransport([httpbin_node_config])
 
@@ -59,6 +58,7 @@ async def test_simple_request(httpbin_node_config):
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
+@pytest.mark.asyncio
 async def test_node(httpbin_node_config):
     def new_node(**kwargs):
         return AiohttpHttpNode(dataclasses.replace(httpbin_node_config, **kwargs))

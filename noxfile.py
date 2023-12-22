@@ -71,10 +71,9 @@ def test(session):
     session.run("coverage", "report", "-m")
 
 
-@nox.session(python=["3"])
+@nox.session(python="3")
 def docs(session):
     session.install(".[develop]")
-    session.install("-rdocs/sphinx/requirements.txt")
 
     session.chdir("docs/sphinx")
     session.run(

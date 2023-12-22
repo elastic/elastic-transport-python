@@ -36,7 +36,6 @@ TLSv1_0_URL = "https://tls-v1-0.badssl.com:1010"
 TLSv1_1_URL = "https://tls-v1-1.badssl.com:1011"
 TLSv1_2_URL = "https://tls-v1-2.badssl.com:1012"
 
-pytestmark = pytest.mark.asyncio
 node_classes = pytest.mark.parametrize(
     "node_class",
     [AiohttpHttpNode, Urllib3HttpNode, RequestsHttpNode, HttpxAsyncHttpNode],
@@ -99,6 +98,7 @@ def tlsv1_1_supported() -> bool:
     ["url", "ssl_version"],
     supported_version_params,
 )
+@pytest.mark.asyncio
 async def test_supported_tls_versions(node_class, url: str, ssl_version: int):
     if url in (TLSv1_0_URL, TLSv1_1_URL) and not tlsv1_1_supported():
         pytest.skip("TLSv1.1 isn't supported by this OpenSSL distribution")
@@ -114,6 +114,7 @@ async def test_supported_tls_versions(node_class, url: str, ssl_version: int):
     ["url", "ssl_version"],
     unsupported_version_params,
 )
+@pytest.mark.asyncio
 async def test_unsupported_tls_versions(node_class, url: str, ssl_version: int):
     node_config = url_to_node_config(url).replace(ssl_version=ssl_version)
     node = node_class(node_config)
