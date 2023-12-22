@@ -26,10 +26,9 @@ from multidict import CIMultiDict
 from elastic_transport import AiohttpHttpNode, NodeConfig
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
-pytestmark = pytest.mark.asyncio
-
 
 class TestAiohttpHttpNode:
+    @pytest.mark.asyncio
     async def _get_mock_node(self, node_config, response_body=b"{}"):
         node = AiohttpHttpNode(node_config)
         node._create_aiohttp_session()
@@ -57,6 +56,7 @@ class TestAiohttpHttpNode:
         node.session.request = _dummy_request
         return node
 
+    @pytest.mark.asyncio
     async def test_aiohttp_options(self):
         node = await self._get_mock_node(
             NodeConfig(scheme="http", host="localhost", port=80)
@@ -85,6 +85,7 @@ class TestAiohttpHttpNode:
             ),
         }
 
+    @pytest.mark.asyncio
     async def test_aiohttp_options_fingerprint(self):
         node = await self._get_mock_node(
             NodeConfig(
@@ -121,6 +122,7 @@ class TestAiohttpHttpNode:
         "options",
         [(5, 5, 5), (None, 5, 5), (5, None, 0), (None, None, 0), (5, 5), (None, 0)],
     )
+    @pytest.mark.asyncio
     async def test_aiohttp_options_timeout(self, options):
         if len(options) == 3:
             constructor_timeout, request_timeout, aiohttp_timeout = options
@@ -157,6 +159,7 @@ class TestAiohttpHttpNode:
             ),
         }
 
+    @pytest.mark.asyncio
     async def test_http_compression(self):
         node = await self._get_mock_node(
             NodeConfig(scheme="http", host="localhost", port=80, http_compress=True)
@@ -178,6 +181,7 @@ class TestAiohttpHttpNode:
         assert gzip.decompress(kwargs["data"]) == b"{}"
 
     @pytest.mark.parametrize("http_compress", [None, False])
+    @pytest.mark.asyncio
     async def test_no_http_compression(self, http_compress):
         node = await self._get_mock_node(
             NodeConfig(
@@ -197,6 +201,7 @@ class TestAiohttpHttpNode:
         assert kwargs["data"] == b"{}"
 
     @pytest.mark.parametrize("path_prefix", ["url", "/url"])
+    @pytest.mark.asyncio
     async def test_uses_https_if_verify_certs_is_off(self, path_prefix):
         with warnings.catch_warnings(record=True) as w:
             await self._get_mock_node(
@@ -215,6 +220,7 @@ class TestAiohttpHttpNode:
             == str(w[0].message)
         )
 
+    @pytest.mark.asyncio
     async def test_uses_https_if_verify_certs_is_off_no_show_warning(self):
         with warnings.catch_warnings(record=True) as w:
             node = await self._get_mock_node(
@@ -230,6 +236,7 @@ class TestAiohttpHttpNode:
 
         assert w == []
 
+    @pytest.mark.asyncio
     async def test_merge_headers(self):
         node = await self._get_mock_node(
             NodeConfig(
@@ -254,6 +261,7 @@ class TestAiohttpHttpNode:
         }
 
     @pytest.mark.parametrize("aiohttp_fixed_head_bug", [True, False])
+    @pytest.mark.asyncio
     async def test_head_workaround(self, aiohttp_fixed_head_bug):
         from elastic_transport._node import _http_aiohttp
 
@@ -281,6 +289,7 @@ class TestAiohttpHttpNode:
             _http_aiohttp._AIOHTTP_FIXED_HEAD_BUG = prev
 
 
+@pytest.mark.asyncio
 async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
     with warnings.catch_warnings(record=True) as w:
         node = AiohttpHttpNode(
@@ -297,6 +306,7 @@ async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
     assert [str(x.message) for x in w if x.category != DeprecationWarning] == []
 
 
+@pytest.mark.asyncio
 async def test_default_headers():
     node = AiohttpHttpNode(NodeConfig(scheme="https", host="httpbin.org", port=443))
     resp, data = await node.perform_request("GET", "/anything")
@@ -307,6 +317,7 @@ async def test_default_headers():
     assert headers == {"Host": "httpbin.org", "User-Agent": DEFAULT_USER_AGENT}
 
 
+@pytest.mark.asyncio
 async def test_custom_headers():
     node = AiohttpHttpNode(
         NodeConfig(
@@ -336,6 +347,7 @@ async def test_custom_headers():
     }
 
 
+@pytest.mark.asyncio
 async def test_custom_user_agent():
     node = AiohttpHttpNode(
         NodeConfig(
@@ -370,6 +382,7 @@ def test_repr():
     assert "<AiohttpHttpNode(https://localhost:443)>" == repr(node)
 
 
+@pytest.mark.asyncio
 async def test_head():
     node = AiohttpHttpNode(
         NodeConfig(scheme="https", host="httpbin.org", port=443, http_compress=True)

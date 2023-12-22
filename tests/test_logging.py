@@ -31,15 +31,13 @@ from elastic_transport import (
 from elastic_transport._compat import await_if_coro
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
-pytestmark = pytest.mark.asyncio
-
-
 node_class = pytest.mark.parametrize(
     "node_class", [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode]
 )
 
 
 @node_class
+@pytest.mark.asyncio
 async def test_debug_logging(node_class, httpbin_node_config):
     debug_logging()
 
@@ -95,6 +93,7 @@ async def test_debug_logging(node_class, httpbin_node_config):
 
 
 @node_class
+@pytest.mark.asyncio
 async def test_debug_logging_uncompressed_body(httpbin_node_config, node_class):
     debug_logging()
     stream = io.StringIO()
@@ -118,6 +117,7 @@ async def test_debug_logging_uncompressed_body(httpbin_node_config, node_class):
 
 
 @node_class
+@pytest.mark.asyncio
 async def test_debug_logging_no_body(httpbin_node_config, node_class):
     debug_logging()
     stream = io.StringIO()
@@ -138,6 +138,7 @@ async def test_debug_logging_no_body(httpbin_node_config, node_class):
 
 
 @node_class
+@pytest.mark.asyncio
 async def test_debug_logging_error(httpbin_node_config, node_class):
     debug_logging()
     stream = io.StringIO()

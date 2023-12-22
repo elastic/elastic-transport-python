@@ -43,9 +43,8 @@ from elastic_transport._node._base import DEFAULT_USER_AGENT
 from elastic_transport.client_utils import DEFAULT
 from tests.conftest import AsyncDummyNode
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 async def test_async_transport_httpbin(httpbin_node_config):
     t = AsyncTransport([httpbin_node_config], meta_header=False)
     resp, data = await t.perform_request("GET", "/anything?key=value")
@@ -62,6 +61,7 @@ async def test_async_transport_httpbin(httpbin_node_config):
 @pytest.mark.skipif(
     sys.version_info < (3, 8), reason="Mock didn't support async before Python 3.8"
 )
+@pytest.mark.asyncio
 async def test_transport_close_node_pool():
     t = AsyncTransport([NodeConfig("http", "localhost", 443)])
     with mock.patch.object(t.node_pool.all()[0], "close") as node_close:
@@ -69,6 +69,7 @@ async def test_transport_close_node_pool():
     node_close.assert_called_with()
 
 
+@pytest.mark.asyncio
 async def test_request_with_custom_user_agent_header():
     t = AsyncTransport(
         [NodeConfig("http", "localhost", 80)],
@@ -85,6 +86,7 @@ async def test_request_with_custom_user_agent_header():
     } == t.node_pool.get().calls[0][1]
 
 
+@pytest.mark.asyncio
 async def test_body_gets_encoded_into_bytes():
     t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class=AsyncDummyNode)
 
@@ -98,6 +100,7 @@ async def test_body_gets_encoded_into_bytes():
     assert kwargs["body"] == b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd"}'
 
 
+@pytest.mark.asyncio
 async def test_body_bytes_get_passed_untouched():
     t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class=AsyncDummyNode)
 
@@ -123,6 +126,7 @@ def test_kwargs_passed_on_to_node_pool():
     assert dt is t.node_pool.max_dead_node_backoff
 
 
+@pytest.mark.asyncio
 async def test_request_will_fail_after_x_retries():
     t = AsyncTransport(
         [
@@ -145,6 +149,7 @@ async def test_request_will_fail_after_x_retries():
 
 
 @pytest.mark.parametrize("retry_on_timeout", [True, False])
+@pytest.mark.asyncio
 async def test_retry_on_timeout(retry_on_timeout):
     t = AsyncTransport(
         [
@@ -179,6 +184,7 @@ async def test_retry_on_timeout(retry_on_timeout):
         assert len(e.value.errors) == 0
 
 
+@pytest.mark.asyncio
 async def test_retry_on_status():
     t = AsyncTransport(
         [
@@ -222,6 +228,7 @@ async def test_retry_on_status():
     ]
 
 
+@pytest.mark.asyncio
 async def test_failed_connection_will_be_marked_as_dead():
     t = AsyncTransport(
         [
@@ -250,6 +257,7 @@ async def test_failed_connection_will_be_marked_as_dead():
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
 
+@pytest.mark.asyncio
 async def test_resurrected_connection_will_be_marked_as_live_on_success():
     for method in ("GET", "HEAD"):
         t = AsyncTransport(
@@ -270,6 +278,7 @@ async def test_resurrected_connection_will_be_marked_as_live_on_success():
         assert 1 == len(t.node_pool._dead_nodes.queue)
 
 
+@pytest.mark.asyncio
 async def test_mark_dead_error_doesnt_raise():
     t = AsyncTransport(
         [
@@ -289,6 +298,7 @@ async def test_mark_dead_error_doesnt_raise():
     mark_dead.assert_called_with(bad_node)
 
 
+@pytest.mark.asyncio
 async def test_node_class_as_string():
     t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class="aiohttp")
     assert isinstance(t.node_pool.get(), AiohttpHttpNode)
@@ -302,6 +312,7 @@ async def test_node_class_as_string():
 
 
 @pytest.mark.parametrize(["status", "boolean"], [(200, True), (299, True)])
+@pytest.mark.asyncio
 async def test_head_response_true(status, boolean):
     t = AsyncTransport(
         [NodeConfig("http", "localhost", 80, _extras={"status": status, "body": b""})],
@@ -312,6 +323,7 @@ async def test_head_response_true(status, boolean):
     assert data is None
 
 
+@pytest.mark.asyncio
 async def test_head_response_false():
     t = AsyncTransport(
         [NodeConfig("http", "localhost", 80, _extras={"status": 404, "body": b""})],
@@ -328,6 +340,7 @@ async def test_head_response_false():
     "node_class",
     ["aiohttp", AiohttpHttpNode],
 )
+@pytest.mark.asyncio
 async def test_transport_client_meta_node_class(node_class):
     t = AsyncTransport([NodeConfig("http", "localhost", 80)], node_class=node_class)
     assert (
@@ -359,6 +372,7 @@ def test_transport_and_node_are_async(node_class):
     )
 
 
+@pytest.mark.asyncio
 async def test_sniff_on_start():
     calls = []
 
@@ -385,6 +399,7 @@ async def test_sniff_on_start():
     assert sniff_options == SniffOptions(is_initial_sniff=True, sniff_timeout=0.5)
 
 
+@pytest.mark.asyncio
 async def test_sniff_before_requests():
     calls = []
 
@@ -410,6 +425,7 @@ async def test_sniff_before_requests():
     assert sniff_options == SniffOptions(is_initial_sniff=False, sniff_timeout=0.5)
 
 
+@pytest.mark.asyncio
 async def test_sniff_on_node_failure():
     calls = []
 
@@ -454,6 +470,7 @@ async def test_sniff_on_node_failure():
         {"sniff_before_requests": True},
     ],
 )
+@pytest.mark.asyncio
 async def test_error_with_sniffing_enabled_without_callback(kwargs):
     with pytest.raises(ValueError) as e:
         AsyncTransport([NodeConfig("http", "localhost", 80)], **kwargs)
@@ -461,6 +478,7 @@ async def test_error_with_sniffing_enabled_without_callback(kwargs):
     assert str(e.value) == "Enabling sniffing requires specifying a 'sniff_callback'"
 
 
+@pytest.mark.asyncio
 async def test_error_sniffing_callback_without_sniffing_enabled():
     with pytest.raises(ValueError) as e:
         AsyncTransport(
@@ -473,6 +491,7 @@ async def test_error_sniffing_callback_without_sniffing_enabled():
     )
 
 
+@pytest.mark.asyncio
 async def test_heterogeneous_node_config_warning_with_sniffing():
     with warnings.catch_warnings(record=True) as w:
         AsyncTransport(
@@ -494,6 +513,7 @@ async def test_heterogeneous_node_config_warning_with_sniffing():
 
 
 @pytest.mark.parametrize("async_sniff_callback", [True, False])
+@pytest.mark.asyncio
 async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
     sniffed_nodes = [
         NodeConfig("http", "localhost", 80),
@@ -545,6 +565,7 @@ async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
     assert set(sniffed_nodes) == {node.config for node in t.node_pool.all()}
 
 
+@pytest.mark.asyncio
 async def test_sniff_error_resets_lock_and_last_sniffed_at():
     def sniff_error(*_):
         raise TransportError("This is an error!")
@@ -574,6 +595,7 @@ async def _empty_sniff(*_):
 
 
 @pytest.mark.parametrize("sniff_callback", [lambda *_: [], _empty_sniff])
+@pytest.mark.asyncio
 async def test_sniff_on_start_no_results_errors(sniff_callback):
     t = AsyncTransport(
         [
@@ -592,6 +614,7 @@ async def test_sniff_on_start_no_results_errors(sniff_callback):
 
 
 @pytest.mark.parametrize("pool_size", [1, 8])
+@pytest.mark.asyncio
 async def test_multiple_tasks_test(pool_size):
     node_configs = [
         NodeConfig("http", "localhost", 80),
@@ -629,6 +652,7 @@ async def test_multiple_tasks_test(pool_size):
     assert sum([await task for task in tasks]) >= 1000
 
 
+@pytest.mark.asyncio
 async def test_httpbin(httpbin_node_config):
     t = AsyncTransport([httpbin_node_config])
     resp = await t.perform_request("GET", "/anything")
