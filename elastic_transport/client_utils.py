@@ -21,7 +21,7 @@ import dataclasses
 import re
 from platform import python_version
 from typing import Optional, Tuple, TypeVar, Union
-from urllib.parse import quote as percent_encode
+from urllib.parse import quote as _quote
 
 from urllib3.exceptions import LocationParseError
 from urllib3.util import parse_url
@@ -147,6 +147,18 @@ def to_bytes(
     if isinstance(value, str):
         return value.encode(encoding, errors)
     return value
+
+
+def percent_encode(
+    string: Union[bytes, str],
+    safe: str = "/",
+    encoding: Optional[str] = None,
+    errors: Optional[str] = None,
+) -> str:
+    """Percent-encodes a string so it can be used in an HTTP request target"""
+    # This function used to add `~` to unreserverd characters, but this was fixed in Python 3.7.
+    # Keeping the function here as it is part of the public API.
+    return _quote(string, safe, encoding=encoding, errors=errors)  # type: ignore[arg-type]
 
 
 def basic_auth_to_header(basic_auth: Tuple[str, str]) -> str:
