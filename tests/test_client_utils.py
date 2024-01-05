@@ -236,8 +236,15 @@ def test_url_with_auth_into_authorization():
 
     node_config = url_to_node_config("http://me@example.com:password@localhost:9200")
     assert node_config.headers == {
-        "Authorization": "Basic bWUlNDBleGFtcGxlLmNvbTpwYXNzd29yZA=="
+        "Authorization": "Basic bWVAZXhhbXBsZS5jb206cGFzc3dvcmQ="
     }
+
+    # ensure username and password are passed to basic auth unmodified
+    basic_auth = basic_auth_to_header(("user@", "@password"))
+    node_config = url_to_node_config("http://user@:@password@localhost:9200")
+    assert node_config.headers == {"Authorization": basic_auth}
+    node_config = url_to_node_config("http://user%40:%40password@localhost:9200")
+    assert node_config.headers == {"Authorization": basic_auth}
 
 
 @pytest.mark.parametrize(
