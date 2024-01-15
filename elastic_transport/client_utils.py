@@ -19,6 +19,7 @@ import base64
 import binascii
 import dataclasses
 import re
+import urllib.parse
 from platform import python_version
 from typing import Optional, Tuple, TypeVar, Union
 from urllib.parse import quote as _quote
@@ -218,7 +219,13 @@ def url_to_node_config(
 
     headers = {}
     if parsed_url.auth:
-        username, _, password = parsed_url.auth.partition(":")
+        # `urllib3.util.url_parse` ensures `parsed_url` is correctly
+        # percent-encoded but does not percent-decode userinfo, so we have to
+        # do it ourselves to build the basic auth header correctly.
+        encoded_username, _, encoded_password = parsed_url.auth.partition(":")
+        username = urllib.parse.unquote(encoded_username)
+        password = urllib.parse.unquote(encoded_password)
+
         headers["authorization"] = basic_auth_to_header((username, password))
 
     host = parsed_url.host.strip("[]")
