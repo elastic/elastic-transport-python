@@ -66,9 +66,6 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
             else:
                 ssl_context = ssl_context_from_node_config(config)
 
-                if config.ca_certs is not None and not config.verify_certs:
-                    raise ValueError("Cannot set 'ca_certs' when 'verify_certs=False'")
-
                 ca_certs = (
                     DEFAULT_CA_CERTS if config.ca_certs is None else config.ca_certs
                 )
