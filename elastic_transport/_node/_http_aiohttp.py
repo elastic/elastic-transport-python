@@ -259,7 +259,7 @@ class AiohttpHttpNode(BaseAsyncNode):
                 limit_per_host=self._connections_per_node,
                 use_dns_cache=True,
                 enable_cleanup_closed=True,
-                ssl=self._ssl_context,
+                ssl=self._ssl_context or False,
             ),
         )
 

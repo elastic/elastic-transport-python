@@ -272,12 +272,10 @@ class NodePool:
             )
 
     @overload
-    def resurrect(self, force: "Literal[True]" = ...) -> BaseNode:
-        ...
+    def resurrect(self, force: "Literal[True]" = ...) -> BaseNode: ...
 
     @overload
-    def resurrect(self, force: "Literal[False]" = ...) -> Optional[BaseNode]:
-        ...
+    def resurrect(self, force: "Literal[False]" = ...) -> Optional[BaseNode]: ...
 
     def resurrect(self, force: bool = False) -> Optional[BaseNode]:
         """
