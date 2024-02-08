@@ -15,7 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import asyncio
 import inspect
 import sys
 from pathlib import Path

@@ -248,7 +248,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         a chance to set AiohttpHttpNode.loop
         """
         if self._loop is None:
-            self._loop = get_running_loop()
+            self._loop = asyncio.get_running_loop()
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             skip_auto_headers=("accept", "accept-encoding", "user-agent"),
