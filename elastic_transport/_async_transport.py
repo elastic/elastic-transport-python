@@ -30,7 +30,7 @@ from typing import (
     Union,
 )
 
-from ._compat import await_if_coro, get_running_loop
+from ._compat import await_if_coro
 from ._exceptions import (
     ConnectionError,
     ConnectionTimeout,
@@ -459,6 +459,6 @@ class AsyncTransport(Transport):
         """
         if self._loop is not None:
             return  # Call at most once!
-        self._loop = get_running_loop()
+        self._loop = asyncio.get_running_loop()
         if self._sniff_on_start:
             await self.sniff(True)

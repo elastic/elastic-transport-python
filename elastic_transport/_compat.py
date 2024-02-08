@@ -30,16 +30,6 @@ if sys.version_info >= (3, 7):  # dict is insert ordered on Python 3.7+
 else:
     from collections import OrderedDict as ordered_dict
 
-try:
-    from asyncio import get_running_loop
-except ImportError:
-
-    def get_running_loop() -> asyncio.AbstractEventLoop:
-        loop = asyncio.get_event_loop()
-        if not loop.is_running():
-            raise RuntimeError("no running event loop")
-        return loop
-
 
 T = TypeVar("T")
 
@@ -118,7 +108,6 @@ def warn_stacklevel() -> int:
 
 __all__ = [
     "await_if_coro",
-    "get_running_loop",
     "ordered_dict",
     "quote",
     "urlparse",

@@ -25,7 +25,7 @@ import ssl
 import warnings
 from typing import Optional, Union
 
-from .._compat import get_running_loop, warn_stacklevel
+from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
