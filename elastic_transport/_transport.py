@@ -52,7 +52,13 @@ from ._models import (
     NodeConfig,
     SniffOptions,
 )
-from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
+from ._node import (
+    AiohttpHttpNode,
+    BaseNode,
+    HttpxAsyncHttpNode,
+    RequestsHttpNode,
+    Urllib3HttpNode,
+)
 from ._node_pool import NodePool, NodeSelector
 from ._serializer import DEFAULT_SERIALIZERS, Serializer, SerializerCollection
 from ._version import __version__
@@ -63,6 +69,7 @@ NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
     "urllib3": Urllib3HttpNode,
     "requests": RequestsHttpNode,
     "aiohttp": AiohttpHttpNode,
+    "httpxasync": HttpxAsyncHttpNode,
 }
 # These are HTTP status errors that shouldn't be considered
 # 'errors' for marking a node as dead. These errors typically

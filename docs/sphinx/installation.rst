@@ -10,3 +10,5 @@ Additional dependencies are required to use some features of the ``elastic-trans
 Install the ``requests`` package to use :class:`elastic_transport.RequestsHttpNode`.
 
 Install the ``aiohttp`` package to use :class:`elastic_transport.AiohttpHttpNode`.
+
+Install the ``httpx`` package to use :class:`elastic_transport.HttpxAsyncHttpNode`.
