@@ -269,18 +269,20 @@ for i, _protocol_attr in enumerate(_SSL_PROTOCOL_VERSION_ATTRS):
         _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_tls_version_value] = _tls_version_value
 
     # Because we're setting a minimum version we binary OR all the options together.
-    _SSL_PROTOCOL_VERSION_TO_OPTIONS[
-        _protocol_value
-    ] = _SSL_PROTOCOL_VERSION_DEFAULT | sum(
-        getattr(ssl, f"OP_NO_{_attr}", 0) for _attr in _SSL_PROTOCOL_VERSION_ATTRS[:i]
+    _SSL_PROTOCOL_VERSION_TO_OPTIONS[_protocol_value] = (
+        _SSL_PROTOCOL_VERSION_DEFAULT
+        | sum(
+            getattr(ssl, f"OP_NO_{_attr}", 0)
+            for _attr in _SSL_PROTOCOL_VERSION_ATTRS[:i]
+        )
     )
 
 # TLSv1.3 is unique, doesn't have a PROTOCOL_TLSvX counterpart. So we have to set it manually.
 if _HAS_TLS_VERSION:
     try:
-        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[
+        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[ssl.TLSVersion.TLSv1_3] = (
             ssl.TLSVersion.TLSv1_3
-        ] = ssl.TLSVersion.TLSv1_3
+        )
     except AttributeError:  # pragma: nocover
         pass
 

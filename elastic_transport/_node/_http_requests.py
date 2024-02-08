@@ -75,9 +75,9 @@ try:
                     ssl_context.check_hostname = False
                     ssl_context.verify_mode = ssl.CERT_NONE
 
-                    pool_kwargs[
-                        "assert_fingerprint"
-                    ] = self._node_config.ssl_assert_fingerprint
+                    pool_kwargs["assert_fingerprint"] = (
+                        self._node_config.ssl_assert_fingerprint
+                    )
                     pool_kwargs["cert_reqs"] = "CERT_NONE"
                     pool_kwargs["assert_hostname"] = False
 
@@ -203,9 +203,11 @@ class RequestsHttpNode(BaseNode):
         )
         prepared_request = self.session.prepare_request(request)
         send_kwargs = {
-            "timeout": request_timeout
-            if request_timeout is not DEFAULT
-            else self.config.request_timeout
+            "timeout": (
+                request_timeout
+                if request_timeout is not DEFAULT
+                else self.config.request_timeout
+            )
         }
         send_kwargs.update(
             self.session.merge_environment_settings(  # type: ignore[arg-type]
