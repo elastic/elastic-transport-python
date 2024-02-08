@@ -1,5 +1,9 @@
 # Changelog
 
+## 8.12.0
+
+- Fix basic auth built from percent-encoded URLs (#143)
+
 ## 8.11.0
 
 - Always set default HTTPS port to 443 (#127)
