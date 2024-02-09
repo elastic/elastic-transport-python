@@ -39,7 +39,6 @@ from elastic_transport import (
     TransportWarning,
     Urllib3HttpNode,
 )
-from elastic_transport._compat import get_running_loop
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 from elastic_transport.client_utils import DEFAULT
 from tests.conftest import AsyncDummyNode
@@ -532,7 +531,7 @@ async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
         NodeConfig("http", "localhost", 81),
     ]
 
-    loop = get_running_loop()
+    loop = asyncio.get_running_loop()
     sniffed_at = 0.0
 
     # Test that we accept both sync and async sniff_callbacks
@@ -650,7 +649,7 @@ async def test_multiple_tasks_test(pool_size):
         sniff_callback=sniff_callback,
     )
 
-    loop = get_running_loop()
+    loop = asyncio.get_running_loop()
     start = loop.time()
 
     async def run_requests():

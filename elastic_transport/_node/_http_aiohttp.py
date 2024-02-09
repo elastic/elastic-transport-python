@@ -25,7 +25,7 @@ import ssl
 import warnings
 from typing import Optional, Union
 
-from .._compat import get_running_loop, warn_stacklevel
+from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
@@ -248,7 +248,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         a chance to set AiohttpHttpNode.loop
         """
         if self._loop is None:
-            self._loop = get_running_loop()
+            self._loop = asyncio.get_running_loop()
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             skip_auto_headers=("accept", "accept-encoding", "user-agent"),
