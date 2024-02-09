@@ -121,7 +121,7 @@ class Transport:
         ] = None,
         meta_header: bool = True,
         client_meta_service: Tuple[str, str] = DEFAULT_CLIENT_META_SERVICE,
-    ) -> None:
+    ):
         """
         :arg node_configs: List of 'NodeConfig' instances to create initial set of nodes.
         :arg node_class: subclass of :class:`~elastic_transport.BaseNode` to use
@@ -332,7 +332,7 @@ class Transport:
             node = self.node_pool.get()
             start_time = time.time()
             try:
-                meta, raw_data = node.perform_request(
+                resp = node.perform_request(
                     method,
                     target,
                     body=request_body,
@@ -345,26 +345,32 @@ class Transport:
                         method,
                         node.base_url,
                         target,
-                        meta.status,
+                        resp.meta.status,
                         time.time() - start_time,
                     )
                 )
 
                 if method != "HEAD":
-                    data = self.serializers.loads(raw_data, meta.mimetype)
+                    body = self.serializers.loads(resp.body, resp.meta.mimetype)
                 else:
-                    data = None
+                    body = None
 
-                if meta.status in retry_on_status:
+                if resp.meta.status in retry_on_status:
                     retry = True
                     # Keep track of the last response we see so we can return
                     # it in case the retried request returns with a transport error.
-                    last_response = TransportApiResponse(meta, data)
+                    last_response = TransportApiResponse(resp.meta, body)
 
             except TransportError as e:
                 _logger.info(
                     "%s %s%s [status:%s duration:%.3fs]"
-                    % (method, node.base_url, target, "N/A", time.time() - start_time)
+                    % (
+                        method,
+                        node.base_url,
+                        target,
+                        "N/A",
+                        time.time() - start_time,
+                    )
                 )
 
                 if isinstance(e, ConnectionTimeout):
@@ -411,8 +417,8 @@ class Transport:
                 # If we got back a response we need to check if that status
                 # is indicative of a healthy node even if it's a non-2XX status
                 if (
-                    200 <= meta.status < 299
-                    or meta.status in NOT_DEAD_NODE_HTTP_STATUSES
+                    200 <= resp.meta.status < 299
+                    or resp.meta.status in NOT_DEAD_NODE_HTTP_STATUSES
                 ):
                     self.node_pool.mark_live(node)
                 else:
@@ -429,11 +435,11 @@ class Transport:
                 # We either got a response we're happy with or
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
-                    return TransportApiResponse(meta, data)
+                    return TransportApiResponse(resp.meta, body)
                 else:
                     _logger.warning(
                         "Retrying request after non-successful status %d (attempt %d of %d)",
-                        meta.status,
+                        resp.meta.status,
                         attempt,
                         max_retries,
                     )
