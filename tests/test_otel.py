@@ -30,7 +30,7 @@ def test_span():
     tracer = tracer_provider.get_tracer(__name__)
 
     otel = OpenTelemetry(enabled=True, tracer=tracer)
-    with otel.span("GET", "my-endpoint"):
+    with otel.span("GET"):
         pass
 
     spans = memory_exporter.get_finished_spans()
