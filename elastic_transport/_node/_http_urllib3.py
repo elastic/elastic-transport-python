@@ -24,7 +24,7 @@ from typing import Any, Dict, Optional, Union
 try:
     from importlib import metadata
 except ImportError:
-    import importlib_metadata as metadata  # type: ignore[import-not-found,no-redef]
+    import importlib_metadata as metadata  # type: ignore[no-redef]
 
 import urllib3
 from urllib3.exceptions import ConnectTimeoutError, NewConnectionError, ReadTimeoutError

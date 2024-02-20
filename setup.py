@@ -52,7 +52,6 @@ setup(
     install_requires=[
         "urllib3>=1.26.2, <3",
         "certifi",
-        "dataclasses; python_version<'3.7'",
         "importlib-metadata; python_version<'3.8'",
     ],
     python_requires=">=3.7",
@@ -69,6 +68,8 @@ setup(
             "aiohttp",
             "httpx",
             "respx",
+            "opentelemetry-api",
+            "opentelemetry-sdk",
             # Override Read the Docs default (sphinx<2)
             "sphinx>2",
             "furo",
