@@ -60,6 +60,7 @@ from ._node import (
     Urllib3HttpNode,
 )
 from ._node_pool import NodePool, NodeSelector
+from ._otel import OpenTelemetry
 from ._serializer import DEFAULT_SERIALIZERS, Serializer, SerializerCollection
 from ._version import __version__
 from .client_utils import client_meta_version, resolve_default
@@ -225,6 +226,9 @@ class Transport:
         self.retry_on_status = retry_on_status
         self.retry_on_timeout = retry_on_timeout
 
+        # Instrumentation
+        self.otel = OpenTelemetry()
+
         # Build the NodePool from all the options
         node_pool_kwargs: Dict[str, Any] = {}
         if node_selector_class is not None:
@@ -252,7 +256,7 @@ class Transport:
         if sniff_on_start:
             self.sniff(True)
 
-    def perform_request(  # type: ignore[return]
+    def perform_request(
         self,
         method: str,
         target: str,
@@ -289,6 +293,32 @@ class Transport:
         :arg client_meta: Extra client metadata key-value pairs to send in the client meta header.
         :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
+        with self.otel.span(method):
+            return self._perform_request(
+                method,
+                target,
+                body=body,
+                headers=headers,
+                max_retries=max_retries,
+                retry_on_status=retry_on_status,
+                retry_on_timeout=retry_on_timeout,
+                request_timeout=request_timeout,
+                client_meta=client_meta,
+            )
+
+    def _perform_request(  # type: ignore[return]
+        self,
+        method: str,
+        target: str,
+        *,
+        body: Optional[Any] = None,
+        headers: Union[Mapping[str, Any], DefaultType] = DEFAULT,
+        max_retries: Union[int, DefaultType] = DEFAULT,
+        retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
+        retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
+        request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
+        client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
+    ) -> TransportApiResponse:
         if headers is DEFAULT:
             request_headers = HttpHeaders()
         else:
