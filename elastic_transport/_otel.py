@@ -38,7 +38,6 @@ class OpenTelemetry:
             enabled = os.environ.get(ENABLED_ENV_VAR, "false") != "false"
         self.tracer = tracer or _tracer
         self.enabled = enabled and self.tracer is not None
-        print(self.enabled)
 
     @contextlib.contextmanager
     def span(self, method: str) -> typing.Generator[None, None, None]:
