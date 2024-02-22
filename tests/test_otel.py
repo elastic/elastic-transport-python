@@ -36,7 +36,7 @@ def test_minimal_span():
     tracer, memory_exporter = setup_tracing()
 
     otel = OpenTelemetry(enabled=True, tracer=tracer)
-    with otel.span("GET", path_parts={}):
+    with otel.span("GET", endpoint_id=None, path_parts={}):
         pass
 
     spans = memory_exporter.get_finished_spans()
@@ -52,7 +52,7 @@ def test_detailed_span():
     tracer, memory_exporter = setup_tracing()
     otel = OpenTelemetry(enabled=True, tracer=tracer)
     with otel.span(
-        "GET", "ml.close_job", path_parts={"job_id": "my-job", "foo": "bar"}
+        "GET", endpoint_id="ml.close_job", path_parts={"job_id": "my-job", "foo": "bar"}
     ):
         pass
 
