@@ -150,12 +150,6 @@ def to_bytes(
     return value
 
 
-# Python 3.7 added '~' to the safe list for urllib.parse.quote()
-_QUOTE_ALWAYS_SAFE = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~"
-)
-
-
 def percent_encode(
     string: Union[bytes, str],
     safe: str = "/",
@@ -163,9 +157,8 @@ def percent_encode(
     errors: Optional[str] = None,
 ) -> str:
     """Percent-encodes a string so it can be used in an HTTP request target"""
-    # Redefines 'urllib.parse.quote()' to always have the '~' character
-    # within the 'ALWAYS_SAFE' list. The character was added in Python 3.7
-    safe = "".join(_QUOTE_ALWAYS_SAFE.union(set(safe)))
+    # This function used to add `~` to unreserverd characters, but this was fixed in Python 3.7.
+    # Keeping the function here as it is part of the public API.
     return _quote(string, safe, encoding=encoding, errors=errors)  # type: ignore[arg-type]
 
 
