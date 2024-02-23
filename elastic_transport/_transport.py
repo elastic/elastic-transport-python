@@ -295,7 +295,7 @@ class Transport:
         :arg client_meta: Extra client metadata key-value pairs to send in the client meta header.
         :arg endpoint_id: The endpoint id of the request, such as `ml.close_job`.
             Used for OpenTelemetry instrumentation.
-        :arg path_parths: Dictionary with all dynamic value in the url path.
+        :arg path_paths: Dictionary with all dynamic value in the url path.
             Used for OpenTelemetry instrumentation.
         :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
