@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import os
-import typing
+from typing import Generator, Mapping, Optional
 
 try:
     from opentelemetry import trace
@@ -40,13 +40,21 @@ class OpenTelemetry:
         self.enabled = enabled and self.tracer is not None
 
     @contextlib.contextmanager
-    def span(self, method: str) -> typing.Generator[None, None, None]:
+    def span(
+        self,
+        method: str,
+        *,
+        endpoint_id: Optional[str],
+        path_parts: Mapping[str, str],
+    ) -> Generator[None, None, None]:
         if not self.enabled or self.tracer is None:
             yield
             return
 
-        span_name = method
+        span_name = endpoint_id or method
         with self.tracer.start_as_current_span(span_name) as span:
             span.set_attribute("http.request.method", method)
             span.set_attribute("db.system", "elasticsearch")
+            for key, value in path_parts.items():
+                span.set_attribute(f"db.elasticsearch.path_parts.{key}", value)
             yield

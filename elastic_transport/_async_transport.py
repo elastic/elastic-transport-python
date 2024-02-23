@@ -173,7 +173,7 @@ class AsyncTransport(Transport):
         # sniffing. Uses '_sniffing_task' instead.
         self._sniffing_lock = None  # type: ignore[assignment]
 
-    async def perform_request(  # type: ignore[override,return]
+    async def perform_request(  # type: ignore[override]
         self,
         method: str,
         target: str,
@@ -185,6 +185,8 @@ class AsyncTransport(Transport):
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
+        endpoint_id: Union[str, DefaultType] = DEFAULT,
+        path_parts: Union[Mapping[str, str], DefaultType] = DEFAULT,
     ) -> TransportApiResponse:
         """
         Perform the actual request. Retrieve a node from the node
@@ -208,8 +210,42 @@ class AsyncTransport(Transport):
         :arg retry_on_timeout: Set to true to retry after timeout errors.
         :arg request_timeout: Amount of time to wait for a response to fail with a timeout error.
         :arg client_meta: Extra client metadata key-value pairs to send in the client meta header.
+        :arg endpoint_id: The endpoint id of the request, such as `ml.close_job`.
+            Used for OpenTelemetry instrumentation.
+        :arg path_paths: Dictionary with all dynamic value in the url path.
+            Used for OpenTelemetry instrumentation.
         :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
+        with self.otel.span(
+            method,
+            endpoint_id=resolve_default(endpoint_id, None),
+            path_parts=resolve_default(path_parts, {}),
+        ):
+            return await self._perform_request(
+                method,
+                target,
+                body=body,
+                headers=headers,
+                max_retries=max_retries,
+                retry_on_status=retry_on_status,
+                retry_on_timeout=retry_on_timeout,
+                request_timeout=request_timeout,
+                client_meta=client_meta,
+            )
+
+    async def _perform_request(  # type: ignore[override,return]
+        self,
+        method: str,
+        target: str,
+        *,
+        body: Optional[Any] = None,
+        headers: Union[Mapping[str, Any], DefaultType] = DEFAULT,
+        max_retries: Union[int, DefaultType] = DEFAULT,
+        retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
+        retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
+        request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
+        client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
+    ) -> TransportApiResponse:
         await self._async_call()
 
         if headers is DEFAULT:

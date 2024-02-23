@@ -22,20 +22,46 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from elastic_transport._otel import OpenTelemetry
 
 
-def test_span():
+def setup_tracing():
     tracer_provider = TracerProvider()
     memory_exporter = InMemorySpanExporter()
     span_processor = export.SimpleSpanProcessor(memory_exporter)
     tracer_provider.add_span_processor(span_processor)
     tracer = tracer_provider.get_tracer(__name__)
 
+    return tracer, memory_exporter
+
+
+def test_minimal_span():
+    tracer, memory_exporter = setup_tracing()
+
     otel = OpenTelemetry(enabled=True, tracer=tracer)
-    with otel.span("GET"):
+    with otel.span("GET", endpoint_id=None, path_parts={}):
         pass
 
     spans = memory_exporter.get_finished_spans()
     assert len(spans) == 1
+    assert spans[0].name == "GET"
     assert spans[0].attributes == {
         "http.request.method": "GET",
         "db.system": "elasticsearch",
+    }
+
+
+def test_detailed_span():
+    tracer, memory_exporter = setup_tracing()
+    otel = OpenTelemetry(enabled=True, tracer=tracer)
+    with otel.span(
+        "GET", endpoint_id="ml.close_job", path_parts={"job_id": "my-job", "foo": "bar"}
+    ):
+        pass
+
+    spans = memory_exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "ml.close_job"
+    assert spans[0].attributes == {
+        "http.request.method": "GET",
+        "db.system": "elasticsearch",
+        "db.elasticsearch.path_parts.job_id": "my-job",
+        "db.elasticsearch.path_parts.foo": "bar",
     }
