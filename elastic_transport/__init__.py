@@ -97,6 +97,13 @@ __all__ = [
     "Urllib3HttpNode",
 ]
 
+try:
+    from elastic_transport._serializer import OrjsonSerializer  # noqa: F401
+
+    __all__.append("OrjsonSerializer")
+except ModuleNotFoundError:
+    pass
+
 _logger = logging.getLogger("elastic_transport")
 _logger.addHandler(logging.NullHandler())
 del _logger

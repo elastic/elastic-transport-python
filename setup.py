@@ -70,6 +70,7 @@ setup(
             "respx",
             "opentelemetry-api",
             "opentelemetry-sdk",
+            "orjson",
             # Override Read the Docs default (sphinx<2)
             "sphinx>2",
             "furo",
