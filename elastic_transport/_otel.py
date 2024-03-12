@@ -55,6 +55,7 @@ class OpenTelemetry:
         with self.tracer.start_as_current_span(span_name) as span:
             span.set_attribute("http.request.method", method)
             span.set_attribute("db.system", "elasticsearch")
+            span.set_attribute("db.operation", endpoint_id)
             for key, value in path_parts.items():
                 span.set_attribute(f"db.elasticsearch.path_parts.{key}", value)
             yield
