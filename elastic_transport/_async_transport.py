@@ -220,8 +220,8 @@ class AsyncTransport(Transport):
             method,
             endpoint_id=resolve_default(endpoint_id, None),
             path_parts=resolve_default(path_parts, {}),
-        ):
-            return await self._perform_request(
+        ) as span:
+            response = await self._perform_request(
                 method,
                 target,
                 body=body,
@@ -232,6 +232,8 @@ class AsyncTransport(Transport):
                 request_timeout=request_timeout,
                 client_meta=client_meta,
             )
+            span.set_elastic_cloud_metadata(response.meta.headers)
+            return response
 
     async def _perform_request(  # type: ignore[override,return]
         self,

@@ -23,6 +23,7 @@ from typing import Generator, Mapping, Optional
 
 try:
     from opentelemetry import trace
+    from opentelemetry.trace import Span
 
     _tracer: trace.Tracer | None = trace.get_tracer("elastic-transport")
 except ModuleNotFoundError:
@@ -30,6 +31,23 @@ except ModuleNotFoundError:
 
 
 ENABLED_ENV_VAR = "OTEL_PYTHON_INSTRUMENTATION_ELASTICSEARCH_ENABLED"
+
+
+class OpenTelemetrySpan:
+    def __init__(self, otel_span: Optional[Span]):
+        self.otel_span = otel_span
+
+    def set_attribute(self, key: str, value: str) -> None:
+        if self.otel_span is not None:
+            self.otel_span.set_attribute(key, value)
+
+    def set_elastic_cloud_metadata(self, headers: Mapping[str, str]) -> None:
+        cluster_name = headers.get("X-Found-Handling-Cluster")
+        if cluster_name is not None:
+            self.set_attribute("db.elasticsearch.cluster.name", cluster_name)
+        node_name = headers.get("X-Found-Handling-Instance")
+        if node_name is not None:
+            self.set_attribute("db.elasticsearch.node.name", node_name)
 
 
 class OpenTelemetry:
@@ -46,17 +64,17 @@ class OpenTelemetry:
         *,
         endpoint_id: Optional[str],
         path_parts: Mapping[str, str],
-    ) -> Generator[None, None, None]:
+    ) -> Generator[OpenTelemetrySpan, None, None]:
         if not self.enabled or self.tracer is None:
-            yield
+            yield OpenTelemetrySpan(None)
             return
 
         span_name = endpoint_id or method
-        with self.tracer.start_as_current_span(span_name) as span:
-            span.set_attribute("http.request.method", method)
-            span.set_attribute("db.system", "elasticsearch")
+        with self.tracer.start_as_current_span(span_name) as otel_span:
+            otel_span.set_attribute("http.request.method", method)
+            otel_span.set_attribute("db.system", "elasticsearch")
             if endpoint_id is not None:
-                span.set_attribute("db.operation", endpoint_id)
+                otel_span.set_attribute("db.operation", endpoint_id)
             for key, value in path_parts.items():
-                span.set_attribute(f"db.elasticsearch.path_parts.{key}", value)
-            yield
+                otel_span.set_attribute(f"db.elasticsearch.path_parts.{key}", value)
+            yield OpenTelemetrySpan(otel_span)
