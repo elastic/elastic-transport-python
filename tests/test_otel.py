@@ -62,6 +62,7 @@ def test_detailed_span():
     assert spans[0].attributes == {
         "http.request.method": "GET",
         "db.system": "elasticsearch",
+        "db.operation": "ml.close_job",
         "db.elasticsearch.path_parts.job_id": "my-job",
         "db.elasticsearch.path_parts.foo": "bar",
     }
