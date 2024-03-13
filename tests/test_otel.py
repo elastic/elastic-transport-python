@@ -53,8 +53,13 @@ def test_detailed_span():
     otel = OpenTelemetry(enabled=True, tracer=tracer)
     with otel.span(
         "GET", endpoint_id="ml.close_job", path_parts={"job_id": "my-job", "foo": "bar"}
-    ):
-        pass
+    ) as span:
+        span.set_elastic_cloud_metadata(
+            {
+                "X-Found-Handling-Cluster": "e9106fc68e3044f0b1475b04bf4ffd5f",
+                "X-Found-Handling-Instance": "instance-0000000001",
+            }
+        )
 
     spans = memory_exporter.get_finished_spans()
     assert len(spans) == 1
@@ -65,4 +70,6 @@ def test_detailed_span():
         "db.operation": "ml.close_job",
         "db.elasticsearch.path_parts.job_id": "my-job",
         "db.elasticsearch.path_parts.foo": "bar",
+        "db.elasticsearch.cluster.name": "e9106fc68e3044f0b1475b04bf4ffd5f",
+        "db.elasticsearch.node.name": "instance-0000000001",
     }

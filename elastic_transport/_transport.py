@@ -303,8 +303,8 @@ class Transport:
             method,
             endpoint_id=resolve_default(endpoint_id, None),
             path_parts=resolve_default(path_parts, {}),
-        ):
-            return self._perform_request(
+        ) as span:
+            api_response = self._perform_request(
                 method,
                 target,
                 body=body,
@@ -315,6 +315,8 @@ class Transport:
                 request_timeout=request_timeout,
                 client_meta=client_meta,
             )
+            span.set_elastic_cloud_metadata(api_response.meta.headers)
+            return api_response
 
     def _perform_request(  # type: ignore[return]
         self,
