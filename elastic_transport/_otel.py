@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import os
-from typing import Any, Generator, Mapping, Optional
+from typing import Generator, Mapping, Optional
 
 try:
     from opentelemetry import trace
@@ -90,8 +90,6 @@ class OpenTelemetrySpan:
     def set_db_statement(self, serialized_body: bytes) -> None:
         if self.otel_span is None:
             return
-
-        print(f"{self.body_strategy=} {self.endpoint_id=}")
 
         if self.body_strategy == "omit":
             return
