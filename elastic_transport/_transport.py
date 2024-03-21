@@ -60,7 +60,7 @@ from ._node import (
     Urllib3HttpNode,
 )
 from ._node_pool import NodePool, NodeSelector
-from ._otel import OpenTelemetry
+from ._otel import OpenTelemetry, OpenTelemetrySpan
 from ._serializer import DEFAULT_SERIALIZERS, Serializer, SerializerCollection
 from ._version import __version__
 from .client_utils import client_meta_version, resolve_default
@@ -303,8 +303,8 @@ class Transport:
             method,
             endpoint_id=resolve_default(endpoint_id, None),
             path_parts=resolve_default(path_parts, {}),
-        ) as span:
-            api_response = self._perform_request(
+        ) as otel_span:
+            response = self._perform_request(
                 method,
                 target,
                 body=body,
@@ -314,9 +314,10 @@ class Transport:
                 retry_on_timeout=retry_on_timeout,
                 request_timeout=request_timeout,
                 client_meta=client_meta,
+                otel_span=otel_span,
             )
-            span.set_elastic_cloud_metadata(api_response.meta.headers)
-            return api_response
+            otel_span.set_elastic_cloud_metadata(response.meta.headers)
+            return response
 
     def _perform_request(  # type: ignore[return]
         self,
@@ -330,6 +331,7 @@ class Transport:
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
+        otel_span: OpenTelemetrySpan,
     ) -> TransportApiResponse:
         if headers is DEFAULT:
             request_headers = HttpHeaders()
@@ -356,6 +358,7 @@ class Transport:
             request_body = self.serializers.dumps(
                 body, mimetype=request_headers["content-type"]
             )
+            otel_span.set_db_statement(request_body)
         else:
             request_body = None
 
@@ -374,6 +377,7 @@ class Transport:
             node = self.node_pool.get()
             start_time = time.time()
             try:
+                otel_span.set_node_metadata(node.host, node.port, node.base_url, target)
                 resp = node.perform_request(
                     method,
                     target,

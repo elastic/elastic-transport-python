@@ -15,11 +15,13 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import os
 
 from opentelemetry.sdk.trace import TracerProvider, export
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from elastic_transport._otel import OpenTelemetry
+from elastic_transport import JsonSerializer
+from elastic_transport._otel import ENABLED_ENV_VAR, OpenTelemetry
 
 
 def setup_tracing():
@@ -30,6 +32,34 @@ def setup_tracing():
     tracer = tracer_provider.get_tracer(__name__)
 
     return tracer, memory_exporter
+
+
+def test_no_span():
+    # With telemetry disabled, those calls should not raise
+    otel = OpenTelemetry(enabled=False)
+    with otel.span(
+        "GET",
+        endpoint_id="ml.open_job",
+        path_parts={"job_id": "my-job"},
+    ) as span:
+        span.set_db_statement(JsonSerializer().dumps({"timeout": "1m"}))
+        span.set_node_metadata(
+            "localhost",
+            9200,
+            "http://localhost:9200/",
+            "_ml/anomaly_detectors/my-job/_open",
+        )
+        span.set_elastic_cloud_metadata(
+            {
+                "X-Found-Handling-Cluster": "e9106fc68e3044f0b1475b04bf4ffd5f",
+                "X-Found-Handling-Instance": "instance-0000000001",
+            }
+        )
+
+
+def test_enabled():
+    otel = OpenTelemetry()
+    assert otel.enabled == bool(os.environ.get(ENABLED_ENV_VAR, "false") != "false")
 
 
 def test_minimal_span():
@@ -52,8 +82,17 @@ def test_detailed_span():
     tracer, memory_exporter = setup_tracing()
     otel = OpenTelemetry(enabled=True, tracer=tracer)
     with otel.span(
-        "GET", endpoint_id="ml.close_job", path_parts={"job_id": "my-job", "foo": "bar"}
+        "GET",
+        endpoint_id="ml.open_job",
+        path_parts={"job_id": "my-job"},
     ) as span:
+        span.set_db_statement(JsonSerializer().dumps({"timeout": "1m"}))
+        span.set_node_metadata(
+            "localhost",
+            9200,
+            "http://localhost:9200/",
+            "_ml/anomaly_detectors/my-job/_open",
+        )
         span.set_elastic_cloud_metadata(
             {
                 "X-Found-Handling-Cluster": "e9106fc68e3044f0b1475b04bf4ffd5f",
@@ -63,13 +102,32 @@ def test_detailed_span():
 
     spans = memory_exporter.get_finished_spans()
     assert len(spans) == 1
-    assert spans[0].name == "ml.close_job"
+    assert spans[0].name == "ml.open_job"
+    assert spans[0].attributes == {
+        "http.request.method": "GET",
+        "url.full": "http://localhost:9200/_ml/anomaly_detectors/my-job/_open",
+        "server.address": "localhost",
+        "server.port": 9200,
+        "db.system": "elasticsearch",
+        "db.operation": "ml.open_job",
+        "db.elasticsearch.path_parts.job_id": "my-job",
+        "db.elasticsearch.cluster.name": "e9106fc68e3044f0b1475b04bf4ffd5f",
+        "db.elasticsearch.node.name": "instance-0000000001",
+    }
+
+
+def test_db_statement():
+    tracer, memory_exporter = setup_tracing()
+    otel = OpenTelemetry(enabled=True, tracer=tracer, body_strategy="raw")
+    with otel.span("GET", endpoint_id="search", path_parts={}) as span:
+        span.set_db_statement(JsonSerializer().dumps({"query": {"match_all": {}}}))
+
+    spans = memory_exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "search"
     assert spans[0].attributes == {
         "http.request.method": "GET",
         "db.system": "elasticsearch",
-        "db.operation": "ml.close_job",
-        "db.elasticsearch.path_parts.job_id": "my-job",
-        "db.elasticsearch.path_parts.foo": "bar",
-        "db.elasticsearch.cluster.name": "e9106fc68e3044f0b1475b04bf4ffd5f",
-        "db.elasticsearch.node.name": "instance-0000000001",
+        "db.operation": "search",
+        "db.statement": '{"query":{"match_all":{}}}',
     }
