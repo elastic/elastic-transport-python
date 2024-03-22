@@ -94,7 +94,6 @@ class OpenTelemetrySpan:
         if self.body_strategy == "omit":
             return
         elif self.body_strategy == "raw" and self.endpoint_id in SEARCH_ENDPOINTS:
-            print("set", serialized_body)
             self.otel_span.set_attribute(
                 "db.statement", serialized_body.decode("utf-8")
             )
