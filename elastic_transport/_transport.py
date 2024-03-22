@@ -268,8 +268,8 @@ class Transport:
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
-        endpoint_id: Union[str, DefaultType] = DEFAULT,
-        path_parts: Union[Mapping[str, str], DefaultType] = DEFAULT,
+        endpoint_id: Optional[str] = None,
+        path_parts: Optional[Mapping[str, str]] = None,
     ) -> TransportApiResponse:
         """
         Perform the actual request. Retrieve a node from the node
@@ -299,12 +299,13 @@ class Transport:
             Used for OpenTelemetry instrumentation.
         :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
+        path_parts = path_parts if path_parts is not None else {}
         with self.otel.span(
             method,
-            endpoint_id=resolve_default(endpoint_id, None),
-            path_parts=resolve_default(path_parts, {}),
+            endpoint_id=endpoint_id,
+            path_parts=path_parts,
         ) as span:
-            api_response = self._perform_request(
+            response = self._perform_request(
                 method,
                 target,
                 body=body,
@@ -315,8 +316,8 @@ class Transport:
                 request_timeout=request_timeout,
                 client_meta=client_meta,
             )
-            span.set_elastic_cloud_metadata(api_response.meta.headers)
-            return api_response
+            span.set_elastic_cloud_metadata(response.meta.headers)
+            return response
 
     def _perform_request(  # type: ignore[return]
         self,
