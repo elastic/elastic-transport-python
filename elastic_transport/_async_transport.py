@@ -40,6 +40,7 @@ from ._exceptions import (
 from ._models import DEFAULT, DefaultType, HttpHeaders, NodeConfig, SniffOptions
 from ._node import AiohttpHttpNode, BaseAsyncNode
 from ._node_pool import NodePool, NodeSelector
+from ._otel import OpenTelemetrySpan
 from ._serializer import Serializer
 from ._transport import (
     DEFAULT_CLIENT_META_SERVICE,
@@ -221,7 +222,7 @@ class AsyncTransport(Transport):
             method,
             endpoint_id=endpoint_id,
             path_parts=path_parts,
-        ) as span:
+        ) as otel_span:
             response = await self._perform_request(
                 method,
                 target,
@@ -232,8 +233,9 @@ class AsyncTransport(Transport):
                 retry_on_timeout=retry_on_timeout,
                 request_timeout=request_timeout,
                 client_meta=client_meta,
+                otel_span=otel_span,
             )
-            span.set_elastic_cloud_metadata(response.meta.headers)
+            otel_span.set_elastic_cloud_metadata(response.meta.headers)
             return response
 
     async def _perform_request(  # type: ignore[override,return]
@@ -248,6 +250,7 @@ class AsyncTransport(Transport):
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
+        otel_span: OpenTelemetrySpan,
     ) -> TransportApiResponse:
         await self._async_call()
 
@@ -276,6 +279,7 @@ class AsyncTransport(Transport):
             request_body = self.serializers.dumps(
                 body, mimetype=request_headers["content-type"]
             )
+            otel_span.set_db_statement(request_body)
         else:
             request_body = None
 
@@ -294,6 +298,7 @@ class AsyncTransport(Transport):
             node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
             start_time = self._loop.time()
             try:
+                otel_span.set_node_metadata(node.host, node.port, node.base_url, target)
                 resp = await node.perform_request(
                     method,
                     target,
