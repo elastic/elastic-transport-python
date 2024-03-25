@@ -59,7 +59,7 @@ def test_no_span():
 
 def test_enabled():
     otel = OpenTelemetry()
-    assert otel.enabled == bool(os.environ.get(ENABLED_ENV_VAR, "false") != "false")
+    assert otel.enabled == (os.environ.get(ENABLED_ENV_VAR, "false") != "false")
 
 
 def test_minimal_span():
