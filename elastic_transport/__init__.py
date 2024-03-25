@@ -41,6 +41,7 @@ from ._node import (
     Urllib3HttpNode,
 )
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
+from ._otel import OpenTelemetrySpan
 from ._response import ApiResponse as ApiResponse
 from ._response import BinaryApiResponse as BinaryApiResponse
 from ._response import HeadApiResponse as HeadApiResponse
@@ -79,6 +80,7 @@ __all__ = [
     "NodePool",
     "NodeSelector",
     "ObjectApiResponse",
+    "OpenTelemetrySpan",
     "RandomSelector",
     "RequestsHttpNode",
     "RoundRobinSelector",
