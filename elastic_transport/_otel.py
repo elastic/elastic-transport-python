@@ -17,9 +17,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Mapping
+from typing import TYPE_CHECKING, Mapping
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from opentelemetry.trace import Span
 
 
@@ -43,7 +45,8 @@ class OpenTelemetrySpan:
         self,
         otel_span: Span | None,
         endpoint_id: str | None = None,
-        body_strategy: Literal["omit", "raw"] = "omit",
+        # TODO import Literal at the top-level when dropping Python 3.7
+        body_strategy: 'Literal["omit", "raw"]' = "omit",
     ):
         self.otel_span = otel_span
         self.body_strategy = body_strategy
