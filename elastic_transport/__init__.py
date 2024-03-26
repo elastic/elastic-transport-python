@@ -103,7 +103,7 @@ try:
     from elastic_transport._serializer import OrjsonSerializer  # noqa: F401
 
     __all__.append("OrjsonSerializer")
-except ModuleNotFoundError:
+except ImportError:
     pass
 
 _logger = logging.getLogger("elastic_transport")
