@@ -15,4 +15,4 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-__version__ = "8.12.0"
+__version__ = "8.13.0"
