@@ -37,8 +37,10 @@ from ._node import (
     BaseAsyncNode,
     BaseNode,
     HttpxAsyncHttpNode,
+    NodeApiResponse,
     RequestsHttpNode,
     Urllib3HttpNode,
+
 )
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
 from ._otel import OpenTelemetrySpan
@@ -76,6 +78,7 @@ __all__ = [
     "JsonSerializer",
     "ListApiResponse",
     "NdjsonSerializer",
+    "NodeApiResponse",
     "NodeConfig",
     "NodePool",
     "NodeSelector",
