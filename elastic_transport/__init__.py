@@ -40,7 +40,6 @@ from ._node import (
     NodeApiResponse,
     RequestsHttpNode,
     Urllib3HttpNode,
-
 )
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
 from ._otel import OpenTelemetrySpan
