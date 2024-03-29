@@ -37,6 +37,7 @@ from ._node import (
     BaseAsyncNode,
     BaseNode,
     HttpxAsyncHttpNode,
+    NodeApiResponse,
     RequestsHttpNode,
     Urllib3HttpNode,
 )
@@ -76,6 +77,7 @@ __all__ = [
     "JsonSerializer",
     "ListApiResponse",
     "NdjsonSerializer",
+    "NodeApiResponse",
     "NodeConfig",
     "NodePool",
     "NodeSelector",
