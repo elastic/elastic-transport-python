@@ -77,7 +77,6 @@ __all__ = [
     "JsonSerializer",
     "ListApiResponse",
     "NdjsonSerializer",
-    "NodeApiResponse",
     "NodeConfig",
     "NodePool",
     "NodeSelector",
