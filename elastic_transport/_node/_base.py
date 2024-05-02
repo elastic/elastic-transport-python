@@ -191,7 +191,7 @@ class BaseNode:
             :class:`elastic_transport.ConnectionError`,
             :class:`elastic_transport.ConnectionTimeout`,
             :class:`elastic_transport.TlsError`
-        :rtype: Tuple[NodeApiResponse, bytes]
+        :rtype: Tuple[ApiResponseMeta, bytes]
         :returns: Metadata about the request+response and the raw
             decompressed bytes from the HTTP response body.
         """
