@@ -63,7 +63,6 @@ setup(
             "pytest-asyncio",
             "pytest-httpserver",
             "trustme",
-            "mock",
             "requests",
             "aiohttp",
             "httpx",

@@ -19,10 +19,10 @@ import gzip
 import re
 import ssl
 import warnings
+from unittest.mock import Mock, patch
 
 import pytest
 import urllib3
-from mock import Mock, patch
 from urllib3.response import HTTPHeaderDict
 
 from elastic_transport import NodeConfig, TransportError, Urllib3HttpNode
