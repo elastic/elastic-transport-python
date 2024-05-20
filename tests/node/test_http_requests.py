@@ -18,10 +18,10 @@
 import gzip
 import ssl
 import warnings
+from unittest.mock import Mock, patch
 
 import pytest
 import requests
-from mock import Mock, patch
 from requests.auth import HTTPBasicAuth
 
 from elastic_transport import NodeConfig, RequestsHttpNode
