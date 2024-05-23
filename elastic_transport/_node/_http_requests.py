@@ -170,7 +170,7 @@ class RequestsHttpNode(BaseNode):
         # Preload the HTTPConnectionPool so initialization issues
         # are raised here instead of in perform_request()
         if hasattr(adapter, "get_connection_with_tls_context"):
-            request = requests.Request(url=self.base_url)
+            request = requests.Request(method="GET", url=self.base_url)
             prepared_request = self.session.prepare_request(request)
             adapter.get_connection_with_tls_context(
                 prepared_request, verify=self.session.verify
