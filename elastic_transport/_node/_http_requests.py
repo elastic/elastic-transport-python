@@ -170,14 +170,16 @@ class RequestsHttpNode(BaseNode):
         # Preload the HTTPConnectionPool so initialization issues
         # are raised here instead of in perform_request()
         if hasattr(adapter, "get_connection_with_tls_context"):
+            request = requests.Request(url=self.base_url)
+            prepared_request = self.session.prepare_request(request)
             adapter.get_connection_with_tls_context(
-                requests.Request(url=self.base_url), verify=self.session.verify
+                prepared_request, verify=self.session.verify
             )
         else:
             # elastic-transport is not vulnerable to CVE-2024-35195 because it uses
             # requests.Session and an SSLContext without using the verify parameter.
             # We should remove this branch when requiring requests 2.32 or later.
-            adapter.get_connection(self.base_url)  # type: ignore [no-untyped-call]
+            adapter.get_connection(self.base_url)
 
         self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
 
