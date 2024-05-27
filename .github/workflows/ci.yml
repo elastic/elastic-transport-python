@@ -51,7 +51,7 @@ jobs:
             nox-session: "test-min-deps"
 
     runs-on: ${{ matrix.os }}
-    name: test-${{ matrix.python-version }} ${{ matrix-nox-session }}
+    name: test-${{ matrix.python-version }} ${{ matrix.nox-session }}
     continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Checkout repository
