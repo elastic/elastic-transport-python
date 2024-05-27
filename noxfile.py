@@ -71,7 +71,7 @@ def test(session):
     session.run("coverage", "report", "-m")
 
 
-@nox.session(name="test-min-deps", python="3.7")
+@nox.session(name="test-min-deps", python="3.8")
 def test_min_deps(session):
     session.install("-r", "requirements-min.txt", ".[develop]", silent=False)
     session.run(

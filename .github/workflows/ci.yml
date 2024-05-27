@@ -45,7 +45,7 @@ jobs:
         experimental: [false]
         nox-session: ['']
         include:
-          - python-version: "3.7"
+          - python-version: "3.8"
             os: "ubuntu-latest"
             experimental: false
             nox-session: "test-min-deps"
