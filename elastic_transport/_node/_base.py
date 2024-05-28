@@ -143,6 +143,11 @@ class BaseNode:
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}({self.base_url})>"
 
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, BaseNode):
+            return NotImplemented
+        return id(self) < id(other)
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, BaseNode):
             return NotImplemented
