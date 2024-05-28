@@ -1,8 +1,14 @@
 # Changelog
 
+## 8.13.1
+
+- Fixed requests 2.32 compatibility
+- Fixed TypeError when two nodes are declared dead at the same time
+- Added `TransportApiResponse`
+
 ## 8.13.0
 
-- Support the HTTPX client with asyncio (#137, contributed by @b4sus)
+- Added support for the HTTPX client with asyncio (#137, contributed by @b4sus)
 - Added optional orjson serializer support (#152)
 
 ## 8.12.0
