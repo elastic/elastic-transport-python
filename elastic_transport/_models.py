@@ -68,7 +68,15 @@ except ImportError:
 
 
 class HttpHeaders(MutableMapping[str, str]):
-    """HTTP headers"""
+    """HTTP headers
+
+    Behaves like a Python dictionary. Can be used like this::
+
+      headers = HttpHeaders()
+      headers["foo"] = "bar"
+      headers["foo"] = "baz"
+      print(headers["foo"])  # prints "baz"
+    """
 
     __slots__ = ("_internal", "_frozen")
 
@@ -180,26 +188,24 @@ class HttpHeaders(MutableMapping[str, str]):
 
 @dataclass
 class ApiResponseMeta:
-    """Metadata that is returned from Transport.perform_request()"""
+    """Metadata that is returned from Transport.perform_request()
 
-    #: HTTP status code
+    :ivar int status: HTTP status code
+    :ivar str http_version: HTTP version being used
+    :ivar HttpHeaders headers: HTTP headers
+    :ivar float duration: Number of seconds from start of request to start of response
+    :ivar NodeConfig node: Node which handled the request
+    :ivar typing.Optional[str] mimetype: Mimetype to be used by the serializer to decode the raw response bytes.
+    """
+
     status: int
-
-    #: HTTP version being used
     http_version: str
-
-    #: HTTP headers
     headers: HttpHeaders
-
-    #: Number of seconds from start of request to start of response
     duration: float
-
-    #: Node which handled the request
     node: "NodeConfig"
 
     @property
     def mimetype(self) -> Optional[str]:
-        """Mimetype to be used by the serializer to decode the raw response bytes."""
         try:
             content_type = self.headers["content-type"]
             return content_type.partition(";")[0] or None
