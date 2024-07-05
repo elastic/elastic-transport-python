@@ -1,7 +1,7 @@
 # elastic-transport-python
 
-[![PyPI](https://img.shields.io/pypi/v/elastic-transport)](https://pypi.org/elastic-transport)
-[![Python Versions](https://img.shields.io/pypi/pyversions/elastic-transport)](https://pypi.org/elastic-transport)
+[![PyPI](https://img.shields.io/pypi/v/elastic-transport)](https://pypi.org/project/elastic-transport)
+[![Python Versions](https://img.shields.io/pypi/pyversions/elastic-transport)](https://pypi.org/project/elastic-transport)
 [![PyPI Downloads](https://static.pepy.tech/badge/elastic-transport)](https://pepy.tech/project/elastic-transport)
 [![CI Status](https://img.shields.io/github/actions/workflow/status/elastic/elastic-transport-python/ci.yml)](https://github.com/elastic/elastic-transport-python/actions)
 
