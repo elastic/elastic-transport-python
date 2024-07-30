@@ -179,7 +179,9 @@ def basic_auth_to_header(basic_auth: Tuple[str, str]) -> str:
         raise ValueError(
             "'basic_auth' must be a 2-tuple of str/bytes (username, password)"
         )
-    return f"Basic {base64.b64encode(b':'.join(to_bytes(x) for x in basic_auth)).decode()}"
+    return (
+        f"Basic {base64.b64encode(b':'.join(to_bytes(x) for x in basic_auth)).decode()}"
+    )
 
 
 def url_to_node_config(
