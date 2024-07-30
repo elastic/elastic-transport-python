@@ -34,7 +34,7 @@ from typing import (
     overload,
 )
 
-from ._compat import Lock, ordered_dict
+from ._compat import Lock
 from ._models import NodeConfig
 from ._node import BaseNode
 
@@ -182,8 +182,8 @@ class NodePool:
         self._node_class = node_class
         self._node_selector = node_selector_class(node_configs)
 
-        # Maintain insert order
-        self._all_nodes: Dict[NodeConfig, BaseNode] = ordered_dict()
+        # _all_nodes relies on dict insert order
+        self._all_nodes: Dict[NodeConfig, BaseNode] = {}
         for node_config in node_configs:
             self._all_nodes[node_config] = self._node_class(node_config)
 
@@ -196,11 +196,11 @@ class NodePool:
 
         # Collection of currently-alive nodes. This is an ordered
         # dict so round-robin actually works.
-        self._alive_nodes: Dict[NodeConfig, BaseNode] = ordered_dict(self._all_nodes)
+        self._alive_nodes: Dict[NodeConfig, BaseNode] = dict(self._all_nodes)
 
         # PriorityQueue for thread safety and ease of timeout management
         self._dead_nodes: PriorityQueue[Tuple[float, BaseNode]] = PriorityQueue()
-        self._dead_consecutive_failures: Dict[NodeConfig, int] = defaultdict(lambda: 0)
+        self._dead_consecutive_failures: Dict[NodeConfig, int] = defaultdict(int)
 
         # Nodes that have been marked as 'removed' to be thread-safe.
         self._removed_nodes: Set[NodeConfig] = set()
