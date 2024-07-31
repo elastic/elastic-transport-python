@@ -24,12 +24,6 @@ from urllib.parse import urlencode, urlparse
 
 string_types = (str, bytes)
 
-if sys.version_info >= (3, 7):  # dict is insert ordered on Python 3.7+
-    ordered_dict = dict
-else:
-    from collections import OrderedDict as ordered_dict
-
-
 T = TypeVar("T")
 
 
@@ -107,7 +101,6 @@ def warn_stacklevel() -> int:
 
 __all__ = [
     "await_if_coro",
-    "ordered_dict",
     "quote",
     "urlparse",
     "urlencode",

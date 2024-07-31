@@ -37,7 +37,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from typing_extensions import Final
+    from typing import Final
 
 
 class DefaultType(enum.Enum):
@@ -59,12 +59,7 @@ DEFAULT: "Final[DefaultType]" = DefaultType.value
 
 T = TypeVar("T")
 
-try:
-    from ssl import TLSVersion
-
-    _TYPE_SSL_VERSION = Union[int, TLSVersion]
-except ImportError:
-    _TYPE_SSL_VERSION = int  # type: ignore[misc]
+_TYPE_SSL_VERSION = Union[int, ssl.TLSVersion]
 
 
 class HttpHeaders(MutableMapping[str, str]):
@@ -278,7 +273,7 @@ class NodeConfig:
     #: **experimental**.
     ssl_assert_fingerprint: Optional[str] = None
     #: Minimum TLS version to use to connect to the node. Can be either
-    #: :class:`ssl.TLSVersion` on Python 3.7+ or one of the
+    #: :class:`ssl.TLSVersion` or one of the deprecated
     #: ``ssl.PROTOCOL_TLSvX`` instances.
     ssl_version: Optional[_TYPE_SSL_VERSION] = None
     #: Pre-configured :class:`ssl.SSLContext` object. If this value
