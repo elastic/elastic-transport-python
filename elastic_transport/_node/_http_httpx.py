@@ -20,7 +20,7 @@ import os.path
 import ssl
 import time
 import warnings
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -58,8 +58,7 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                 "httpx does not support certificate pinning. https://github.com/encode/httpx/issues/761"
             )
 
-        # TODO switch to Literal[False] when dropping Python 3.7 support
-        ssl_context: Union[ssl.SSLContext, bool] = False
+        ssl_context: Union[ssl.SSLContext, Literal[False]] = False
         if config.scheme == "https":
             if config.ssl_context is not None:
                 ssl_context = ssl_context_from_node_config(config)
