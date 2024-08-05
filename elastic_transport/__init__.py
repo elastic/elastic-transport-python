@@ -63,6 +63,7 @@ from ._version import __version__ as __version__  # noqa
 
 __all__ = [
     "AiohttpHttpNode",
+    "AiosonicHttpNode",
     "ApiError",
     "ApiResponse",
     "ApiResponseMeta",
