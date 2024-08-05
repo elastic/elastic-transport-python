@@ -34,6 +34,7 @@ from ._exceptions import (
 from ._models import ApiResponseMeta, HttpHeaders, NodeConfig, SniffOptions
 from ._node import (
     AiohttpHttpNode,
+    AiosonicHttpNode,
     BaseAsyncNode,
     BaseNode,
     HttpxAsyncHttpNode,
