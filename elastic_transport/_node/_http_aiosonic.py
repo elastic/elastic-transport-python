@@ -37,12 +37,12 @@ from ._base import (
 from ._base_async import BaseAsyncNode
 
 try:
-    from  aiosonic.timeout import Timeouts
-    from aiosonic.connection import TCPConnector
     from aiosonic import HTTPClient
-    from aiosonic.version import VERSION
     from aiosonic import exceptions as aiosonic_exceptions
+    from aiosonic.connection import TCPConnector
     from aiosonic.resolver import get_loop
+    from aiosonic.timeout import Timeouts
+    from aiosonic.version import VERSION
 
     _AIOSONIC_AVAILABLE = True
     _AIOSONIC_META_VERSION = client_meta_version(VERSION)
@@ -59,14 +59,16 @@ except ImportError:  # pragma: nocover
 
 
 class AiosonicHttpNode(BaseAsyncNode):
-    """Default asynchronous node class using the ``aiohttp`` library via HTTP"""
+    """Default asynchronous node class using the ``aiosonic`` library via HTTP"""
 
     _CLIENT_META_HTTP_CLIENT = ("as", _AIOSONIC_META_VERSION)
     _BIG_TIMEOUT = 60 * 2  # 2 min timeout
 
     def __init__(self, config: NodeConfig):
         if not _AIOSONIC_AVAILABLE:  # pragma: nocover
-            raise ValueError("You must have 'aiosonic' installed to use AiosonicHttpNode")
+            raise ValueError(
+                "You must have 'aiosonic' installed to use AiosonicHttpNode"
+            )
 
         super().__init__(config)
 
@@ -136,7 +138,11 @@ class AiosonicHttpNode(BaseAsyncNode):
         if not self._loop:
             self._loop = get_loop()
 
-        timeouts = Timeouts(request_timeout=request_timeout.value if request_timeout.value else self._BIG_TIMEOUT)
+        timeouts = Timeouts(
+            request_timeout=(
+                request_timeout.value if request_timeout.value else self._BIG_TIMEOUT
+            )
+        )
 
         request_headers = self._headers.copy()
         if headers:
