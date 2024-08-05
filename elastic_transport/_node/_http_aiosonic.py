@@ -56,7 +56,7 @@ try:
 
 except ImportError:  # pragma: nocover
     _AIOSONIC_AVAILABLE = False
-
+    _AIOSONIC_META_VERSION = ""
 
 class AiosonicHttpNode(BaseAsyncNode):
     """Default asynchronous node class using the ``aiosonic`` library via HTTP"""
