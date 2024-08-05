@@ -26,7 +26,7 @@ from typing import Optional, Union
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
-from ..client_utils import DEFAULT, DefaultType, client_meta_version
+from ..client_utils import DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
     DEFAULT_CA_CERTS,
@@ -37,12 +37,12 @@ from ._base import (
 from ._base_async import BaseAsyncNode
 
 try:
-    from aiosonic import HTTPClient
-    from aiosonic import exceptions as aiosonic_exceptions
-    from aiosonic.connection import TCPConnector
-    from aiosonic.resolver import get_loop
-    from aiosonic.timeout import Timeouts
-    from aiosonic.version import VERSION
+    import aiosonic  # type: ignore
+    from aiosonic.connection import TCPConnector  # type: ignore
+    from aiosonic.exceptions import TimeoutException  # type: ignore
+    from aiosonic.resolver import get_loop  # type: ignore
+    from aiosonic.timeout import Timeouts  # type: ignore
+    from aiosonic.version import VERSION  # type: ignore
 
     _AIOSONIC_AVAILABLE = True
     _AIOSONIC_META_VERSION = client_meta_version(VERSION)
@@ -117,12 +117,13 @@ class AiosonicHttpNode(BaseAsyncNode):
                     ssl_context.load_cert_chain(config.client_cert)
 
         self._loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
-        self.client = HTTPClient(
-            connector=TCPConnector(
-                pool_size=config.connections_per_node,
-                use_dns_cache=True,
-            ),
-        )
+        if _AIOSONIC_AVAILABLE:
+            self.client = aiosonic.HTTPClient(
+                connector=TCPConnector(
+                    pool_size=config.connections_per_node,
+                    use_dns_cache=True,
+                ),
+            )
 
         self._ssl_context = ssl_context
 
@@ -132,7 +133,7 @@ class AiosonicHttpNode(BaseAsyncNode):
         target: str,
         body: Optional[bytes] = None,
         headers: Optional[HttpHeaders] = None,
-        request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
+        request_timeout: Union[DefaultType, Optional[float]] = None,
     ) -> NodeApiResponse:
         url = self.base_url + target
 
@@ -140,9 +141,7 @@ class AiosonicHttpNode(BaseAsyncNode):
             self._loop = get_loop()
 
         timeouts = Timeouts(
-            request_timeout=(
-                request_timeout.value if request_timeout.value else self._BIG_TIMEOUT
-            )
+            request_timeout=(request_timeout if request_timeout else self._BIG_TIMEOUT)
         )
 
         request_headers = self._headers.copy()
@@ -177,9 +176,7 @@ class AiosonicHttpNode(BaseAsyncNode):
             raise
         except Exception as e:
             err: Exception
-            if isinstance(
-                e, (asyncio.TimeoutError, aiosonic_exceptions.TimeoutException)
-            ):
+            if isinstance(e, (asyncio.TimeoutError, TimeoutException)):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
