@@ -46,6 +46,7 @@ def lint(session):
         "mypy==1.7.1",
         "types-requests",
         "types-certifi",
+        "pyarrow-stubs",
     )
     # https://github.com/python/typeshed/issues/10786
     session.run(

@@ -19,12 +19,14 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+import pyarrow as pa
 import pytest
 
 from elastic_transport import (
     JsonSerializer,
     NdjsonSerializer,
     OrjsonSerializer,
+    PyArrowSerializer,
     SerializationError,
     SerializerCollection,
     TextSerializer,
@@ -191,3 +193,22 @@ def test_ndjson_dumps():
         b'{"key:"value"}\n'
         b'{"bytes":"too"}\n'
     )
+
+
+def test_pyarrow_loads():
+    data = [
+        pa.array([1, 2, 3, 4]),
+        pa.array(["foo", "bar", "baz", None]),
+        pa.array([True, None, False, True]),
+    ]
+    batch = pa.record_batch(data, names=["f0", "f1", "f2"])
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_stream(sink, batch.schema) as writer:
+        writer.write_batch(batch)
+
+    serializer = PyArrowSerializer()
+    assert serializer.loads(sink.getvalue()).to_pydict() == {
+        "f0": [1, 2, 3, 4],
+        "f1": ["foo", "bar", "baz", None],
+        "f2": [True, None, False, True],
+    }

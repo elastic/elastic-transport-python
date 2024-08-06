@@ -29,6 +29,11 @@ try:
 except ModuleNotFoundError:
     orjson = None  # type: ignore[assignment]
 
+try:
+    import pyarrow as pa
+except ModuleNotFoundError:
+    pa = None  # type: ignore[assignment]
+
 
 class Serializer:
     """Serializer interface."""
@@ -192,11 +197,37 @@ class NdjsonSerializer(JsonSerializer):
         return bytes(buffer)
 
 
+if pa is not None:
+
+    class PyArrowSerializer(Serializer):
+        """PyArrow serializer for deserializing Arrow Stream data."""
+
+        mimetype: ClassVar[str] = "application/vnd.apache.arrow.stream"
+
+        def loads(self, data: bytes) -> pa.Table:
+            try:
+                with pa.ipc.open_stream(data) as reader:
+                    return reader.read_all()
+            except pa.ArrowException as e:
+                raise SerializationError(
+                    message=f"Unable to deserialize as Arrow stream: {data!r}",
+                    errors=(e,),
+                )
+
+        def dumps(self, data: Any) -> bytes:
+            raise SerializationError(
+                message="Elasticsearch does not accept Arrow input data"
+            )
+
+
 DEFAULT_SERIALIZERS = {
     JsonSerializer.mimetype: JsonSerializer(),
     TextSerializer.mimetype: TextSerializer(),
     NdjsonSerializer.mimetype: NdjsonSerializer(),
 }
+
+if pa is not None:
+    DEFAULT_SERIALIZERS[PyArrowSerializer.mimetype] = PyArrowSerializer()
 
 
 class SerializerCollection:

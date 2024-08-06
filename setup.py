@@ -70,6 +70,7 @@ setup(
             "opentelemetry-api",
             "opentelemetry-sdk",
             "orjson",
+            "pyarrow",
             # Override Read the Docs default (sphinx<2)
             "sphinx>2",
             "furo",

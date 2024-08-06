@@ -29,6 +29,9 @@ def test__all__sorted(module):
     # Optional dependencies are added at the end
     if "OrjsonSerializer" in module_all:
         module_all.remove("OrjsonSerializer")
+    if "PyArrowSerializer" in module_all:
+        module_all.remove("PyArrowSerializer")
+
     assert module_all == sorted(module_all)
 
 

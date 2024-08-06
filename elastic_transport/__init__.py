@@ -108,6 +108,13 @@ try:
 except ImportError:
     pass
 
+try:
+    from elastic_transport._serializer import PyArrowSerializer  # noqa: F401
+
+    __all__.append("PyArrowSerializer")
+except ImportError:
+    pass
+
 _logger = logging.getLogger("elastic_transport")
 _logger.addHandler(logging.NullHandler())
 del _logger
