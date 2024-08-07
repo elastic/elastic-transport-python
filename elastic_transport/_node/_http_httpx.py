@@ -146,7 +146,6 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                     headers=dict(resolved_headers),
                     timeout=request_timeout,
                 )
-            resp.raise_for_status()
             response_body = resp.read()
             duration = time.perf_counter() - start
         except RERAISE_EXCEPTIONS + BUILTIN_EXCEPTIONS:
