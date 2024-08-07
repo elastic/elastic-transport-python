@@ -65,6 +65,7 @@ setup(
             "trustme",
             "requests",
             "aiohttp",
+            "aiosonic",
             "httpx",
             "respx",
             "opentelemetry-api",
