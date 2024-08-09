@@ -23,7 +23,7 @@ import os
 import re
 import ssl
 import warnings
-from typing import Optional, Union
+from typing import Any, MutableMapping, Optional, Union
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -170,7 +170,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         else:
             body_to_send = None
 
-        kwargs = {}
+        kwargs: MutableMapping[str, Any] = {}
         if self._ssl_assert_fingerprint:
             kwargs["ssl"] = aiohttp_fingerprint(self._ssl_assert_fingerprint)
 
