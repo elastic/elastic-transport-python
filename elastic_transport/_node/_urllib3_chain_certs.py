@@ -106,7 +106,10 @@ class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
             fingerprints: List[bytes]
             try:
                 if sys.version_info >= (3, 13):
-                    fingerprints = [hash_func(cert).digest() for cert in conn.sock.get_verified_chain()]
+                    fingerprints = [
+                        hash_func(cert).digest()
+                        for cert in conn.sock.get_verified_chain()
+                    ]
                 else:
                     # 'get_verified_chain()' and 'Certificate.public_bytes()' are private APIs
                     # in CPython 3.10. They're not documented anywhere yet but seem to work
