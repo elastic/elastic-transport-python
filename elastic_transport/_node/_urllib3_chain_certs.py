@@ -105,14 +105,17 @@ class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
 
             fingerprints: List[bytes]
             try:
-                # 'get_verified_chain()' and 'Certificate.public_bytes()' are private APIs
-                # in CPython 3.10. They're not documented anywhere yet but seem to work
-                # and we need them for Security on by Default so... onwards we go!
-                # See: https://github.com/python/cpython/pull/25467
-                fingerprints = [
-                    hash_func(cert.public_bytes(_ENCODING_DER)).digest()
-                    for cert in conn.sock._sslobj.get_verified_chain()  # type: ignore[union-attr]
-                ]
+                if sys.version_info >= (3, 13):
+                    fingerprints = [hash_func(cert).digest() for cert in conn.sock.get_verified_chain()]
+                else:
+                    # 'get_verified_chain()' and 'Certificate.public_bytes()' are private APIs
+                    # in CPython 3.10. They're not documented anywhere yet but seem to work
+                    # and we need them for Security on by Default so... onwards we go!
+                    # See: https://github.com/python/cpython/pull/25467
+                    fingerprints = [
+                        hash_func(cert.public_bytes(_ENCODING_DER)).digest()
+                        for cert in conn.sock._sslobj.get_verified_chain()  # type: ignore[union-attr]
+                    ]
             except RERAISE_EXCEPTIONS:  # pragma: nocover
                 raise
             # Because these are private APIs we are super careful here
