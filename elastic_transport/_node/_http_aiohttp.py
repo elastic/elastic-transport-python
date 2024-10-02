@@ -182,7 +182,7 @@ class AiohttpHttpNode(BaseAsyncNode):
                 data=body_to_send,
                 headers=request_headers,
                 timeout=aiohttp_timeout,
-                **kwargs,
+                **kwargs,  # type: ignore[arg-type]
             ) as response:
                 if is_head:  # We actually called 'GET' so throw away the data.
                     await response.release()
