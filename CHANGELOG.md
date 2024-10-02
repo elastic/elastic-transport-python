@@ -1,5 +1,11 @@
 # Changelog
 
+## 8.15.0 (2024-08-09)
+
+* Removed call to `raise_for_status()` when using `HttpxAsyncHttpNode` to prevent exceptions being raised for 404 responses ([#182](https://github.com/elastic/elastic-transport-python/pull/182))
+* Documented response classes ([#175](https://github.com/elastic/elastic-transport-python/pull/175))
+* Dropped support for Python 3.7 ([#179](https://github.com/elastic/elastic-transport-python/pull/179))
+
 ## 8.13.1 (2024-04-28)
 
 - Fixed requests 2.32 compatibility (#164)
