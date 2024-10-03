@@ -23,7 +23,7 @@ import os
 import re
 import ssl
 import warnings
-from typing import Any, MutableMapping, Optional, Union
+from typing import Optional, TypedDict, Union
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -55,6 +55,10 @@ try:
 
     # See aio-libs/aiohttp#1769 and #5012
     _AIOHTTP_FIXED_HEAD_BUG = _AIOHTTP_SEMVER_VERSION >= (3, 7, 0)
+
+    class RequestKwarg(TypedDict, total=False):
+        ssl: aiohttp.Fingerprint
+
 except ImportError:  # pragma: nocover
     _AIOHTTP_AVAILABLE = False
     _AIOHTTP_META_VERSION = ""
@@ -170,7 +174,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         else:
             body_to_send = None
 
-        kwargs: MutableMapping[str, Any] = {}
+        kwargs: RequestKwarg = {}
         if self._ssl_assert_fingerprint:
             kwargs["ssl"] = aiohttp_fingerprint(self._ssl_assert_fingerprint)
 
@@ -182,7 +186,7 @@ class AiohttpHttpNode(BaseAsyncNode):
                 data=body_to_send,
                 headers=request_headers,
                 timeout=aiohttp_timeout,
-                **kwargs,  # type: ignore[arg-type]
+                **kwargs,
             ) as response:
                 if is_head:  # We actually called 'GET' so throw away the data.
                     await response.release()
