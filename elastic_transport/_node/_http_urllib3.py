@@ -199,7 +199,7 @@ class Urllib3HttpNode(BaseNode):
                 body=body,
                 exception=err,
             )
-            raise err from None
+            raise err from e
 
         meta = ApiResponseMeta(
             node=self.config,
