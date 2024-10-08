@@ -1,5 +1,9 @@
 # Changelog
 
+## 8.15.1 (2024-10-08)
+
+* Add explicit Python 3.13 support ([#189](https://github.com/elastic/elastic-transport-python/pull/189))
+
 ## 8.15.0 (2024-08-09)
 
 * Removed call to `raise_for_status()` when using `HttpxAsyncHttpNode` to prevent exceptions being raised for 404 responses ([#182](https://github.com/elastic/elastic-transport-python/pull/182))
