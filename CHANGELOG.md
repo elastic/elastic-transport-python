@@ -1,6 +1,6 @@
 # Changelog
 
-## 8.15.1 (2024-10-08)
+## 8.15.1 (2024-10-09)
 
 * Add explicit Python 3.13 support ([#189](https://github.com/elastic/elastic-transport-python/pull/189))
 
