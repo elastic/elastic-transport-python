@@ -65,6 +65,7 @@ setup(
             "trustme",
             "requests",
             "aiohttp",
+            "aiosonic",
             "httpx",
             # https://github.com/encode/httpx/discussions/3214#discussioncomment-10830925
             "httpcore<1.0.6",

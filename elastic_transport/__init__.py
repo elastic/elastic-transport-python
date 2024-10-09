@@ -34,6 +34,7 @@ from ._exceptions import (
 from ._models import ApiResponseMeta, HttpHeaders, NodeConfig, SniffOptions
 from ._node import (
     AiohttpHttpNode,
+    AiosonicHttpNode,
     BaseAsyncNode,
     BaseNode,
     HttpxAsyncHttpNode,
@@ -62,6 +63,7 @@ from ._version import __version__ as __version__  # noqa
 
 __all__ = [
     "AiohttpHttpNode",
+    "AiosonicHttpNode",
     "ApiError",
     "ApiResponse",
     "ApiResponseMeta",
