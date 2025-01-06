@@ -24,7 +24,7 @@ import re
 import ssl
 import sys
 import warnings
-from typing import Optional, Union
+from typing import Optional, TypedDict, Union
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -56,6 +56,10 @@ try:
 
     # See aio-libs/aiohttp#1769 and #5012
     _AIOHTTP_FIXED_HEAD_BUG = _AIOHTTP_SEMVER_VERSION >= (3, 7, 0)
+
+    class RequestKwarg(TypedDict, total=False):
+        ssl: aiohttp.Fingerprint
+
 except ImportError:  # pragma: nocover
     _AIOHTTP_AVAILABLE = False
     _AIOHTTP_META_VERSION = ""
@@ -176,7 +180,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         else:
             body_to_send = None
 
-        kwargs = {}
+        kwargs: RequestKwarg = {}
         if self._ssl_assert_fingerprint:
             kwargs["ssl"] = aiohttp_fingerprint(self._ssl_assert_fingerprint)
 
