@@ -52,7 +52,6 @@ setup(
     install_requires=[
         "urllib3>=1.26.2, <3",
         "certifi",
-        "importlib-metadata; python_version<'3.8'",
     ],
     python_requires=">=3.8",
     extras_require={
@@ -66,6 +65,8 @@ setup(
             "requests",
             "aiohttp",
             "httpx",
+            # https://github.com/encode/httpx/discussions/3214#discussioncomment-10830925
+            "httpcore<1.0.6",
             "respx",
             "opentelemetry-api",
             "opentelemetry-sdk",
@@ -88,6 +89,7 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
