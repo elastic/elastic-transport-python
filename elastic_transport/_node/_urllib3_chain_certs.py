@@ -108,7 +108,7 @@ class HTTPSConnectionPool(urllib3.HTTPSConnectionPool):
                 if sys.version_info >= (3, 13):
                     fingerprints = [
                         hash_func(cert).digest()
-                        for cert in conn.sock.get_verified_chain()
+                        for cert in conn.sock.get_verified_chain()  # type: ignore
                     ]
                 else:
                     # 'get_verified_chain()' and 'Certificate.public_bytes()' are private APIs
