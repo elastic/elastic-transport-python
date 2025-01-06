@@ -18,6 +18,7 @@
 import asyncio
 import random
 import re
+import ssl
 import sys
 import time
 import warnings
@@ -505,13 +506,17 @@ async def test_error_sniffing_callback_without_sniffing_enabled():
 @pytest.mark.asyncio
 async def test_heterogeneous_node_config_warning_with_sniffing():
     with warnings.catch_warnings(record=True) as w:
+        # SSLContext objects cannot be compared and are thus ignored
+        context = ssl.create_default_context()
         AsyncTransport(
             [
-                NodeConfig("http", "localhost", 80, path_prefix="/a"),
-                NodeConfig("http", "localhost", 81, path_prefix="/b"),
+                NodeConfig("https", "localhost", 80, path_prefix="/a", ssl_context=context),
+                NodeConfig("https", "localhost", 81, path_prefix="/b", ssl_context=context),
             ],
             sniff_on_start=True,
-            sniff_callback=lambda *_: [],
+            sniff_callback=lambda *_: [
+                NodeConfig("https", "localhost", 80, path_prefix="/a")
+            ],
         )
 
     assert len(w) == 1
