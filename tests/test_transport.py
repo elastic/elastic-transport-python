@@ -17,6 +17,7 @@
 
 import random
 import re
+import ssl
 import threading
 import time
 import warnings
@@ -537,14 +538,19 @@ def test_error_sniffing_callback_without_sniffing_enabled():
 
 def test_heterogeneous_node_config_warning_with_sniffing():
     with warnings.catch_warnings(record=True) as w:
+        context = ssl.create_default_context()
         Transport(
             [
-                NodeConfig("http", "localhost", 80, path_prefix="/a"),
-                NodeConfig("http", "localhost", 81, path_prefix="/b"),
+                NodeConfig(
+                    "https", "localhost", 80, path_prefix="/a", ssl_context=context
+                ),
+                NodeConfig(
+                    "https", "localhost", 81, path_prefix="/b", ssl_context=context
+                ),
             ],
             sniff_on_start=True,
             sniff_callback=lambda *_: [
-                NodeConfig("http", "localhost", 80, path_prefix="/a")
+                NodeConfig("https", "localhost", 80, path_prefix="/a")
             ],
         )
 

@@ -540,13 +540,13 @@ def validate_sniffing_options(
 
 def warn_if_varying_node_config_options(node_configs: List[NodeConfig]) -> None:
     """Function which detects situations when sniffing may produce incorrect configs"""
-    exempt_attrs = {"host", "port", "connections_per_node", "_extras"}
+    exempt_attrs = {"host", "port", "connections_per_node", "_extras", "ssl_context"}
     match_attr_dict = None
     for node_config in node_configs:
         attr_dict = {
-            k: v
-            for k, v in dataclasses.asdict(node_config).items()
-            if k not in exempt_attrs
+            field.name: getattr(node_config, field.name)
+            for field in dataclasses.fields(node_config)
+            if field.name not in exempt_attrs
         }
         if match_attr_dict is None:
             match_attr_dict = attr_dict
