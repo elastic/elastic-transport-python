@@ -510,8 +510,12 @@ async def test_heterogeneous_node_config_warning_with_sniffing():
         context = ssl.create_default_context()
         AsyncTransport(
             [
-                NodeConfig("https", "localhost", 80, path_prefix="/a", ssl_context=context),
-                NodeConfig("https", "localhost", 81, path_prefix="/b", ssl_context=context),
+                NodeConfig(
+                    "https", "localhost", 80, path_prefix="/a", ssl_context=context
+                ),
+                NodeConfig(
+                    "https", "localhost", 81, path_prefix="/b", ssl_context=context
+                ),
             ],
             sniff_on_start=True,
             sniff_callback=lambda *_: [
