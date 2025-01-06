@@ -22,6 +22,7 @@ import gzip
 import os
 import re
 import ssl
+import sys
 import warnings
 from typing import Optional, Union
 
@@ -59,6 +60,11 @@ except ImportError:  # pragma: nocover
     _AIOHTTP_AVAILABLE = False
     _AIOHTTP_META_VERSION = ""
     _AIOHTTP_FIXED_HEAD_BUG = False
+
+
+# Avoid aiohttp enabled_cleanup_closed warning: https://github.com/aio-libs/aiohttp/pull/9726
+_NEEDS_CLEANUP_CLOSED_313 = (3, 13, 0) <= sys.version_info < (3, 13, 1)
+_NEEDS_CLEANUP_CLOSED = _NEEDS_CLEANUP_CLOSED_313 or sys.version_info < (3, 12, 7)
 
 
 class AiohttpHttpNode(BaseAsyncNode):
@@ -258,7 +264,7 @@ class AiohttpHttpNode(BaseAsyncNode):
             connector=aiohttp.TCPConnector(
                 limit_per_host=self._connections_per_node,
                 use_dns_cache=True,
-                enable_cleanup_closed=True,
+                enable_cleanup_closed=_NEEDS_CLEANUP_CLOSED,
                 ssl=self._ssl_context or False,
             ),
         )
