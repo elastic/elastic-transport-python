@@ -67,7 +67,6 @@ class AsyncDummyNode(DummyNode):
 
 
 @pytest.fixture(scope="session", params=[True, False])
-@pytest.mark.usefixtures("httpbin_node_config")
 def httpbin_cert_fingerprint(request) -> str:
     """Gets the SHA256 fingerprint of the certificate for 'httpbin.org'"""
     sock = socket.create_connection(("httpbin.org", 443))
