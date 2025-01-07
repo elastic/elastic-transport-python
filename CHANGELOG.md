@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.17.0 (2025-01-07)
+
+* Fix use of SSLContext with sniffing ([#199](https://github.com/elastic/elastic-transport-python/pull/199))
+* Fix enabled_cleanup_closed warning ([#202](https://github.com/elastic/elastic-transport-python/pull/202))
+* Remove unneeded install requirement ([#196](https://github.com/elastic/elastic-transport-python/pull/196))
+* Fix aiohttp call type: ignore differently ([#190](https://github.com/elastic/elastic-transport-python/pull/190))
+
 ## 8.15.1 (2024-10-09)
 
 * Add explicit Python 3.13 support ([#189](https://github.com/elastic/elastic-transport-python/pull/189))
