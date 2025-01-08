@@ -158,6 +158,13 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                 )
             elif isinstance(e, ssl.SSLError):
                 err = TlsError(str(e), errors=(e,))
+            # Detect SSL errors for httpx v0.28.0+
+            elif isinstance(e, httpx.ConnectError) and e.__cause__:
+                context = e.__cause__.__context__
+                if isinstance(context, ssl.SSLError):
+                    err = TlsError(str(context), errors=(e,))
+                else:
+                    err = ConnectionError(str(e), errors=(e,))
             else:
                 err = ConnectionError(str(e), errors=(e,))
             self._log_request(
