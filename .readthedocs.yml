@@ -17,5 +17,5 @@ python:
         - develop
 
 sphinx:
-  configuration: docs/conf.py
+  configuration: docs/sphinx/conf.py
   fail_on_warning: true
