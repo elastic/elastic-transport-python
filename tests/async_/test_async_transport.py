@@ -45,6 +45,14 @@ from elastic_transport.client_utils import DEFAULT
 from tests.conftest import AsyncDummyNode
 
 
+def exception_to_dict(exc: TransportError) -> dict:
+    return {
+        "type": exc.__class__.__name__,
+        "message": exc.message,
+        "errors": [exception_to_dict(e) for e in exc.errors],
+    }
+
+
 @pytest.mark.asyncio
 async def test_async_transport_httpbin(httpbin_node_config):
     t = AsyncTransport([httpbin_node_config], meta_header=False)
@@ -139,14 +147,39 @@ async def test_request_will_fail_after_x_retries():
             )
         ],
         node_class=AsyncDummyNode,
+        max_retries=0,
     )
 
     with pytest.raises(ConnectionError) as e:
         await t.perform_request("GET", "/")
 
+    assert exception_to_dict(e.value) == {
+        "type": "ConnectionError",
+        "message": "abandon ship",
+        "errors": [],
+    }
+
+    # max_retries=2
+    with pytest.raises(ConnectionError) as e:
+        await t.perform_request("GET", "/", max_retries=2)
+
     assert 4 == len(t.node_pool.get().calls)
-    assert len(e.value.errors) == 3
-    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+    assert exception_to_dict(e.value) == {
+        "type": "ConnectionError",
+        "message": "abandon ship",
+        "errors": [
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+        ],
+    }
 
 
 @pytest.mark.parametrize("retry_on_timeout", [True, False])
@@ -174,15 +207,30 @@ async def test_retry_on_timeout(retry_on_timeout):
     )
 
     if retry_on_timeout:
-        with pytest.raises(ConnectionError) as e:
+        with pytest.raises(TransportError) as e:
             await t.perform_request("GET", "/")
-        assert len(e.value.errors) == 1
-        assert isinstance(e.value.errors[0], ConnectionTimeout)
+
+        assert exception_to_dict(e.value) == {
+            "type": "ConnectionError",
+            "message": "error!",
+            "errors": [
+                {
+                    "type": "ConnectionTimeout",
+                    "message": "abandon ship",
+                    "errors": [],
+                }
+            ],
+        }
 
     else:
-        with pytest.raises(ConnectionTimeout) as e:
+        with pytest.raises(TransportError) as e:
             await t.perform_request("GET", "/")
-        assert len(e.value.errors) == 0
+
+        assert exception_to_dict(e.value) == {
+            "type": "ConnectionTimeout",
+            "message": "abandon ship",
+            "errors": [],
+        }
 
 
 @pytest.mark.asyncio
@@ -254,8 +302,27 @@ async def test_failed_connection_will_be_marked_as_dead():
         await t.perform_request("GET", "/")
     assert 0 == len(t.node_pool._alive_nodes)
     assert 2 == len(t.node_pool._dead_nodes.queue)
-    assert len(e.value.errors) == 3
-    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+    assert exception_to_dict(e.value) == {
+        "type": "ConnectionError",
+        "message": "abandon ship",
+        "errors": [
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+        ],
+    }
 
 
 @pytest.mark.asyncio
@@ -602,7 +669,12 @@ async def test_sniff_error_resets_lock_and_last_sniffed_at():
 
     with pytest.raises(TransportError) as e:
         await t.perform_request("GET", "/")
-    assert str(e.value) == "This is an error!"
+
+    assert exception_to_dict(e.value) == {
+        "type": "TransportError",
+        "message": "This is an error!",
+        "errors": [],
+    }
 
     assert t._last_sniffed_at == last_sniffed_at
     assert t._sniffing_task.done()
@@ -628,9 +700,11 @@ async def test_sniff_on_start_no_results_errors(sniff_callback):
     with pytest.raises(SniffingError) as e:
         await t._async_call()
 
-    assert (
-        str(e.value) == "No viable nodes were discovered on the initial sniff attempt"
-    )
+    assert exception_to_dict(e.value) == {
+        "type": "SniffingError",
+        "message": "No viable nodes were discovered on the initial sniff attempt",
+        "errors": [],
+    }
 
 
 @pytest.mark.parametrize("pool_size", [1, 8])

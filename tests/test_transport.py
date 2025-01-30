@@ -42,6 +42,14 @@ from elastic_transport.client_utils import DEFAULT
 from tests.conftest import DummyNode
 
 
+def exception_to_dict(exc: TransportError) -> dict:
+    return {
+        "type": exc.__class__.__name__,
+        "message": exc.message,
+        "errors": [exception_to_dict(e) for e in exc.errors],
+    }
+
+
 def test_transport_close_node_pool():
     t = Transport([NodeConfig("http", "localhost", 443)])
     with mock.patch.object(t.node_pool.all()[0], "close") as node_close:
@@ -138,37 +146,33 @@ def test_request_will_fail_after_x_retries():
     with pytest.raises(ConnectionError) as e:
         t.perform_request("GET", "/")
 
-    assert 1 == len(t.node_pool.get().calls)
-    assert len(e.value.errors) == 0
-
-    # max_retries=3
-    t = Transport(
-        [
-            NodeConfig(
-                "http",
-                "localhost",
-                80,
-                _extras={"exception": ConnectionError("abandon ship")},
-            )
-        ],
-        node_class=DummyNode,
-        max_retries=3,
-    )
-
-    with pytest.raises(ConnectionError) as e:
-        t.perform_request("GET", "/")
-
-    assert 4 == len(t.node_pool.get().calls)
-    assert len(e.value.errors) == 3
-    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+    assert exception_to_dict(e.value) == {
+        "type": "ConnectionError",
+        "message": "abandon ship",
+        "errors": [],
+    }
 
     # max_retries=2 in perform_request()
     with pytest.raises(ConnectionError) as e:
         t.perform_request("GET", "/", max_retries=2)
 
-    assert 7 == len(t.node_pool.get().calls)
-    assert len(e.value.errors) == 2
-    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+    assert 4 == len(t.node_pool.get().calls)
+    assert exception_to_dict(e.value) == {
+        "type": "ConnectionError",
+        "message": "abandon ship",
+        "errors": [
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+        ],
+    }
 
 
 @pytest.mark.parametrize("retry_on_timeout", [True, False])
@@ -197,13 +201,28 @@ def test_retry_on_timeout(retry_on_timeout):
     if retry_on_timeout:
         with pytest.raises(ConnectionError) as e:
             t.perform_request("GET", "/")
-        assert len(e.value.errors) == 1
-        assert isinstance(e.value.errors[0], ConnectionTimeout)
+
+        assert exception_to_dict(e.value) == {
+            "type": "ConnectionError",
+            "message": "error!",
+            "errors": [
+                {
+                    "type": "ConnectionTimeout",
+                    "message": "abandon ship",
+                    "errors": [],
+                }
+            ],
+        }
 
     else:
         with pytest.raises(ConnectionTimeout) as e:
             t.perform_request("GET", "/")
-        assert len(e.value.errors) == 0
+
+        assert exception_to_dict(e.value) == {
+            "type": "ConnectionTimeout",
+            "message": "abandon ship",
+            "errors": [],
+        }
 
 
 def test_retry_on_status():
@@ -273,8 +292,27 @@ def test_failed_connection_will_be_marked_as_dead():
         t.perform_request("GET", "/")
     assert 0 == len(t.node_pool._alive_nodes)
     assert 2 == len(t.node_pool._dead_nodes.queue)
-    assert len(e.value.errors) == 3
-    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+    assert exception_to_dict(e.value) == {
+        "type": "ConnectionError",
+        "message": "abandon ship",
+        "errors": [
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+            {
+                "type": "ConnectionError",
+                "message": "abandon ship",
+                "errors": [],
+            },
+        ],
+    }
 
 
 def test_resurrected_connection_will_be_marked_as_live_on_success():
@@ -603,7 +641,12 @@ def test_sniff_error_resets_lock_and_last_sniffed_at():
 
     with pytest.raises(TransportError) as e:
         t.perform_request("GET", "/")
-    assert str(e.value) == "This is an error!"
+
+    assert exception_to_dict(e.value) == {
+        "type": "TransportError",
+        "message": "This is an error!",
+        "errors": [],
+    }
 
     assert t._last_sniffed_at == last_sniffed_at
     assert t._sniffing_lock.locked() is False
@@ -620,9 +663,11 @@ def test_sniff_on_start_no_results_errors():
             sniff_callback=lambda *_: [],
         )
 
-    assert (
-        str(e.value) == "No viable nodes were discovered on the initial sniff attempt"
-    )
+    assert exception_to_dict(e.value) == {
+        "type": "SniffingError",
+        "message": "No viable nodes were discovered on the initial sniff attempt",
+        "errors": [],
+    }
 
 
 @pytest.mark.parametrize("pool_size", [1, 8])
