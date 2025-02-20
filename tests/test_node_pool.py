@@ -247,7 +247,7 @@ def test_threading_test(pool_size):
         def run(self) -> None:
             nonlocal pool
 
-            while time.time() < start + 2:
+            while time.time() < start + 5:
                 node = pool.get()
                 self.nodes_gotten += 1
                 if random.random() > 0.9:
