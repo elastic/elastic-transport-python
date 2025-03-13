@@ -1,5 +1,10 @@
 # Changelog
 
+## 8.17.1 (2025-03-12)
+
+* Ensure compatibility with httpx v0.28.0+ ([#222](https://github.com/elastic/elastic-transport-python/pull/222), contributed by Arch Linux maintainer @carlsmedstad)
+* Add missing NOTICE file ([#229](https://github.com/elastic/elastic-transport-python/pull/229), reported by Debian Maintainer @schoekek)
+
 ## 8.17.0 (2025-01-07)
 
 * Fix use of SSLContext with sniffing ([#199](https://github.com/elastic/elastic-transport-python/pull/199))
