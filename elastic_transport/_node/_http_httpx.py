@@ -101,11 +101,22 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                 elif config.client_cert:
                     ssl_context.load_cert_chain(config.client_cert)
 
+        # Httpx supports setting 'auth' via _extras['requests.session.auth'] = ...
+        # The naming is weird but it enables compatibility with the existing
+        # 'requests.session.auth' parameter
+        try:
+            httpx_auth: Optional[httpx.Auth] = config._extras.pop(
+                "requests.session.auth", None
+            )
+        except AttributeError:
+            httpx_auth = None
+
         self.client = httpx.AsyncClient(
             base_url=f"{config.scheme}://{config.host}:{config.port}",
             limits=httpx.Limits(max_connections=config.connections_per_node),
             verify=ssl_context or False,
             timeout=config.request_timeout,
+            auth=httpx_auth,
         )
 
     async def perform_request(  # type: ignore[override]
