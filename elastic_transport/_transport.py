@@ -338,7 +338,9 @@ class Transport:
             node = self.node_pool.get()
             start_time = time.time()
             try:
-                otel_span.set_node_metadata(node.host, node.port, node.base_url, target)
+                otel_span.set_node_metadata(
+                    node.host, node.port, node.base_url, target, method
+                )
                 resp = node.perform_request(
                     method,
                     target,
