@@ -74,6 +74,7 @@ def test_detailed_span():
                 "X-Found-Handling-Instance": "instance-0000000001",
             }
         )
+        span.set_db_response(202)
 
     spans = memory_exporter.get_finished_spans()
     assert len(spans) == 1
@@ -88,6 +89,7 @@ def test_detailed_span():
         "http.request.method": "POST",
         "db.namespace": "e9106fc68e3044f0b1475b04bf4ffd5f",
         "elasticsearch.node.name": "instance-0000000001",
+        "db.response.status_code": "202",
     }
 
 

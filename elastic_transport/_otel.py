@@ -92,3 +92,9 @@ class OpenTelemetrySpan:
             self.otel_span.set_attribute(
                 "db.query.text", serialized_body.decode("utf-8")
             )
+
+    def set_db_response(self, status_code: int) -> None:
+        if self.otel_span is None:
+            return
+
+        self.otel_span.set_attribute("db.response.status_code", str(status_code))
