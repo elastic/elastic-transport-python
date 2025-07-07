@@ -52,11 +52,15 @@ async def test_async_transport_httpbin(httpbin_node_config):
 
     assert resp.status == 200
     assert data["method"] == "GET"
-    assert data["url"] == "https://httpbin.org/anything?key=value"
+    assert data["url"] == "http://localhost:8080/anything?key=value"
     assert data["args"] == {"key": "value"}
 
     data["headers"].pop("X-Amzn-Trace-Id", None)
-    assert data["headers"] == {"User-Agent": DEFAULT_USER_AGENT, "Host": "httpbin.org"}
+    assert data["headers"] == {
+        "User-Agent": DEFAULT_USER_AGENT,
+        "Connection": "keep-alive",
+        "Host": "localhost:8080",
+    }
 
 
 @pytest.mark.skipif(

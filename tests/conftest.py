@@ -86,12 +86,14 @@ def httpbin_cert_fingerprint(request) -> str:
 @pytest.fixture(scope="session")
 def httpbin_node_config() -> NodeConfig:
     try:
-        sock = socket.create_connection(("httpbin.org", 443))
+        sock = socket.create_connection(("localhost", 8080))
     except Exception as e:
-        pytest.skip(f"Couldn't connect to httpbin.org, internet not connected? {e}")
+        pytest.skip(
+            f"Couldn't connect to localhost:8080, not running httpbin image? {e}"
+        )
     sock.close()
     return NodeConfig(
-        "https", "httpbin.org", 443, verify_certs=False, ssl_show_warn=False
+        "http", "localhost", 8080, verify_certs=False, ssl_show_warn=False
     )
 
 
