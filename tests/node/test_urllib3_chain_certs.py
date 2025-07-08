@@ -35,8 +35,8 @@ def test_ssl_assert_fingerprint_invalid_length(node_cls):
         node_cls(
             NodeConfig(
                 "https",
-                "httpbin.org",
-                443,
+                "localhost",
+                9200,
                 ssl_assert_fingerprint="0000",
             )
         )
@@ -52,9 +52,9 @@ def test_ssl_assert_fingerprint_invalid_length(node_cls):
 @pytest.mark.parametrize(
     "ssl_assert_fingerprint",
     [
-        "8ecde6884f3d87b1125ba31ac3fcb13d7016de7f57cc904fe1cb97c6ae98196e",
-        "8e:cd:e6:88:4f:3d:87:b1:12:5b:a3:1a:c3:fc:b1:3d:70:16:de:7f:57:cc:90:4f:e1:cb:97:c6:ae:98:19:6e",
-        "8ECDE6884F3D87B1125BA31AC3FCB13D7016DE7F57CC904FE1CB97C6AE98196E",
+        "18efbd94dda87e3598a1251f9440cd2f4fd1dbf08be007c1012e992e830ca262",
+        "18:EF:BD:94:DD:A8:7E:35:98:A1:25:1F:94:40:CD:2F:4F:D1:DB:F0:8B:E0:07:C1:01:2E:99:2E:83:0C:A2:62",
+        "18EFBD94DDA87E3598A1251F9440CD2F4FD1DBF08BE007C1012E992E830CA262",
     ],
 )
 def test_assert_fingerprint_in_cert_chain(node_cls, ssl_assert_fingerprint):
@@ -62,7 +62,7 @@ def test_assert_fingerprint_in_cert_chain(node_cls, ssl_assert_fingerprint):
         node = node_cls(
             NodeConfig(
                 "https",
-                "httpbin.org",
+                "www.elastic.co",
                 443,
                 ssl_assert_fingerprint=ssl_assert_fingerprint,
             )
@@ -79,7 +79,7 @@ def test_assert_fingerprint_in_cert_chain_failure(node_cls):
     node = node_cls(
         NodeConfig(
             "https",
-            "httpbin.org",
+            "www.elastic.co",
             443,
             ssl_assert_fingerprint="0" * 64,
         )
@@ -89,6 +89,7 @@ def test_assert_fingerprint_in_cert_chain_failure(node_cls):
         node.perform_request("GET", "/")
 
     err = str(e.value)
+    print(err)
     assert "Fingerprints did not match." in err
     # This is the bad value we "expected"
     assert (
@@ -96,4 +97,4 @@ def test_assert_fingerprint_in_cert_chain_failure(node_cls):
         in err
     )
     # This is the root CA for httpbin.org with a leading comma to denote more than one cert was listed.
-    assert ', "8ecde6884f3d87b1125ba31ac3fcb13d7016de7f57cc904fe1cb97c6ae98196e"' in err
+    assert '"18efbd94dda87e3598a1251f9440cd2f4fd1dbf08be007c1012e992e830ca262"' in err

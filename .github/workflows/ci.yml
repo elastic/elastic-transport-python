@@ -61,6 +61,12 @@ jobs:
         image: kennethreitz/httpbin
         ports:
           - 8080:80
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:9.0.2
+        env:
+          discovery.type: single-node
+        ports:
+          - 9200:9200
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
