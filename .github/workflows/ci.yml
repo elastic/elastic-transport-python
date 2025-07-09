@@ -56,13 +56,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     name: test-${{ matrix.python-version }} ${{ matrix.nox-session }}
     continue-on-error: ${{ matrix.experimental }}
-    services:
-      elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:9.0.2
-        env:
-          discovery.type: single-node
-        ports:
-          - 9200:9200
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2

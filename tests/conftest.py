@@ -66,10 +66,12 @@ class AsyncDummyNode(DummyNode):
         return NodeApiResponse(meta, self.body)
 
 
-@pytest.fixture(scope="session", params=[True, False])
-def cert_fingerprint(request) -> str:
-    """Gets the SHA256 fingerprint of the certificate for localhost:9200"""
-    sock = socket.create_connection(("localhost", 9200))
+@pytest.fixture(
+    scope="session", params=["short-lower", "short-upper", "long-lower", "long-upper"]
+)
+def cert_fingerprint(request, httpbin_secure) -> str:
+    """Gets the SHA256 fingerprint of the certificate for the secure httpbin"""
+    sock = socket.create_connection((httpbin_secure.host, httpbin_secure.port))
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -77,7 +79,11 @@ def cert_fingerprint(request) -> str:
     digest = hashlib.sha256(sock.getpeercert(binary_form=True)).hexdigest()
     assert len(digest) == 64
     sock.close()
-    if request.param:
+    if "upper" in request.param:
+        digest = digest.upper()
+    else:
+        digest = digest.lower()
+    if "short" in request.param:
         return digest
     else:
         return ":".join([digest[i : i + 2] for i in range(0, len(digest), 2)])

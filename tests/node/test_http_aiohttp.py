@@ -290,19 +290,19 @@ class TestAiohttpHttpNode:
 
 
 @pytest.mark.asyncio
-async def test_ssl_assert_fingerprint(cert_fingerprint):
+async def test_ssl_assert_fingerprint(cert_fingerprint, httpbin_secure):
     with warnings.catch_warnings(record=True) as w:
         node = AiohttpHttpNode(
             NodeConfig(
                 scheme="https",
-                host="localhost",
-                port=9200,
+                host=httpbin_secure.host,
+                port=httpbin_secure.port,
                 ssl_assert_fingerprint=cert_fingerprint,
             )
         )
         resp, _ = await node.perform_request("GET", "/")
 
-    assert resp.status == 401
+    assert resp.status == 200
     assert [str(x.message) for x in w if x.category != DeprecationWarning] == []
 
 
