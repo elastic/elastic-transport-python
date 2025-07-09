@@ -38,7 +38,7 @@ node_class = pytest.mark.parametrize(
 
 @node_class
 @pytest.mark.asyncio
-async def test_debug_logging(node_class, httpbin_node_config):
+async def test_debug_logging(node_class, httpbin_node_config, httpbin):
     debug_logging()
 
     stream = io.StringIO()
@@ -59,8 +59,8 @@ async def test_debug_logging(node_class, httpbin_node_config):
     print(node_class)
     print(stream.getvalue())
 
-    lines = stream.getvalue().split("\n")
-    print(lines)
+    response = stream.getvalue()
+    print(response)
     for line in [
         "> GET /anything HTTP/1.1",
         "> Connection: keep-alive",
@@ -72,23 +72,23 @@ async def test_debug_logging(node_class, httpbin_node_config):
         "< Access-Control-Allow-Origin: *",
         "< Content-Type: application/json",
         "< {",
-        '  "args": {}, ',
-        '  "data": "{\\"key\\":\\"value\\"}", ',
-        '  "files": {}, ',
-        '  "form": {}, ',
-        '  "headers": {',
-        '    "Content-Type": "application/json", ',
-        '    "Host": "localhost:8080", ',
-        f'    "User-Agent": "{DEFAULT_USER_AGENT}"',
-        "  }, ",
-        '  "json": {',
-        '    "key": "value"',
-        "  }, ",
-        '  "method": "GET", ',
-        '  "url": "http://localhost:8080/anything"',
+        '"args":{},',
+        '"data":"{\\"key\\":\\"value\\"}",',
+        '"files":{},',
+        '"form":{},',
+        '"headers":{',
+        '"Content-Type":"application/json",',
+        f'"Host":"{httpbin.host}:{httpbin.port}",',
+        f'"User-Agent":"{DEFAULT_USER_AGENT}"',
+        "},",
+        '"json":{',
+        '"key":"value"',
+        "},",
+        '"method":"GET",',
+        f'"url":"{httpbin.url}/anything"',
         "}",
     ]:
-        assert line in lines
+        assert line in response
 
 
 @node_class

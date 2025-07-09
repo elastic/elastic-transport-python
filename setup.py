@@ -60,6 +60,7 @@ setup(
             "pytest-cov",
             "pytest-mock",
             "pytest-asyncio",
+            "pytest-httpbin",
             "pytest-httpserver",
             "trustme",
             "requests",

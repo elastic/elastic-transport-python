@@ -26,7 +26,7 @@ from elastic_transport._transport import NODE_CLASS_NAMES
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
-def test_simple_request(node_class, httpbin_node_config):
+def test_simple_request(node_class, httpbin_node_config, httpbin):
     t = Transport([httpbin_node_config], node_class=node_class)
 
     resp, data = t.perform_request(
@@ -37,7 +37,7 @@ def test_simple_request(node_class, httpbin_node_config):
     )
     assert resp.status == 200
     assert data["method"] == "GET"
-    assert data["url"] == "http://localhost:8080/anything?key[]=1&key[]=2&q1&q2="
+    assert data["url"] == f"{httpbin.url}/anything?key[]=1&key[]=2&q1&q2="
 
     # httpbin makes no-value query params into ''
     assert data["args"] == {
@@ -53,13 +53,13 @@ def test_simple_request(node_class, httpbin_node_config):
         "Content-Length": "15",
         "Custom": "headeR",
         "Connection": "keep-alive",
-        "Host": "localhost:8080",
+        "Host": f"{httpbin.host}:{httpbin.port}",
     }
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
-def test_node(node_class, httpbin_node_config):
+def test_node(node_class, httpbin_node_config, httpbin):
     def new_node(**kwargs):
         return NODE_CLASS_NAMES[node_class](
             dataclasses.replace(httpbin_node_config, **kwargs)
@@ -73,11 +73,11 @@ def test_node(node_class, httpbin_node_config):
         "headers": {
             "Accept-Encoding": "identity",
             "Connection": "keep-alive",
-            "Host": "localhost:8080",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "http://localhost:8080/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     node = new_node(http_compress=True)
@@ -88,11 +88,11 @@ def test_node(node_class, httpbin_node_config):
         "headers": {
             "Accept-Encoding": "gzip",
             "Connection": "keep-alive",
-            "Host": "localhost:8080",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "http://localhost:8080/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     resp, data = node.perform_request("GET", "/anything", body=b"hello, world!")
@@ -104,11 +104,11 @@ def test_node(node_class, httpbin_node_config):
             "Content-Encoding": "gzip",
             "Content-Length": "33",
             "Connection": "keep-alive",
-            "Host": "localhost:8080",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "http://localhost:8080/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     resp, data = node.perform_request(
@@ -126,11 +126,11 @@ def test_node(node_class, httpbin_node_config):
             "Content-Length": "36",
             "Content-Type": "application/json",
             "Connection": "keep-alive",
-            "Host": "localhost:8080",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "POST",
-        "url": "http://localhost:8080/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
 
