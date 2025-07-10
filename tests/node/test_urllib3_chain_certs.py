@@ -89,5 +89,5 @@ def test_assert_fingerprint_in_cert_chain_failure(
         'Expected "0000000000000000000000000000000000000000000000000000000000000000",'
         in err
     )
-    # This is the root CA for httpbin.org with a leading comma to denote more than one cert was listed.
+    # This is the root CA for www.elastic.co with a leading comma to denote more than one cert was listed.
     assert ', "cbb522d7b7f127ad6a0113865bdf1cd4102e7d0759af635a7cf4720dc963c53b"' in err
