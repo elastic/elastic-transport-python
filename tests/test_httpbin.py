@@ -26,7 +26,7 @@ from elastic_transport._transport import NODE_CLASS_NAMES
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
-def test_simple_request(node_class, httpbin_node_config):
+def test_simple_request(node_class, httpbin_node_config, httpbin):
     t = Transport([httpbin_node_config], node_class=node_class)
 
     resp, data = t.perform_request(
@@ -37,7 +37,7 @@ def test_simple_request(node_class, httpbin_node_config):
     )
     assert resp.status == 200
     assert data["method"] == "GET"
-    assert data["url"] == "https://httpbin.org/anything?key[]=1&key[]=2&q1&q2="
+    assert data["url"] == f"{httpbin.url}/anything?key[]=1&key[]=2&q1&q2="
 
     # httpbin makes no-value query params into ''
     assert data["args"] == {
@@ -52,13 +52,14 @@ def test_simple_request(node_class, httpbin_node_config):
         "Content-Type": "application/json",
         "Content-Length": "15",
         "Custom": "headeR",
-        "Host": "httpbin.org",
+        "Connection": "keep-alive",
+        "Host": f"{httpbin.host}:{httpbin.port}",
     }
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
-def test_node(node_class, httpbin_node_config):
+def test_node(node_class, httpbin_node_config, httpbin):
     def new_node(**kwargs):
         return NODE_CLASS_NAMES[node_class](
             dataclasses.replace(httpbin_node_config, **kwargs)
@@ -71,11 +72,12 @@ def test_node(node_class, httpbin_node_config):
     assert parsed == {
         "headers": {
             "Accept-Encoding": "identity",
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     node = new_node(http_compress=True)
@@ -85,11 +87,12 @@ def test_node(node_class, httpbin_node_config):
     assert parsed == {
         "headers": {
             "Accept-Encoding": "gzip",
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     resp, data = node.perform_request("GET", "/anything", body=b"hello, world!")
@@ -100,11 +103,12 @@ def test_node(node_class, httpbin_node_config):
             "Accept-Encoding": "gzip",
             "Content-Encoding": "gzip",
             "Content-Length": "33",
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     resp, data = node.perform_request(
@@ -121,16 +125,17 @@ def test_node(node_class, httpbin_node_config):
             "Content-Encoding": "gzip",
             "Content-Length": "36",
             "Content-Type": "application/json",
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "POST",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
 
 def parse_httpbin(value):
-    """Parses a response from httpbin.org/anything by stripping all the variable things"""
+    """Parses a response from httpbin's /anything by stripping all the variable things"""
     if isinstance(value, bytes):
         value = json.loads(value)
     else:
