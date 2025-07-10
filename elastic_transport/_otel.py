@@ -49,14 +49,25 @@ class OpenTelemetrySpan:
         self.body_strategy = body_strategy
         self.endpoint_id = endpoint_id
 
+        if self.otel_span:
+            self.otel_span.set_attribute("db.system.name", "elasticsearch")
+            if self.endpoint_id:
+                self.otel_span.set_attribute("db.operation.name", self.endpoint_id)
+
     def set_node_metadata(
-        self, host: str, port: int, base_url: str, target: str
+        self,
+        host: str,
+        port: int,
+        base_url: str,
+        target: str,
+        method: str,
     ) -> None:
         if self.otel_span is None:
             return
 
         # url.full does not contain auth info which is passed as headers
         self.otel_span.set_attribute("url.full", base_url + target)
+        self.otel_span.set_attribute("http.request.method", method)
         self.otel_span.set_attribute("server.address", host)
         self.otel_span.set_attribute("server.port", port)
 
@@ -66,10 +77,10 @@ class OpenTelemetrySpan:
 
         cluster_name = headers.get("X-Found-Handling-Cluster")
         if cluster_name is not None:
-            self.otel_span.set_attribute("db.elasticsearch.cluster.name", cluster_name)
+            self.otel_span.set_attribute("db.namespace", cluster_name)
         node_name = headers.get("X-Found-Handling-Instance")
         if node_name is not None:
-            self.otel_span.set_attribute("db.elasticsearch.node.name", node_name)
+            self.otel_span.set_attribute("elasticsearch.node.name", node_name)
 
     def set_db_statement(self, serialized_body: bytes) -> None:
         if self.otel_span is None:
@@ -79,5 +90,11 @@ class OpenTelemetrySpan:
             return
         elif self.body_strategy == "raw" and self.endpoint_id in SEARCH_ENDPOINTS:
             self.otel_span.set_attribute(
-                "db.statement", serialized_body.decode("utf-8")
+                "db.query.text", serialized_body.decode("utf-8")
             )
+
+    def set_db_response(self, status_code: int) -> None:
+        if self.otel_span is None:
+            return
+
+        self.otel_span.set_attribute("db.response.status_code", str(status_code))

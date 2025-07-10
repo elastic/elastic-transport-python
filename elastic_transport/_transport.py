@@ -338,7 +338,9 @@ class Transport:
             node = self.node_pool.get()
             start_time = time.time()
             try:
-                otel_span.set_node_metadata(node.host, node.port, node.base_url, target)
+                otel_span.set_node_metadata(
+                    node.host, node.port, node.base_url, target, method
+                )
                 resp = node.perform_request(
                     method,
                     target,
@@ -442,6 +444,7 @@ class Transport:
                 # We either got a response we're happy with or
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
+                    otel_span.set_db_response(resp.meta.status)
                     return TransportApiResponse(resp.meta, body)
                 else:
                     _logger.warning(

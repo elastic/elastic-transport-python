@@ -41,6 +41,7 @@ def test_no_span():
         9200,
         "http://localhost:9200/",
         "_ml/anomaly_detectors/my-job/_open",
+        "POST",
     )
     span.set_elastic_cloud_metadata(
         {
@@ -65,6 +66,7 @@ def test_detailed_span():
             9200,
             "http://localhost:9200/",
             "_ml/anomaly_detectors/my-job/_open",
+            "POST",
         )
         span.set_elastic_cloud_metadata(
             {
@@ -72,16 +74,22 @@ def test_detailed_span():
                 "X-Found-Handling-Instance": "instance-0000000001",
             }
         )
+        span.set_db_response(202)
 
     spans = memory_exporter.get_finished_spans()
     assert len(spans) == 1
     assert spans[0].name == "ml.open_job"
     assert spans[0].attributes == {
+        "db.system.name": "elasticsearch",
         "url.full": "http://localhost:9200/_ml/anomaly_detectors/my-job/_open",
+        "http.request.method": "POST",
         "server.address": "localhost",
         "server.port": 9200,
-        "db.elasticsearch.cluster.name": "e9106fc68e3044f0b1475b04bf4ffd5f",
-        "db.elasticsearch.node.name": "instance-0000000001",
+        "db.operation.name": "my-job/_open",
+        "http.request.method": "POST",
+        "db.namespace": "e9106fc68e3044f0b1475b04bf4ffd5f",
+        "elasticsearch.node.name": "instance-0000000001",
+        "db.response.status_code": "202",
     }
 
 
@@ -95,5 +103,7 @@ def test_db_statement():
     assert len(spans) == 1
     assert spans[0].name == "search"
     assert spans[0].attributes == {
-        "db.statement": '{"query":{"match_all":{}}}',
+        "db.system.name": "elasticsearch",
+        "db.operation.name": "search",
+        "db.query.text": '{"query":{"match_all":{}}}',
     }
