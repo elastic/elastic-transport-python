@@ -145,13 +145,13 @@ class TestHttpxAsyncNode:
         assert request.headers["h3"] == "v3"
 
 
-def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
+def test_ssl_assert_fingerprint(cert_fingerprint, httpbin_secure):
     with pytest.raises(ValueError, match="httpx does not support certificate pinning"):
         HttpxAsyncHttpNode(
             NodeConfig(
                 scheme="https",
-                host="httpbin.org",
-                port=443,
-                ssl_assert_fingerprint=httpbin_cert_fingerprint,
+                host=httpbin_secure.host,
+                port=httpbin_secure.port,
+                ssl_assert_fingerprint=cert_fingerprint,
             )
         )
