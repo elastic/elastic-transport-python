@@ -15,6 +15,7 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import copy
 import hashlib
 import logging
 import socket
@@ -40,7 +41,8 @@ class DummyNode(BaseNode):
     def perform_request(self, *args, **kwargs):
         self.calls.append((args, kwargs))
         if self.exception:
-            raise self.exception
+            # Raising the same exception can cause recursion errors when exceptions are linked together
+            raise copy.deepcopy(self.exception)
         meta = ApiResponseMeta(
             node=self.config,
             duration=0.0,
@@ -55,7 +57,8 @@ class AsyncDummyNode(DummyNode):
     async def perform_request(self, *args, **kwargs):
         self.calls.append((args, kwargs))
         if self.exception:
-            raise self.exception
+            # Raising the same exception can cause recursion errors when exceptions are linked together
+            raise copy.deepcopy(self.exception)
         meta = ApiResponseMeta(
             node=self.config,
             duration=0.0,
