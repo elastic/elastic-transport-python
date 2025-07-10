@@ -46,17 +46,21 @@ from tests.conftest import AsyncDummyNode
 
 
 @pytest.mark.asyncio
-async def test_async_transport_httpbin(httpbin_node_config):
+async def test_async_transport_httpbin(httpbin_node_config, httpbin):
     t = AsyncTransport([httpbin_node_config], meta_header=False)
     resp, data = await t.perform_request("GET", "/anything?key=value")
 
     assert resp.status == 200
     assert data["method"] == "GET"
-    assert data["url"] == "https://httpbin.org/anything?key=value"
+    assert data["url"] == f"{httpbin.url}/anything?key=value"
     assert data["args"] == {"key": "value"}
 
     data["headers"].pop("X-Amzn-Trace-Id", None)
-    assert data["headers"] == {"User-Agent": DEFAULT_USER_AGENT, "Host": "httpbin.org"}
+    assert data["headers"] == {
+        "User-Agent": DEFAULT_USER_AGENT,
+        "Connection": "keep-alive",
+        "Host": f"{httpbin.host}:{httpbin.port}",
+    }
 
 
 @pytest.mark.skipif(
