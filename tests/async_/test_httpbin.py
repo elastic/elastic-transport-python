@@ -27,7 +27,7 @@ from ..test_httpbin import parse_httpbin
 
 
 @pytest.mark.asyncio
-async def test_simple_request(httpbin_node_config):
+async def test_simple_request(httpbin_node_config, httpbin):
     t = AsyncTransport([httpbin_node_config])
 
     resp, data = await t.perform_request(
@@ -38,7 +38,7 @@ async def test_simple_request(httpbin_node_config):
     )
     assert resp.status == 200
     assert data["method"] == "GET"
-    assert data["url"] == "https://httpbin.org/anything?key[]=1&key[]=2&q1&q2="
+    assert data["url"] == f"{httpbin.url}/anything?key[]=1&key[]=2&q1&q2="
 
     # httpbin makes no-value query params into ''
     assert data["args"] == {
@@ -53,13 +53,14 @@ async def test_simple_request(httpbin_node_config):
         "Content-Type": "application/json",
         "Content-Length": "15",
         "Custom": "headeR",
-        "Host": "httpbin.org",
+        "Connection": "keep-alive",
+        "Host": f"{httpbin.host}:{httpbin.port}",
     }
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
 @pytest.mark.asyncio
-async def test_node(httpbin_node_config):
+async def test_node(httpbin_node_config, httpbin):
     def new_node(**kwargs):
         return AiohttpHttpNode(dataclasses.replace(httpbin_node_config, **kwargs))
 
@@ -69,11 +70,12 @@ async def test_node(httpbin_node_config):
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": {
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     node = new_node(http_compress=True)
@@ -83,11 +85,12 @@ async def test_node(httpbin_node_config):
     assert parsed == {
         "headers": {
             "Accept-Encoding": "gzip",
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     resp, data = await node.perform_request("GET", "/anything", body=b"hello, world!")
@@ -99,11 +102,12 @@ async def test_node(httpbin_node_config):
             "Content-Encoding": "gzip",
             "Content-Type": "application/octet-stream",
             "Content-Length": "33",
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "GET",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }
 
     resp, data = await node.perform_request(
@@ -120,9 +124,10 @@ async def test_node(httpbin_node_config):
             "Content-Encoding": "gzip",
             "Content-Length": "36",
             "Content-Type": "application/json",
-            "Host": "httpbin.org",
+            "Connection": "keep-alive",
+            "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
         },
         "method": "POST",
-        "url": "https://httpbin.org/anything",
+        "url": f"{httpbin.url}/anything",
     }

@@ -290,14 +290,14 @@ class TestAiohttpHttpNode:
 
 
 @pytest.mark.asyncio
-async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
+async def test_ssl_assert_fingerprint(cert_fingerprint, httpbin_secure):
     with warnings.catch_warnings(record=True) as w:
         node = AiohttpHttpNode(
             NodeConfig(
                 scheme="https",
-                host="httpbin.org",
-                port=443,
-                ssl_assert_fingerprint=httpbin_cert_fingerprint,
+                host=httpbin_secure.host,
+                port=httpbin_secure.port,
+                ssl_assert_fingerprint=cert_fingerprint,
             )
         )
         resp, _ = await node.perform_request("GET", "/")
@@ -307,23 +307,29 @@ async def test_ssl_assert_fingerprint(httpbin_cert_fingerprint):
 
 
 @pytest.mark.asyncio
-async def test_default_headers():
-    node = AiohttpHttpNode(NodeConfig(scheme="https", host="httpbin.org", port=443))
+async def test_default_headers(httpbin):
+    node = AiohttpHttpNode(
+        NodeConfig(scheme="http", host=httpbin.host, port=httpbin.port)
+    )
     resp, data = await node.perform_request("GET", "/anything")
 
     assert resp.status == 200
     headers = json.loads(data)["headers"]
     headers.pop("X-Amzn-Trace-Id", None)
-    assert headers == {"Host": "httpbin.org", "User-Agent": DEFAULT_USER_AGENT}
+    assert headers == {
+        "Connection": "keep-alive",
+        "Host": f"{httpbin.host}:{httpbin.port}",
+        "User-Agent": DEFAULT_USER_AGENT,
+    }
 
 
 @pytest.mark.asyncio
-async def test_custom_headers():
+async def test_custom_headers(httpbin):
     node = AiohttpHttpNode(
         NodeConfig(
-            scheme="https",
-            host="httpbin.org",
-            port=443,
+            scheme="http",
+            host=httpbin.host,
+            port=httpbin.port,
             headers={"accept-encoding": "gzip", "Content-Type": "application/json"},
         )
     )
@@ -341,19 +347,20 @@ async def test_custom_headers():
     headers.pop("X-Amzn-Trace-Id", None)
     assert headers == {
         "Accept-Encoding": "gzip",
+        "Connection": "keep-alive",
         "Content-Type": "application/x-ndjson",
-        "Host": "httpbin.org",
+        "Host": f"{httpbin.host}:{httpbin.port}",
         "User-Agent": "custom-agent/1.2.3",
     }
 
 
 @pytest.mark.asyncio
-async def test_custom_user_agent():
+async def test_custom_user_agent(httpbin):
     node = AiohttpHttpNode(
         NodeConfig(
-            scheme="https",
-            host="httpbin.org",
-            port=443,
+            scheme="http",
+            host=httpbin.host,
+            port=httpbin.port,
             headers={
                 "accept-encoding": "gzip",
                 "Content-Type": "application/json",
@@ -371,8 +378,9 @@ async def test_custom_user_agent():
     headers.pop("X-Amzn-Trace-Id", None)
     assert headers == {
         "Accept-Encoding": "gzip",
+        "Connection": "keep-alive",
         "Content-Type": "application/json",
-        "Host": "httpbin.org",
+        "Host": f"{httpbin.host}:{httpbin.port}",
         "User-Agent": "custom-agent/1.2.3",
     }
 
@@ -383,9 +391,11 @@ def test_repr():
 
 
 @pytest.mark.asyncio
-async def test_head():
+async def test_head(httpbin):
     node = AiohttpHttpNode(
-        NodeConfig(scheme="https", host="httpbin.org", port=443, http_compress=True)
+        NodeConfig(
+            scheme="http", host=httpbin.host, port=httpbin.port, http_compress=True
+        )
     )
     resp, data = await node.perform_request("HEAD", "/anything")
 

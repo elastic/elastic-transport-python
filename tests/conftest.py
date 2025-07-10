@@ -66,10 +66,12 @@ class AsyncDummyNode(DummyNode):
         return NodeApiResponse(meta, self.body)
 
 
-@pytest.fixture(scope="session", params=[True, False])
-def httpbin_cert_fingerprint(request) -> str:
-    """Gets the SHA256 fingerprint of the certificate for 'httpbin.org'"""
-    sock = socket.create_connection(("httpbin.org", 443))
+@pytest.fixture(
+    scope="session", params=["short-lower", "short-upper", "long-lower", "long-upper"]
+)
+def cert_fingerprint(request, httpbin_secure) -> str:
+    """Gets the SHA256 fingerprint of the certificate for the secure httpbin"""
+    sock = socket.create_connection((httpbin_secure.host, httpbin_secure.port))
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -77,21 +79,20 @@ def httpbin_cert_fingerprint(request) -> str:
     digest = hashlib.sha256(sock.getpeercert(binary_form=True)).hexdigest()
     assert len(digest) == 64
     sock.close()
-    if request.param:
+    if "upper" in request.param:
+        digest = digest.upper()
+    else:
+        digest = digest.lower()
+    if "short" in request.param:
         return digest
     else:
         return ":".join([digest[i : i + 2] for i in range(0, len(digest), 2)])
 
 
 @pytest.fixture(scope="session")
-def httpbin_node_config() -> NodeConfig:
-    try:
-        sock = socket.create_connection(("httpbin.org", 443))
-    except Exception as e:
-        pytest.skip(f"Couldn't connect to httpbin.org, internet not connected? {e}")
-    sock.close()
+def httpbin_node_config(httpbin) -> NodeConfig:
     return NodeConfig(
-        "https", "httpbin.org", 443, verify_certs=False, ssl_show_warn=False
+        "http", httpbin.host, httpbin.port, verify_certs=False, ssl_show_warn=False
     )
 
 
