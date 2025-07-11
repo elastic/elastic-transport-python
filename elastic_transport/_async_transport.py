@@ -260,9 +260,7 @@ class AsyncTransport(Transport):
             node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
             start_time = self._loop.time()
             try:
-                otel_span.set_node_metadata(
-                    node.host, node.port, node.base_url, target, method
-                )
+                otel_span.set_node_metadata(node.host, node.port, node.base_url, target)
                 resp = await node.perform_request(
                     method,
                     target,
@@ -366,7 +364,6 @@ class AsyncTransport(Transport):
                 # We either got a response we're happy with or
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
-                    otel_span.set_db_response(resp.meta.status)
                     return TransportApiResponse(resp.meta, body)
                 else:
                     _logger.warning(

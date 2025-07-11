@@ -393,6 +393,7 @@ async def test_sniff_on_start():
     calls = []
 
     def sniff_callback(*args):
+        nonlocal calls
         calls.append(args)
         return [NodeConfig("http", "localhost", 80)]
 
@@ -419,6 +420,7 @@ async def test_sniff_before_requests():
     calls = []
 
     def sniff_callback(*args):
+        nonlocal calls
         calls.append(args)
         return []
 
@@ -444,6 +446,7 @@ async def test_sniff_on_node_failure():
     calls = []
 
     def sniff_callback(*args):
+        nonlocal calls
         calls.append(args)
         return []
 
@@ -548,7 +551,7 @@ async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
     if async_sniff_callback:
 
         async def sniff_callback(*_):
-            nonlocal sniffed_at
+            nonlocal loop, sniffed_at
             await asyncio.sleep(0.1)
             sniffed_at = loop.time()
             return sniffed_nodes
@@ -556,7 +559,7 @@ async def test_sniffed_nodes_added_to_pool(async_sniff_callback):
     else:
 
         def sniff_callback(*_):
-            nonlocal sniffed_at
+            nonlocal loop, sniffed_at
             time.sleep(0.1)
             sniffed_at = loop.time()
             return sniffed_nodes
