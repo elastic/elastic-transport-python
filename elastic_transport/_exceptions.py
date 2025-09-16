@@ -50,9 +50,6 @@ class TransportError(Exception):
             parts.append(f"errors={self.errors!r}")
         return "{}({})".format(self.__class__.__name__, ", ".join(parts))
 
-    def __str__(self) -> str:
-        return str(self.message)
-
 
 class SniffingError(TransportError):
     """Error that occurs during the sniffing of nodes"""
@@ -67,28 +64,13 @@ class SerializationError(TransportError):
 class ConnectionError(TransportError):
     """Error raised by the HTTP connection"""
 
-    def __str__(self) -> str:
-        if self.errors:
-            return f"Connection error caused by: {self.errors[0].__class__.__name__}({self.errors[0]})"
-        return "Connection error"
-
 
 class TlsError(ConnectionError):
     """Error raised by during the TLS handshake"""
 
-    def __str__(self) -> str:
-        if self.errors:
-            return f"TLS error caused by: {self.errors[0].__class__.__name__}({self.errors[0]})"
-        return "TLS error"
-
 
 class ConnectionTimeout(TransportError):
     """Connection timed out during an operation"""
-
-    def __str__(self) -> str:
-        if self.errors:
-            return f"Connection timeout caused by: {self.errors[0].__class__.__name__}({self.errors[0]})"
-        return "Connection timed out"
 
 
 class ApiError(Exception):
