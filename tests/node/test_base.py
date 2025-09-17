@@ -20,6 +20,7 @@ import pytest
 from elastic_transport import (
     AiohttpHttpNode,
     HttpxAsyncHttpNode,
+    HttpxHttpNode,
     NodeConfig,
     RequestsHttpNode,
     Urllib3HttpNode,
@@ -28,7 +29,14 @@ from elastic_transport._node._base import ssl_context_from_node_config
 
 
 @pytest.mark.parametrize(
-    "node_cls", [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode, HttpxAsyncHttpNode]
+    "node_cls",
+    [
+        Urllib3HttpNode,
+        RequestsHttpNode,
+        AiohttpHttpNode,
+        HttpxHttpNode,
+        HttpxAsyncHttpNode,
+    ],
 )
 def test_unknown_parameter(node_cls):
     with pytest.raises(TypeError):
