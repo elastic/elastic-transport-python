@@ -328,7 +328,7 @@ def test_node_class_as_string():
         Transport([NodeConfig("http", "localhost", 80)], node_class="huh?")
     assert str(e.value) == (
         "Unknown option for node_class: 'huh?'. "
-        "Available options are: 'aiohttp', 'httpxasync', 'requests', 'urllib3'"
+        "Available options are: 'aiohttp', 'httpx', 'httpxasync', 'requests', 'urllib3'"
     )
 
 
@@ -364,9 +364,9 @@ def test_transport_client_meta_node_class(node_class):
     assert (
         t._transport_client_meta[3] == t.node_pool.node_class._CLIENT_META_HTTP_CLIENT
     )
-    assert t._transport_client_meta[3][0] in ("ur", "rq")
+    assert t._transport_client_meta[3][0] in ("ur", "rq", "hx")
     assert re.match(
-        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
+        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq|hx)=[0-9.]+p?$",
         ",".join(f"{k}={v}" for k, v in t._transport_client_meta),
     )
 
