@@ -175,11 +175,11 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                 body=body,
                 exception=err,
             )
-            raise err from None
+            raise err from e
 
         meta = ApiResponseMeta(
             resp.status_code,
-            resp.http_version,
+            resp.http_version.lstrip("HTTP/"),
             HttpHeaders(resp.headers),
             duration,
             self.config,

@@ -52,6 +52,8 @@ setup(
     install_requires=[
         "urllib3>=1.26.2, <3",
         "certifi",
+        "sniffio",
+        "anyio",
     ],
     python_requires=">=3.8",
     extras_require={

@@ -20,15 +20,15 @@ import json
 
 import pytest
 
-from elastic_transport import AiohttpHttpNode, AsyncTransport
+from elastic_transport import HttpxAsyncHttpNode, AsyncTransport
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 from ..test_httpbin import parse_httpbin
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simple_request(httpbin_node_config, httpbin):
-    t = AsyncTransport([httpbin_node_config])
+    t = AsyncTransport([httpbin_node_config], node_class=HttpxAsyncHttpNode)
 
     resp, data = await t.perform_request(
         "GET",
@@ -59,10 +59,10 @@ async def test_simple_request(httpbin_node_config, httpbin):
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_node(httpbin_node_config, httpbin):
     def new_node(**kwargs):
-        return AiohttpHttpNode(dataclasses.replace(httpbin_node_config, **kwargs))
+        return HttpxAsyncHttpNode(dataclasses.replace(httpbin_node_config, **kwargs))
 
     node = new_node()
     resp, data = await node.perform_request("GET", "/anything")
@@ -70,6 +70,8 @@ async def test_node(httpbin_node_config, httpbin):
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": {
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
@@ -84,6 +86,7 @@ async def test_node(httpbin_node_config, httpbin):
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": {
+            "Accept": "*/*",
             "Accept-Encoding": "gzip",
             "Connection": "keep-alive",
             "Host": f"{httpbin.host}:{httpbin.port}",
@@ -98,9 +101,9 @@ async def test_node(httpbin_node_config, httpbin):
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": {
+            "Accept": "*/*",
             "Accept-Encoding": "gzip",
             "Content-Encoding": "gzip",
-            "Content-Type": "application/octet-stream",
             "Content-Length": "33",
             "Connection": "keep-alive",
             "Host": f"{httpbin.host}:{httpbin.port}",
@@ -120,6 +123,7 @@ async def test_node(httpbin_node_config, httpbin):
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": {
+            "Accept": "*/*",
             "Accept-Encoding": "gzip",
             "Content-Encoding": "gzip",
             "Content-Length": "36",
