@@ -23,12 +23,12 @@ import pytest
 
 from elastic_transport import (
     AiohttpHttpNode,
+    ConnectionError,
     HttpxAsyncHttpNode,
     NodeConfig,
     RequestsHttpNode,
     TlsError,
     Urllib3HttpNode,
-    ConnectionError,
 )
 from elastic_transport._compat import await_if_coro
 from elastic_transport.client_utils import url_to_node_config

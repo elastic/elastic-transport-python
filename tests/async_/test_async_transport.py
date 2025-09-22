@@ -25,9 +25,8 @@ import warnings
 from unittest import mock
 
 import anyio
-import sniffio
-
 import pytest
+import sniffio
 
 from elastic_transport import (
     AiohttpHttpNode,

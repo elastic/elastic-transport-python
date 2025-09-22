@@ -20,7 +20,7 @@ import json
 
 import pytest
 
-from elastic_transport import HttpxAsyncHttpNode, AsyncTransport
+from elastic_transport import AsyncTransport, HttpxAsyncHttpNode
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 from ..test_httpbin import parse_httpbin

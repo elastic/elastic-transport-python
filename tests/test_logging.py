@@ -24,8 +24,8 @@ from elastic_transport import (
     AiohttpHttpNode,
     ConnectionError,
     HttpHeaders,
-    RequestsHttpNode,
     HttpxAsyncHttpNode,
+    RequestsHttpNode,
     Urllib3HttpNode,
     debug_logging,
 )

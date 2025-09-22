@@ -18,7 +18,6 @@
 import asyncio
 import logging
 import time
-import sniffio
 from typing import (
     Any,
     Awaitable,
@@ -31,6 +30,8 @@ from typing import (
     Type,
     Union,
 )
+
+import sniffio
 
 from ._compat import await_if_coro
 from ._exceptions import (
