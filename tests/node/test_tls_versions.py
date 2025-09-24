@@ -130,6 +130,8 @@ async def test_unsupported_tls_versions(
     node_config = url_to_node_config(url).replace(ssl_version=ssl_version)
     node = node_class(node_config)
 
+    # Remove ConnectionError when we have a fix or workaround for
+    # https://github.com/encode/httpx/discussions/3674
     with pytest.raises((TlsError, ConnectionError)) as e:
         await await_if_coro(node.perform_request("GET", "/"))
     if anyio_backend == "trio" and node_class is HttpxAsyncHttpNode:
@@ -140,6 +142,8 @@ async def test_unsupported_tls_versions(
 @node_classes
 @pytest.mark.parametrize("ssl_version", [0, "TLSv1", object()])
 def test_ssl_version_value_error(node_class, ssl_version):
+    # Remove ConnectionError when we have a fix or workaround for
+    # https://github.com/encode/httpx/discussions/3674
     with pytest.raises((ValueError, ConnectionError)) as e:
         node_class(NodeConfig("https", "localhost", 9200, ssl_version=ssl_version))
     assert str(e.value) == (
