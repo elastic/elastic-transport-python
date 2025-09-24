@@ -24,6 +24,7 @@ from elastic_transport import (
     AiohttpHttpNode,
     ConnectionError,
     HttpHeaders,
+    HttpxAsyncHttpNode,
     RequestsHttpNode,
     Urllib3HttpNode,
     debug_logging,
@@ -32,13 +33,17 @@ from elastic_transport._compat import await_if_coro
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 node_class = pytest.mark.parametrize(
-    "node_class", [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode]
+    "node_class",
+    [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode, HttpxAsyncHttpNode],
 )
 
 
 @node_class
-@pytest.mark.asyncio
-async def test_debug_logging(node_class, httpbin_node_config, httpbin):
+@pytest.mark.anyio
+async def test_debug_logging(node_class, anyio_backend, httpbin_node_config, httpbin):
+    if anyio_backend == "trio" and node_class is not HttpxAsyncHttpNode:
+        pytest.skip("only httpx supports trio")
+
     debug_logging()
 
     stream = io.StringIO()
@@ -92,8 +97,13 @@ async def test_debug_logging(node_class, httpbin_node_config, httpbin):
 
 
 @node_class
-@pytest.mark.asyncio
-async def test_debug_logging_uncompressed_body(httpbin_node_config, node_class):
+@pytest.mark.anyio
+async def test_debug_logging_uncompressed_body(
+    httpbin_node_config, node_class, anyio_backend
+):
+    if anyio_backend == "trio" and node_class is not HttpxAsyncHttpNode:
+        pytest.skip("only httpx supports trio")
+
     debug_logging()
     stream = io.StringIO()
     logging.getLogger("elastic_transport.node").addHandler(
@@ -116,8 +126,11 @@ async def test_debug_logging_uncompressed_body(httpbin_node_config, node_class):
 
 
 @node_class
-@pytest.mark.asyncio
-async def test_debug_logging_no_body(httpbin_node_config, node_class):
+@pytest.mark.anyio
+async def test_debug_logging_no_body(httpbin_node_config, node_class, anyio_backend):
+    if anyio_backend == "trio" and node_class is not HttpxAsyncHttpNode:
+        pytest.skip("only httpx supports trio")
+
     debug_logging()
     stream = io.StringIO()
     logging.getLogger("elastic_transport.node").addHandler(
@@ -137,8 +150,11 @@ async def test_debug_logging_no_body(httpbin_node_config, node_class):
 
 
 @node_class
-@pytest.mark.asyncio
-async def test_debug_logging_error(httpbin_node_config, node_class):
+@pytest.mark.anyio
+async def test_debug_logging_error(httpbin_node_config, node_class, anyio_backend):
+    if anyio_backend == "trio" and node_class is not HttpxAsyncHttpNode:
+        pytest.skip("only httpx supports trio")
+
     debug_logging()
     stream = io.StringIO()
     logging.getLogger("elastic_transport.node").addHandler(
