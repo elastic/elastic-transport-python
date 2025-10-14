@@ -663,8 +663,6 @@ async def test_multiple_tasks_test(pool_size):
             "sniff_callback": sniff_callback,
         }
 
-    print(kwargs)
-
     t = AsyncTransport(
         node_configs,
         retry_on_status=[500],
