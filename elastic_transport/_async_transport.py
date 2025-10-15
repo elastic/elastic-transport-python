@@ -381,9 +381,9 @@ class AsyncTransport(Transport):
                     )
 
     async def sniff(self, is_initial_sniff: bool = False) -> None:  # type: ignore[override]
-        if sniffio.current_async_library() != "asyncio":
+        if sniffio.current_async_library() == "trio":
             raise ValueError(
-                f"Asynchronous sniffing only works with the 'asyncio' library, got {sniffio.current_async_library}"
+                f"Asynchronous sniffing is not supported with the 'trio' library, got {sniffio.current_async_library}"
             )
         await self._async_call()
         task = self._create_sniffing_task(is_initial_sniff)
@@ -477,7 +477,7 @@ class AsyncTransport(Transport):
             return  # Call at most once!
 
         self._async_library = sniffio.current_async_library()
-        if self._async_library != "asyncio":
+        if self._async_library == "trio":
             return
 
         self._loop = asyncio.get_running_loop()
