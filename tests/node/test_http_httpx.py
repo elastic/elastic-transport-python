@@ -82,7 +82,7 @@ class TestHttpxAsyncNodeCreation:
             )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestHttpxAsyncNode:
     @respx.mock
     async def test_simple_request(self):

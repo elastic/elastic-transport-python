@@ -72,7 +72,10 @@ _NEEDS_CLEANUP_CLOSED = _NEEDS_CLEANUP_CLOSED_313 or sys.version_info < (3, 12, 
 
 
 class AiohttpHttpNode(BaseAsyncNode):
-    """Default asynchronous node class using the ``aiohttp`` library via HTTP"""
+    """Default asynchronous node class using the ``aiohttp`` library via HTTP.
+
+    Supports asyncio.
+    """
 
     _CLIENT_META_HTTP_CLIENT = ("ai", _AIOHTTP_META_VERSION)
 

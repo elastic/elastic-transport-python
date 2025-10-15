@@ -52,6 +52,7 @@ setup(
     install_requires=[
         "urllib3>=1.26.2, <3",
         "certifi",
+        "sniffio",
     ],
     python_requires=">=3.8",
     extras_require={
@@ -70,6 +71,8 @@ setup(
             "opentelemetry-api",
             "opentelemetry-sdk",
             "orjson",
+            "anyio",
+            "trio",
             # Override Read the Docs default (sphinx<2)
             "sphinx>2",
             "furo",
