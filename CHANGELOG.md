@@ -1,5 +1,10 @@
 # Changelog
 
+## 9.2.0 (2025-10-17)
+
+* Support Trio when using the httpx async client ([#263](https://github.com/elastic/elastic-transport-python/pull/263))
+* Add Python 3.14 to CI builds, and remove 3.8 and 3.9 ([#264](https://github.com/elastic/elastic-transport-python/pull/264))
+
 ## 9.1.0 (2025-07-24)
 
 * Update OpenTelemetry conventions ([#245](https://github.com/elastic/elastic-transport-python/pull/245))
