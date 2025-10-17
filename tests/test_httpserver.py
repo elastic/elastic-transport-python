@@ -18,14 +18,26 @@
 import warnings
 
 import pytest
+import requests
+import urllib3
 
 from elastic_transport import Transport
 
 
 @pytest.mark.parametrize("node_class", ["urllib3", "requests"])
 def test_simple_request(node_class, https_server_ip_node_config):
+    # when testing minimum urllib3 and requests dependencies, we disable
+    # the deprecation warning for ssl.match_hostname()
+    silence_ssl_deprecation = (
+        node_class == "urllib3" and urllib3.__version__ == "1.26.2"
+    ) or (node_class == "requests" and requests.__version__ == "2.26.0")
+
     with warnings.catch_warnings():
         warnings.simplefilter("error")
+        if silence_ssl_deprecation:
+            warnings.filterwarnings(
+                "ignore", ".*match_hostname.*deprecated", DeprecationWarning
+            )
 
         t = Transport([https_server_ip_node_config], node_class=node_class)
 
