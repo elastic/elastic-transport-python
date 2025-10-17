@@ -30,7 +30,7 @@ SOURCE_FILES = (
 @nox.session()
 def format(session):
     session.install("black~=24.0", "isort", "pyupgrade")
-    session.run("black", "--target-version=py37", *SOURCE_FILES)
+    session.run("black", "--target-version=py310", *SOURCE_FILES)
     session.run("isort", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "fix", *SOURCE_FILES)
 
@@ -52,14 +52,14 @@ def lint(session):
         "python", "-m", "pip", "uninstall", "--yes", "types-urllib3", silent=True
     )
     session.install(".[develop]")
-    session.run("black", "--check", "--target-version=py37", *SOURCE_FILES)
+    session.run("black", "--check", "--target-version=py310", *SOURCE_FILES)
     session.run("isort", "--check", *SOURCE_FILES)
     session.run("flake8", "--ignore=E501,W503,E203,E704", *SOURCE_FILES)
     session.run("python", "utils/license-headers.py", "check", *SOURCE_FILES)
     session.run("mypy", "--strict", "--show-error-codes", "elastic_transport/")
 
 
-@nox.session(python=["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"])
+@nox.session(python=["3.10", "3.11", "3.12", "3.13", "3.14"])
 def test(session):
     session.install(".[develop]")
     session.run(
@@ -71,7 +71,7 @@ def test(session):
     session.run("coverage", "report", "-m")
 
 
-@nox.session(name="test-min-deps", python="3.8")
+@nox.session(name="test-min-deps", python="3.10")
 def test_min_deps(session):
     session.install("-r", "requirements-min.txt", ".[develop]", silent=False)
     session.run(
