@@ -17,6 +17,7 @@
 
 import asyncio
 import logging
+import time
 from typing import (
     Any,
     Awaitable,
@@ -29,6 +30,8 @@ from typing import (
     Type,
     Union,
 )
+
+import sniffio
 
 from ._compat import await_if_coro
 from ._exceptions import (
@@ -169,6 +172,7 @@ class AsyncTransport(Transport):
         # time it's needed. Gets set within '_async_call()' which should
         # precede all logic within async calls.
         self._loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
+        self._async_library: str = None  # type: ignore[assignment]
 
         # AsyncTransport doesn't require a thread lock for
         # sniffing. Uses '_sniffing_task' instead.
@@ -258,7 +262,7 @@ class AsyncTransport(Transport):
             node_failure = False
             last_response: Optional[TransportApiResponse] = None
             node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
-            start_time = self._loop.time()
+            start_time = time.monotonic()
             try:
                 otel_span.set_node_metadata(
                     node.host, node.port, node.base_url, target, method
@@ -277,7 +281,7 @@ class AsyncTransport(Transport):
                         node.base_url,
                         target,
                         resp.meta.status,
-                        self._loop.time() - start_time,
+                        time.monotonic() - start_time,
                     )
                 )
 
@@ -300,7 +304,7 @@ class AsyncTransport(Transport):
                         node.base_url,
                         target,
                         "N/A",
-                        self._loop.time() - start_time,
+                        time.monotonic() - start_time,
                     )
                 )
 
@@ -377,6 +381,10 @@ class AsyncTransport(Transport):
                     )
 
     async def sniff(self, is_initial_sniff: bool = False) -> None:  # type: ignore[override]
+        if sniffio.current_async_library() == "trio":
+            raise ValueError(
+                f"Asynchronous sniffing is not supported with the 'trio' library, got {sniffio.current_async_library}"
+            )
         await self._async_call()
         task = self._create_sniffing_task(is_initial_sniff)
 
@@ -409,8 +417,7 @@ class AsyncTransport(Transport):
             self._sniffing_task.result()
 
         return (
-            self._loop.time() - self._last_sniffed_at
-            >= self._min_delay_between_sniffing
+            time.monotonic() - self._last_sniffed_at >= self._min_delay_between_sniffing
         )
 
     def _create_sniffing_task(
@@ -429,7 +436,7 @@ class AsyncTransport(Transport):
         """Implementation of the sniffing task"""
         previously_sniffed_at = self._last_sniffed_at
         try:
-            self._last_sniffed_at = self._loop.time()
+            self._last_sniffed_at = time.monotonic()
             options = SniffOptions(
                 is_initial_sniff=is_initial_sniff, sniff_timeout=self._sniff_timeout
             )
@@ -466,8 +473,13 @@ class AsyncTransport(Transport):
         because we're not guaranteed to be within an active asyncio event loop
         when __init__() is called.
         """
-        if self._loop is not None:
+        if self._async_library is not None:
             return  # Call at most once!
+
+        self._async_library = sniffio.current_async_library()
+        if self._async_library == "trio":
+            return
+
         self._loop = asyncio.get_running_loop()
         if self._sniff_on_start:
             await self.sniff(True)
