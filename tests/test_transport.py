@@ -309,9 +309,10 @@ def test_sniff_on_node_failure_error_doesnt_raise():
         randomize_nodes_in_pool=False,
     )
     bad_node = t.node_pool._all_nodes[NodeConfig("http", "localhost", 80)]
-    with mock.patch.object(t, "sniff") as sniff, mock.patch.object(
-        t.node_pool, "mark_dead"
-    ) as mark_dead:
+    with (
+        mock.patch.object(t, "sniff") as sniff,
+        mock.patch.object(t.node_pool, "mark_dead") as mark_dead,
+    ):
         sniff.side_effect = TransportError("sniffing error!")
         t.perform_request("GET", "/")
     mark_dead.assert_called_with(bad_node)
