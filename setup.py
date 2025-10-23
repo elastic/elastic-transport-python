@@ -50,7 +50,7 @@ setup(
     package_data={"elastic_transport": ["py.typed"]},
     packages=packages,
     install_requires=[
-        "urllib3>=1.26.2, <3",
+        "urllib3>=2, <3",
         "certifi",
         "sniffio",
     ],
