@@ -322,7 +322,7 @@ async def test_node_class_as_string():
         AsyncTransport([NodeConfig("http", "localhost", 80)], node_class="huh?")
     assert str(e.value) == (
         "Unknown option for node_class: 'huh?'. "
-        "Available options are: 'aiohttp', 'httpxasync', 'requests', 'urllib3'"
+        "Available options are: 'aiohttp', 'httpx', 'httpxasync', 'requests', 'urllib3'"
     )
 
 
