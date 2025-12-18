@@ -106,7 +106,7 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                     ssl_context.load_cert_chain(config.client_cert)
 
         self.client = httpx.AsyncClient(
-            base_url=f"{config.scheme}://{config.host}:{config.port}",
+            base_url=f"{config.scheme}://{config.host}:{config.port}{config.path_prefix}",
             limits=httpx.Limits(max_connections=config.connections_per_node),
             verify=ssl_context or False,
             timeout=config.request_timeout,
