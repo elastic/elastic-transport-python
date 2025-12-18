@@ -235,3 +235,14 @@ class TestRequestsHttpNode:
         node.perform_request("GET", "/")
         (request,), _ = node.session.send.call_args
         assert request.headers["authorization"] == "Basic dXNlcm5hbWU6cGFzc3dvcmQ="
+
+    def test_path_prefix(self):
+        node = self._get_mock_node(
+            NodeConfig(
+                "http",
+                "localhost",
+                9200,
+                path_prefix="/test",
+            )
+        )
+        assert node.base_url == "http://localhost:9200/test"
