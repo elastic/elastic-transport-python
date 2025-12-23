@@ -1,5 +1,9 @@
 # Changelog
 
+## 9.2.1 (2025-12-23)
+
+* Use `path_prefix` to compute the base URL in the httpx node class ([#243](https://github.com/elastic/elastic-transport-python/pull/243))
+
 ## 9.2.0 (2025-10-17)
 
 * Support Trio when using the httpx async client ([#263](https://github.com/elastic/elastic-transport-python/pull/263))
