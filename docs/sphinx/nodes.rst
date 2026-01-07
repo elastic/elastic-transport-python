@@ -22,6 +22,9 @@ Node classes
 .. autoclass:: AiohttpHttpNode
    :members:
 
+.. autoclass:: HttpxHttpNode
+   :members:
+
 .. autoclass:: HttpxAsyncHttpNode
    :members:
 

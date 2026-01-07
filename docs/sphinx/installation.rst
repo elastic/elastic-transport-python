@@ -11,4 +11,4 @@ Install the ``requests`` package to use :class:`elastic_transport.RequestsHttpNo
 
 Install the ``aiohttp`` package to use :class:`elastic_transport.AiohttpHttpNode`.
 
-Install the ``httpx`` package to use :class:`elastic_transport.HttpxAsyncHttpNode`.
+Install the ``httpx`` package to use :class:`elastic_transport.HttpxHttpNode` or :class:`elastic_transport.HttpxAsyncHttpNode`.
