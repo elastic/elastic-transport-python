@@ -18,7 +18,7 @@
 from ._base import BaseNode, NodeApiResponse
 from ._base_async import BaseAsyncNode
 from ._http_aiohttp import AiohttpHttpNode
-from ._http_httpx import HttpxAsyncHttpNode
+from ._http_httpx import HttpxAsyncHttpNode, HttpxHttpNode
 from ._http_requests import RequestsHttpNode
 from ._http_urllib3 import Urllib3HttpNode
 
@@ -30,4 +30,5 @@ __all__ = [
     "RequestsHttpNode",
     "Urllib3HttpNode",
     "HttpxAsyncHttpNode",
+    "HttpxHttpNode",
 ]

@@ -56,6 +56,7 @@ from ._node import (
     AiohttpHttpNode,
     BaseNode,
     HttpxAsyncHttpNode,
+    HttpxHttpNode,
     RequestsHttpNode,
     Urllib3HttpNode,
 )
@@ -70,6 +71,7 @@ NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
     "urllib3": Urllib3HttpNode,
     "requests": RequestsHttpNode,
     "aiohttp": AiohttpHttpNode,
+    "httpxsync": HttpxHttpNode,
     "httpxasync": HttpxAsyncHttpNode,
 }
 # These are HTTP status errors that shouldn't be considered

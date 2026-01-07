@@ -29,6 +29,7 @@ from elastic_transport import (
     AiohttpHttpNode,
     ConnectionError,
     ConnectionTimeout,
+    HttpxHttpNode,
     NodeConfig,
     RequestsHttpNode,
     SniffingError,
@@ -325,11 +326,14 @@ def test_node_class_as_string():
     t = Transport([NodeConfig("http", "localhost", 80)], node_class="requests")
     assert isinstance(t.node_pool.get(), RequestsHttpNode)
 
+    t = Transport([NodeConfig("http", "localhost", 80)], node_class="httpxsync")
+    assert isinstance(t.node_pool.get(), HttpxHttpNode)
+
     with pytest.raises(ValueError) as e:
         Transport([NodeConfig("http", "localhost", 80)], node_class="huh?")
     assert str(e.value) == (
         "Unknown option for node_class: 'huh?'. "
-        "Available options are: 'aiohttp', 'httpxasync', 'requests', 'urllib3'"
+        "Available options are: 'aiohttp', 'httpxasync', 'httpxsync', 'requests', 'urllib3'"
     )
 
 
@@ -358,16 +362,23 @@ def test_head_response_false():
 
 @pytest.mark.parametrize(
     "node_class",
-    ["urllib3", "requests", Urllib3HttpNode, RequestsHttpNode],
+    [
+        "urllib3",
+        "requests",
+        "httpxsync",
+        Urllib3HttpNode,
+        RequestsHttpNode,
+        HttpxHttpNode,
+    ],
 )
 def test_transport_client_meta_node_class(node_class):
     t = Transport([NodeConfig("http", "localhost", 80)], node_class=node_class)
     assert (
         t._transport_client_meta[3] == t.node_pool.node_class._CLIENT_META_HTTP_CLIENT
     )
-    assert t._transport_client_meta[3][0] in ("ur", "rq")
+    assert t._transport_client_meta[3][0] in ("ur", "rq", "hx")
     assert re.match(
-        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
+        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq|hx)=[0-9.]+p?$",
         ",".join(f"{k}={v}" for k, v in t._transport_client_meta),
     )
 
