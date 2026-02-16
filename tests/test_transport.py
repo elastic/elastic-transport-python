@@ -59,7 +59,10 @@ def test_request_with_custom_user_agent_header():
     assert {
         "body": None,
         "request_timeout": DEFAULT,
-        "headers": {"user-agent": "my-custom-value/1.2.3"},
+        "headers": {
+            "user-agent": "my-custom-value/1.2.3",
+            "content-type": "application/json",
+        },
     } == t.node_pool.get().calls[0][1]
 
 
@@ -402,7 +405,8 @@ def test_client_meta_header():
     assert 1 == len(calls)
     headers = calls[0][1]["headers"]
 
-    assert sorted(headers.keys()) == ["x-elastic-client-meta"]
+    assert sorted(headers.keys()) == ["content-type", "x-elastic-client-meta"]
+    assert headers["content-type"] == "application/json"
     assert re.match(
         r"^es=8\.0\.0p,py=[0-9.]+p?,t=[0-9.]+p?,dm=0\.0\.0p$",
         headers["x-elastic-client-meta"],
@@ -424,7 +428,8 @@ def test_client_meta_header_extras():
     assert 1 == len(calls)
     headers = calls[0][1]["headers"]
 
-    assert sorted(headers.keys()) == ["x-elastic-client-meta"]
+    assert sorted(headers.keys()) == ["content-type", "x-elastic-client-meta"]
+    assert headers["content-type"] == "application/json"
     assert re.match(
         r"^es=8\.0\.0p,py=[0-9.]+p?,t=[0-9.]+p?,dm=0\.0\.0p,h=s$",
         headers["x-elastic-client-meta"],

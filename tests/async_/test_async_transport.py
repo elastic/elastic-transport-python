@@ -63,6 +63,7 @@ async def test_async_transport_httpbin(httpbin_node_config, httpbin):
     assert data["headers"] == {
         "Accept": "*/*",
         "Accept-Encoding": "gzip, deflate, br",
+        "Content-Type": "application/json",
         "User-Agent": DEFAULT_USER_AGENT,
         "Connection": "keep-alive",
         "Host": f"{httpbin.host}:{httpbin.port}",
@@ -93,7 +94,10 @@ async def test_request_with_custom_user_agent_header():
     assert {
         "body": None,
         "request_timeout": DEFAULT,
-        "headers": {"user-agent": "my-custom-value/1.2.3"},
+        "headers": {
+            "user-agent": "my-custom-value/1.2.3",
+            "content-type": "application/json",
+        },
     } == t.node_pool.get().calls[0][1]
 
 

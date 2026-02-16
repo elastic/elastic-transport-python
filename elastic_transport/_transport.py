@@ -309,13 +309,11 @@ class Transport:
                 + resolve_default(client_meta, ())
             )
 
+        request_headers.setdefault("content-type", "application/json")
+
         # Serialize the request body to bytes based on the given mimetype.
         request_body: Optional[bytes]
         if body is not None:
-            if "content-type" not in request_headers:
-                raise ValueError(
-                    "Must provide a 'Content-Type' header to requests with bodies"
-                )
             request_body = self.serializers.dumps(
                 body, mimetype=request_headers["content-type"]
             )
