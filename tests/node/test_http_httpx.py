@@ -83,6 +83,18 @@ class TestHttpxNodeCreation:
                 str(exc.value) == "You cannot use 'ca_certs' when 'verify_certs=False'"
             )
 
+    def test_path_prefix(self):
+        node = create_sync_node(
+            NodeConfig(
+                "http",
+                "localhost",
+                9200,
+                path_prefix="/test",
+            )
+        )
+        assert node.base_url == "http://localhost:9200/test"
+        assert node.client.base_url == "http://localhost:9200/test/"
+
 
 class TestHttpxNode:
     @respx.mock
@@ -202,7 +214,7 @@ class TestHttpxAsyncNodeCreation:
             )
 
     def test_path_prefix(self):
-        node = create_node(
+        node = create_async_node(
             NodeConfig(
                 "http",
                 "localhost",

@@ -47,6 +47,10 @@ except ImportError:
 
 
 class HttpxHttpNode(BaseNode):
+    """
+    HTTP node using httpx.
+    """
+
     _CLIENT_META_HTTP_CLIENT = ("hx", _HTTPX_META_VERSION)
 
     def __init__(self, config: NodeConfig):
@@ -103,7 +107,7 @@ class HttpxHttpNode(BaseNode):
                     ssl_context.load_cert_chain(config.client_cert)
 
         self.client = httpx.Client(
-            base_url=f"{config.scheme}://{config.host}:{config.port}",
+            base_url=f"{config.scheme}://{config.host}:{config.port}{config.path_prefix}",
             limits=httpx.Limits(max_connections=config.connections_per_node),
             verify=ssl_context or False,
             timeout=config.request_timeout,
@@ -176,11 +180,11 @@ class HttpxHttpNode(BaseNode):
                 body=body,
                 exception=err,
             )
-            raise err from None
+            raise err from e
 
         meta = ApiResponseMeta(
             resp.status_code,
-            resp.http_version,
+            resp.http_version.lstrip("HTTP/"),
             HttpHeaders(resp.headers),
             duration,
             self.config,

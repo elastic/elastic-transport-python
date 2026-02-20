@@ -25,6 +25,7 @@ from elastic_transport import (
     ConnectionError,
     HttpHeaders,
     HttpxAsyncHttpNode,
+    HttpxHttpNode,
     RequestsHttpNode,
     Urllib3HttpNode,
     debug_logging,
@@ -34,7 +35,13 @@ from elastic_transport._node._base import DEFAULT_USER_AGENT
 
 node_class = pytest.mark.parametrize(
     "node_class",
-    [Urllib3HttpNode, RequestsHttpNode, AiohttpHttpNode, HttpxAsyncHttpNode],
+    [
+        Urllib3HttpNode,
+        RequestsHttpNode,
+        AiohttpHttpNode,
+        HttpxAsyncHttpNode,
+        HttpxHttpNode,
+    ],
 )
 
 

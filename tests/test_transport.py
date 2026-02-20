@@ -29,6 +29,7 @@ from elastic_transport import (
     AiohttpHttpNode,
     ConnectionError,
     ConnectionTimeout,
+    HttpxHttpNode,
     NodeConfig,
     RequestsHttpNode,
     SniffingError,
@@ -358,7 +359,7 @@ def test_head_response_false():
 
 @pytest.mark.parametrize(
     "node_class",
-    ["urllib3", "requests", Urllib3HttpNode, RequestsHttpNode],
+    ["urllib3", "requests", "httpx", Urllib3HttpNode, RequestsHttpNode, HttpxHttpNode],
 )
 def test_transport_client_meta_node_class(node_class):
     t = Transport([NodeConfig("http", "localhost", 80)], node_class=node_class)
