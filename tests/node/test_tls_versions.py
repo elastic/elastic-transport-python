@@ -25,6 +25,7 @@ from elastic_transport import (
     AiohttpHttpNode,
     ConnectionError,
     HttpxAsyncHttpNode,
+    HttpxHttpNode,
     NodeConfig,
     RequestsHttpNode,
     TlsError,
@@ -39,7 +40,13 @@ TLSv1_2_URL = "https://tls-v1-2.badssl.com:1012"
 
 node_classes = pytest.mark.parametrize(
     "node_class",
-    [AiohttpHttpNode, Urllib3HttpNode, RequestsHttpNode, HttpxAsyncHttpNode],
+    [
+        AiohttpHttpNode,
+        Urllib3HttpNode,
+        RequestsHttpNode,
+        HttpxHttpNode,
+        HttpxAsyncHttpNode,
+    ],
 )
 
 supported_version_params = [

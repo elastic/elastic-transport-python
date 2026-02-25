@@ -25,7 +25,7 @@ from elastic_transport._node._base import DEFAULT_USER_AGENT
 from elastic_transport._transport import NODE_CLASS_NAMES
 
 
-@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
+@pytest.mark.parametrize("node_class", ["urllib3", "requests", "httpx"])
 def test_simple_request(node_class, httpbin_node_config, httpbin):
     t = Transport([httpbin_node_config], node_class=node_class)
 
@@ -58,7 +58,7 @@ def test_simple_request(node_class, httpbin_node_config, httpbin):
     assert all(v == data["headers"][k] for k, v in request_headers.items())
 
 
-@pytest.mark.parametrize("node_class", ["urllib3", "requests"])
+@pytest.mark.parametrize("node_class", ["urllib3", "requests", "httpx"])
 def test_node(node_class, httpbin_node_config, httpbin):
     def new_node(**kwargs):
         return NODE_CLASS_NAMES[node_class](
@@ -70,8 +70,12 @@ def test_node(node_class, httpbin_node_config, httpbin):
     assert resp.status == 200
     parsed = parse_httpbin(data)
     assert parsed == {
-        "headers": {
-            "Accept-Encoding": "identity",
+        "headers": (
+            {"Accept": "*/*", "Accept-Encoding": "gzip, deflate, br"}
+            if node_class == "httpx"
+            else {"Accept-Encoding": "identity"}
+        )
+        | {
             "Connection": "keep-alive",
             "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
@@ -85,7 +89,8 @@ def test_node(node_class, httpbin_node_config, httpbin):
     assert resp.status == 200
     parsed = parse_httpbin(data)
     assert parsed == {
-        "headers": {
+        "headers": ({"Accept": "*/*"} if node_class == "httpx" else {})
+        | {
             "Accept-Encoding": "gzip",
             "Connection": "keep-alive",
             "Host": f"{httpbin.host}:{httpbin.port}",
@@ -99,7 +104,8 @@ def test_node(node_class, httpbin_node_config, httpbin):
     assert resp.status == 200
     parsed = parse_httpbin(data)
     assert parsed == {
-        "headers": {
+        "headers": ({"Accept": "*/*"} if node_class == "httpx" else {})
+        | {
             "Accept-Encoding": "gzip",
             "Content-Encoding": "gzip",
             "Content-Length": "33",
@@ -120,7 +126,8 @@ def test_node(node_class, httpbin_node_config, httpbin):
     assert resp.status == 200
     parsed = parse_httpbin(data)
     assert parsed == {
-        "headers": {
+        "headers": ({"Accept": "*/*"} if node_class == "httpx" else {})
+        | {
             "Accept-Encoding": "gzip",
             "Content-Encoding": "gzip",
             "Content-Length": "36",
