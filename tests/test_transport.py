@@ -17,6 +17,7 @@
 
 import random
 import re
+import ssl
 import threading
 import time
 import warnings
@@ -28,6 +29,7 @@ from elastic_transport import (
     AiohttpHttpNode,
     ConnectionError,
     ConnectionTimeout,
+    HttpxHttpNode,
     NodeConfig,
     RequestsHttpNode,
     SniffingError,
@@ -308,9 +310,10 @@ def test_sniff_on_node_failure_error_doesnt_raise():
         randomize_nodes_in_pool=False,
     )
     bad_node = t.node_pool._all_nodes[NodeConfig("http", "localhost", 80)]
-    with mock.patch.object(t, "sniff") as sniff, mock.patch.object(
-        t.node_pool, "mark_dead"
-    ) as mark_dead:
+    with (
+        mock.patch.object(t, "sniff") as sniff,
+        mock.patch.object(t.node_pool, "mark_dead") as mark_dead,
+    ):
         sniff.side_effect = TransportError("sniffing error!")
         t.perform_request("GET", "/")
     mark_dead.assert_called_with(bad_node)
@@ -327,7 +330,7 @@ def test_node_class_as_string():
         Transport([NodeConfig("http", "localhost", 80)], node_class="huh?")
     assert str(e.value) == (
         "Unknown option for node_class: 'huh?'. "
-        "Available options are: 'aiohttp', 'requests', 'urllib3'"
+        "Available options are: 'aiohttp', 'httpx', 'httpxasync', 'requests', 'urllib3'"
     )
 
 
@@ -356,16 +359,16 @@ def test_head_response_false():
 
 @pytest.mark.parametrize(
     "node_class",
-    ["urllib3", "requests", Urllib3HttpNode, RequestsHttpNode],
+    ["urllib3", "requests", "httpx", Urllib3HttpNode, RequestsHttpNode, HttpxHttpNode],
 )
 def test_transport_client_meta_node_class(node_class):
     t = Transport([NodeConfig("http", "localhost", 80)], node_class=node_class)
     assert (
         t._transport_client_meta[3] == t.node_pool.node_class._CLIENT_META_HTTP_CLIENT
     )
-    assert t._transport_client_meta[3][0] in ("ur", "rq")
+    assert t._transport_client_meta[3][0] in ("ur", "rq", "hx")
     assert re.match(
-        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq)=[0-9.]+p?$",
+        r"^et=[0-9.]+p?,py=[0-9.]+p?,t=[0-9.]+p?,(?:ur|rq|hx)=[0-9.]+p?$",
         ",".join(f"{k}={v}" for k, v in t._transport_client_meta),
     )
 
@@ -433,7 +436,6 @@ def test_sniff_on_start():
     calls = []
 
     def sniff_callback(*args):
-        nonlocal calls
         calls.append(args)
         return [NodeConfig("http", "localhost", 80)]
 
@@ -457,7 +459,6 @@ def test_sniff_before_requests():
     calls = []
 
     def sniff_callback(*args):
-        nonlocal calls
         calls.append(args)
         return []
 
@@ -481,7 +482,6 @@ def test_sniff_on_node_failure():
     calls = []
 
     def sniff_callback(*args):
-        nonlocal calls
         calls.append(args)
         return []
 
@@ -537,14 +537,19 @@ def test_error_sniffing_callback_without_sniffing_enabled():
 
 def test_heterogeneous_node_config_warning_with_sniffing():
     with warnings.catch_warnings(record=True) as w:
+        context = ssl.create_default_context()
         Transport(
             [
-                NodeConfig("http", "localhost", 80, path_prefix="/a"),
-                NodeConfig("http", "localhost", 81, path_prefix="/b"),
+                NodeConfig(
+                    "https", "localhost", 80, path_prefix="/a", ssl_context=context
+                ),
+                NodeConfig(
+                    "https", "localhost", 81, path_prefix="/b", ssl_context=context
+                ),
             ],
             sniff_on_start=True,
             sniff_callback=lambda *_: [
-                NodeConfig("http", "localhost", 80, path_prefix="/a")
+                NodeConfig("https", "localhost", 80, path_prefix="/a")
             ],
         )
 
@@ -649,8 +654,6 @@ def test_threading_test(pool_size):
             self.successful_requests = 0
 
         def run(self) -> None:
-            nonlocal t, start
-
             while time.time() < start + 2:
                 t.perform_request("GET", "/")
                 self.successful_requests += 1

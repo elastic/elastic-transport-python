@@ -17,6 +17,7 @@
 
 import asyncio
 import logging
+import time
 from typing import (
     Any,
     Awaitable,
@@ -30,7 +31,9 @@ from typing import (
     Union,
 )
 
-from ._compat import await_if_coro, get_running_loop
+import sniffio
+
+from ._compat import await_if_coro
 from ._exceptions import (
     ConnectionError,
     ConnectionTimeout,
@@ -40,6 +43,7 @@ from ._exceptions import (
 from ._models import DEFAULT, DefaultType, HttpHeaders, NodeConfig, SniffOptions
 from ._node import AiohttpHttpNode, BaseAsyncNode
 from ._node_pool import NodePool, NodeSelector
+from ._otel import OpenTelemetrySpan
 from ._serializer import Serializer
 from ._transport import (
     DEFAULT_CLIENT_META_SERVICE,
@@ -168,12 +172,13 @@ class AsyncTransport(Transport):
         # time it's needed. Gets set within '_async_call()' which should
         # precede all logic within async calls.
         self._loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
+        self._async_library: str = None  # type: ignore[assignment]
 
         # AsyncTransport doesn't require a thread lock for
         # sniffing. Uses '_sniffing_task' instead.
         self._sniffing_lock = None  # type: ignore[assignment]
 
-    async def perform_request(  # type: ignore[override,return]
+    async def perform_request(  # type: ignore[override, return]
         self,
         method: str,
         target: str,
@@ -185,6 +190,7 @@ class AsyncTransport(Transport):
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
+        otel_span: Union[OpenTelemetrySpan, DefaultType] = DEFAULT,
     ) -> TransportApiResponse:
         """
         Perform the actual request. Retrieve a node from the node
@@ -208,6 +214,7 @@ class AsyncTransport(Transport):
         :arg retry_on_timeout: Set to true to retry after timeout errors.
         :arg request_timeout: Amount of time to wait for a response to fail with a timeout error.
         :arg client_meta: Extra client metadata key-value pairs to send in the client meta header.
+        :arg otel_span: OpenTelemetry span used to add metadata to the span.
         :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
         await self._async_call()
@@ -219,6 +226,7 @@ class AsyncTransport(Transport):
         max_retries = resolve_default(max_retries, self.max_retries)
         retry_on_timeout = resolve_default(retry_on_timeout, self.retry_on_timeout)
         retry_on_status = resolve_default(retry_on_status, self.retry_on_status)
+        otel_span = resolve_default(otel_span, OpenTelemetrySpan(None))
 
         if self.meta_header:
             request_headers["x-elastic-client-meta"] = ",".join(
@@ -237,6 +245,7 @@ class AsyncTransport(Transport):
             request_body = self.serializers.dumps(
                 body, mimetype=request_headers["content-type"]
             )
+            otel_span.set_db_statement(request_body)
         else:
             request_body = None
 
@@ -253,8 +262,11 @@ class AsyncTransport(Transport):
             node_failure = False
             last_response: Optional[TransportApiResponse] = None
             node: BaseAsyncNode = self.node_pool.get()  # type: ignore[assignment]
-            start_time = self._loop.time()
+            start_time = time.monotonic()
             try:
+                otel_span.set_node_metadata(
+                    node.host, node.port, node.base_url, target, method
+                )
                 resp = await node.perform_request(
                     method,
                     target,
@@ -269,7 +281,7 @@ class AsyncTransport(Transport):
                         node.base_url,
                         target,
                         resp.meta.status,
-                        self._loop.time() - start_time,
+                        time.monotonic() - start_time,
                     )
                 )
 
@@ -292,7 +304,7 @@ class AsyncTransport(Transport):
                         node.base_url,
                         target,
                         "N/A",
-                        self._loop.time() - start_time,
+                        time.monotonic() - start_time,
                     )
                 )
 
@@ -358,6 +370,7 @@ class AsyncTransport(Transport):
                 # We either got a response we're happy with or
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
+                    otel_span.set_db_response(resp.meta.status)
                     return TransportApiResponse(resp.meta, body)
                 else:
                     _logger.warning(
@@ -368,6 +381,10 @@ class AsyncTransport(Transport):
                     )
 
     async def sniff(self, is_initial_sniff: bool = False) -> None:  # type: ignore[override]
+        if sniffio.current_async_library() == "trio":
+            raise ValueError(
+                f"Asynchronous sniffing is not supported with the 'trio' library, got {sniffio.current_async_library}"
+            )
         await self._async_call()
         task = self._create_sniffing_task(is_initial_sniff)
 
@@ -400,8 +417,7 @@ class AsyncTransport(Transport):
             self._sniffing_task.result()
 
         return (
-            self._loop.time() - self._last_sniffed_at
-            >= self._min_delay_between_sniffing
+            time.monotonic() - self._last_sniffed_at >= self._min_delay_between_sniffing
         )
 
     def _create_sniffing_task(
@@ -420,7 +436,7 @@ class AsyncTransport(Transport):
         """Implementation of the sniffing task"""
         previously_sniffed_at = self._last_sniffed_at
         try:
-            self._last_sniffed_at = self._loop.time()
+            self._last_sniffed_at = time.monotonic()
             options = SniffOptions(
                 is_initial_sniff=is_initial_sniff, sniff_timeout=self._sniff_timeout
             )
@@ -457,8 +473,13 @@ class AsyncTransport(Transport):
         because we're not guaranteed to be within an active asyncio event loop
         when __init__() is called.
         """
-        if self._loop is not None:
+        if self._async_library is not None:
             return  # Call at most once!
-        self._loop = get_running_loop()
+
+        self._async_library = sniffio.current_async_library()
+        if self._async_library == "trio":
+            return
+
+        self._loop = asyncio.get_running_loop()
         if self._sniff_on_start:
             await self.sniff(True)

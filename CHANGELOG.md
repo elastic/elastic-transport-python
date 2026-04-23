@@ -1,5 +1,55 @@
 # Changelog
 
+## 9.2.1 (2025-12-23)
+
+* Use `path_prefix` to compute the base URL in the httpx node class ([#243](https://github.com/elastic/elastic-transport-python/pull/243))
+
+## 9.2.0 (2025-10-17)
+
+* Support Trio when using the httpx async client ([#263](https://github.com/elastic/elastic-transport-python/pull/263))
+* Add Python 3.14 to CI builds, and remove 3.8 and 3.9 ([#264](https://github.com/elastic/elastic-transport-python/pull/264))
+
+## 9.1.0 (2025-07-24)
+
+* Update OpenTelemetry conventions ([#245](https://github.com/elastic/elastic-transport-python/pull/245))
+
+## 8.17.1 (2025-03-12)
+
+* Ensure compatibility with httpx v0.28.0+ ([#222](https://github.com/elastic/elastic-transport-python/pull/222), contributed by Arch Linux maintainer @carlsmedstad)
+* Add missing NOTICE file ([#229](https://github.com/elastic/elastic-transport-python/pull/229), reported by Debian Maintainer @schoekek)
+
+## 8.17.0 (2025-01-07)
+
+* Fix use of SSLContext with sniffing ([#199](https://github.com/elastic/elastic-transport-python/pull/199))
+* Fix enabled_cleanup_closed warning ([#202](https://github.com/elastic/elastic-transport-python/pull/202))
+* Remove unneeded install requirement ([#196](https://github.com/elastic/elastic-transport-python/pull/196))
+* Fix aiohttp call type: ignore differently ([#190](https://github.com/elastic/elastic-transport-python/pull/190))
+
+## 8.15.1 (2024-10-09)
+
+* Add explicit Python 3.13 support ([#189](https://github.com/elastic/elastic-transport-python/pull/189))
+
+## 8.15.0 (2024-08-09)
+
+* Removed call to `raise_for_status()` when using `HttpxAsyncHttpNode` to prevent exceptions being raised for 404 responses ([#182](https://github.com/elastic/elastic-transport-python/pull/182))
+* Documented response classes ([#175](https://github.com/elastic/elastic-transport-python/pull/175))
+* Dropped support for Python 3.7 ([#179](https://github.com/elastic/elastic-transport-python/pull/179))
+
+## 8.13.1 (2024-04-28)
+
+- Fixed requests 2.32 compatibility (#164)
+- Fixed TypeError when two nodes are declared dead at the same time (#115, contributed by @floxay)
+- Added `TransportApiResponse` (#160, #161, contributed by @JessicaGarson)
+
+## 8.13.0
+
+- Added support for the HTTPX client with asyncio (#137, contributed by @b4sus)
+- Added optional orjson serializer support (#152)
+
+## 8.12.0
+
+- Fix basic auth built from percent-encoded URLs (#143)
+
 ## 8.11.0
 
 - Always set default HTTPS port to 443 (#127)

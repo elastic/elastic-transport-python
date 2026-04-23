@@ -52,8 +52,16 @@ from ._models import (
     NodeConfig,
     SniffOptions,
 )
-from ._node import AiohttpHttpNode, BaseNode, RequestsHttpNode, Urllib3HttpNode
+from ._node import (
+    AiohttpHttpNode,
+    BaseNode,
+    HttpxAsyncHttpNode,
+    HttpxHttpNode,
+    RequestsHttpNode,
+    Urllib3HttpNode,
+)
 from ._node_pool import NodePool, NodeSelector
+from ._otel import OpenTelemetrySpan
 from ._serializer import DEFAULT_SERIALIZERS, Serializer, SerializerCollection
 from ._version import __version__
 from .client_utils import client_meta_version, resolve_default
@@ -63,6 +71,8 @@ NODE_CLASS_NAMES: Dict[str, Type[BaseNode]] = {
     "urllib3": Urllib3HttpNode,
     "requests": RequestsHttpNode,
     "aiohttp": AiohttpHttpNode,
+    "httpx": HttpxHttpNode,
+    "httpxasync": HttpxAsyncHttpNode,
 }
 # These are HTTP status errors that shouldn't be considered
 # 'errors' for marking a node as dead. These errors typically
@@ -114,7 +124,7 @@ class Transport:
         ] = None,
         meta_header: bool = True,
         client_meta_service: Tuple[str, str] = DEFAULT_CLIENT_META_SERVICE,
-    ) -> None:
+    ):
         """
         :arg node_configs: List of 'NodeConfig' instances to create initial set of nodes.
         :arg node_class: subclass of :class:`~elastic_transport.BaseNode` to use
@@ -257,6 +267,7 @@ class Transport:
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
+        otel_span: Union[OpenTelemetrySpan, DefaultType] = DEFAULT,
     ) -> TransportApiResponse:
         """
         Perform the actual request. Retrieve a node from the node
@@ -280,6 +291,8 @@ class Transport:
         :arg retry_on_timeout: Set to true to retry after timeout errors.
         :arg request_timeout: Amount of time to wait for a response to fail with a timeout error.
         :arg client_meta: Extra client metadata key-value pairs to send in the client meta header.
+        :arg otel_span: OpenTelemetry span used to add metadata to the span.
+
         :returns: Tuple of the :class:`elastic_transport.ApiResponseMeta` with the deserialized response.
         """
         if headers is DEFAULT:
@@ -289,6 +302,7 @@ class Transport:
         max_retries = resolve_default(max_retries, self.max_retries)
         retry_on_timeout = resolve_default(retry_on_timeout, self.retry_on_timeout)
         retry_on_status = resolve_default(retry_on_status, self.retry_on_status)
+        otel_span = resolve_default(otel_span, OpenTelemetrySpan(None))
 
         if self.meta_header:
             request_headers["x-elastic-client-meta"] = ",".join(
@@ -307,6 +321,7 @@ class Transport:
             request_body = self.serializers.dumps(
                 body, mimetype=request_headers["content-type"]
             )
+            otel_span.set_db_statement(request_body)
         else:
             request_body = None
 
@@ -325,7 +340,10 @@ class Transport:
             node = self.node_pool.get()
             start_time = time.time()
             try:
-                meta, raw_data = node.perform_request(
+                otel_span.set_node_metadata(
+                    node.host, node.port, node.base_url, target, method
+                )
+                resp = node.perform_request(
                     method,
                     target,
                     body=request_body,
@@ -338,26 +356,32 @@ class Transport:
                         method,
                         node.base_url,
                         target,
-                        meta.status,
+                        resp.meta.status,
                         time.time() - start_time,
                     )
                 )
 
                 if method != "HEAD":
-                    data = self.serializers.loads(raw_data, meta.mimetype)
+                    body = self.serializers.loads(resp.body, resp.meta.mimetype)
                 else:
-                    data = None
+                    body = None
 
-                if meta.status in retry_on_status:
+                if resp.meta.status in retry_on_status:
                     retry = True
                     # Keep track of the last response we see so we can return
                     # it in case the retried request returns with a transport error.
-                    last_response = TransportApiResponse(meta, data)
+                    last_response = TransportApiResponse(resp.meta, body)
 
             except TransportError as e:
                 _logger.info(
                     "%s %s%s [status:%s duration:%.3fs]"
-                    % (method, node.base_url, target, "N/A", time.time() - start_time)
+                    % (
+                        method,
+                        node.base_url,
+                        target,
+                        "N/A",
+                        time.time() - start_time,
+                    )
                 )
 
                 if isinstance(e, ConnectionTimeout):
@@ -404,8 +428,8 @@ class Transport:
                 # If we got back a response we need to check if that status
                 # is indicative of a healthy node even if it's a non-2XX status
                 if (
-                    200 <= meta.status < 299
-                    or meta.status in NOT_DEAD_NODE_HTTP_STATUSES
+                    200 <= resp.meta.status < 299
+                    or resp.meta.status in NOT_DEAD_NODE_HTTP_STATUSES
                 ):
                     self.node_pool.mark_live(node)
                 else:
@@ -422,11 +446,12 @@ class Transport:
                 # We either got a response we're happy with or
                 # we've exhausted all of our retries so we return it.
                 if not retry or attempt >= max_retries:
-                    return TransportApiResponse(meta, data)
+                    otel_span.set_db_response(resp.meta.status)
+                    return TransportApiResponse(resp.meta, body)
                 else:
                     _logger.warning(
                         "Retrying request after non-successful status %d (attempt %d of %d)",
-                        meta.status,
+                        resp.meta.status,
                         attempt,
                         max_retries,
                     )
@@ -520,13 +545,13 @@ def validate_sniffing_options(
 
 def warn_if_varying_node_config_options(node_configs: List[NodeConfig]) -> None:
     """Function which detects situations when sniffing may produce incorrect configs"""
-    exempt_attrs = {"host", "port", "connections_per_node", "_extras"}
+    exempt_attrs = {"host", "port", "connections_per_node", "_extras", "ssl_context"}
     match_attr_dict = None
     for node_config in node_configs:
         attr_dict = {
-            k: v
-            for k, v in dataclasses.asdict(node_config).items()
-            if k not in exempt_attrs
+            field.name: getattr(node_config, field.name)
+            for field in dataclasses.fields(node_config)
+            if field.name not in exempt_attrs
         }
         if match_attr_dict is None:
             match_attr_dict = attr_dict

@@ -26,7 +26,6 @@ from elastic_transport import Transport
 def test_simple_request(node_class, https_server_ip_node_config):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-
         t = Transport([https_server_ip_node_config], node_class=node_class)
 
         resp, data = t.perform_request("GET", "/foobar")

@@ -30,13 +30,13 @@ requires_ssl_assert_fingerprint_in_chain = pytest.mark.skipif(
 
 @requires_ssl_assert_fingerprint_in_chain
 @pytest.mark.parametrize("node_cls", [Urllib3HttpNode, RequestsHttpNode])
-def test_ssl_assert_fingerprint_invalid_length(node_cls):
+def test_ssl_assert_fingerprint_invalid_length(node_cls, httpbin_secure):
     with pytest.raises(ValueError) as e:
         node_cls(
             NodeConfig(
                 "https",
-                "httpbin.org",
-                443,
+                httpbin_secure.host,
+                httpbin_secure.port,
                 ssl_assert_fingerprint="0000",
             )
         )
@@ -49,22 +49,14 @@ def test_ssl_assert_fingerprint_invalid_length(node_cls):
 
 @requires_ssl_assert_fingerprint_in_chain
 @pytest.mark.parametrize("node_cls", [Urllib3HttpNode, RequestsHttpNode])
-@pytest.mark.parametrize(
-    "ssl_assert_fingerprint",
-    [
-        "8ecde6884f3d87b1125ba31ac3fcb13d7016de7f57cc904fe1cb97c6ae98196e",
-        "8e:cd:e6:88:4f:3d:87:b1:12:5b:a3:1a:c3:fc:b1:3d:70:16:de:7f:57:cc:90:4f:e1:cb:97:c6:ae:98:19:6e",
-        "8ECDE6884F3D87B1125BA31AC3FCB13D7016DE7F57CC904FE1CB97C6AE98196E",
-    ],
-)
-def test_assert_fingerprint_in_cert_chain(node_cls, ssl_assert_fingerprint):
+def test_assert_fingerprint_in_cert_chain(node_cls, cert_fingerprint, httpbin_secure):
     with warnings.catch_warnings(record=True) as w:
         node = node_cls(
             NodeConfig(
                 "https",
-                "httpbin.org",
-                443,
-                ssl_assert_fingerprint=ssl_assert_fingerprint,
+                httpbin_secure.host,
+                httpbin_secure.port,
+                ssl_assert_fingerprint=cert_fingerprint,
             )
         )
         meta, _ = node.perform_request("GET", "/")
@@ -75,11 +67,13 @@ def test_assert_fingerprint_in_cert_chain(node_cls, ssl_assert_fingerprint):
 
 @requires_ssl_assert_fingerprint_in_chain
 @pytest.mark.parametrize("node_cls", [Urllib3HttpNode, RequestsHttpNode])
-def test_assert_fingerprint_in_cert_chain_failure(node_cls):
+def test_assert_fingerprint_in_cert_chain_failure(
+    node_cls, httpbin_secure, cert_fingerprint
+):
     node = node_cls(
         NodeConfig(
             "https",
-            "httpbin.org",
+            "www.elastic.co",
             443,
             ssl_assert_fingerprint="0" * 64,
         )
@@ -95,5 +89,5 @@ def test_assert_fingerprint_in_cert_chain_failure(node_cls):
         'Expected "0000000000000000000000000000000000000000000000000000000000000000",'
         in err
     )
-    # This is the root CA for httpbin.org with a leading comma to denote more than one cert was listed.
-    assert ', "8ecde6884f3d87b1125ba31ac3fcb13d7016de7f57cc904fe1cb97c6ae98196e"' in err
+    # This is the root CA for www.elastic.co with a leading comma to denote more than one cert was listed.
+    assert ', "cbb522d7b7f127ad6a0113865bdf1cd4102e7d0759af635a7cf4720dc963c53b"' in err

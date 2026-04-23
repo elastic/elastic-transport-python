@@ -6,6 +6,7 @@ API Reference
 
    installation
    nodes
+   responses
    exceptions
    logging
    transport

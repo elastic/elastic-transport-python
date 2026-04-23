@@ -151,12 +151,10 @@ class BinaryApiResponse(ApiResponse[bytes]):
         return iter(self.body)
 
     @overload
-    def __getitem__(self, item: slice) -> bytes:
-        ...
+    def __getitem__(self, item: slice) -> bytes: ...
 
     @overload
-    def __getitem__(self, item: int) -> int:
-        ...
+    def __getitem__(self, item: int) -> int: ...
 
     def __getitem__(self, item: Union[int, slice]) -> Union[int, bytes]:
         return self.body[item]
@@ -201,12 +199,10 @@ class ListApiResponse(
     """API responses which are a list of items. Can be NDJSON or a JSON list"""
 
     @overload
-    def __getitem__(self, item: slice) -> List[_ListItemBodyType]:
-        ...
+    def __getitem__(self, item: slice) -> List[_ListItemBodyType]: ...
 
     @overload
-    def __getitem__(self, item: int) -> _ListItemBodyType:
-        ...
+    def __getitem__(self, item: int) -> _ListItemBodyType: ...
 
     def __getitem__(
         self, item: Union[int, slice]

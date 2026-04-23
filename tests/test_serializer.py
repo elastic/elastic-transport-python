@@ -24,6 +24,7 @@ import pytest
 from elastic_transport import (
     JsonSerializer,
     NdjsonSerializer,
+    OrjsonSerializer,
     SerializationError,
     SerializerCollection,
     TextSerializer,
@@ -33,66 +34,86 @@ from elastic_transport._serializer import DEFAULT_SERIALIZERS
 serializers = SerializerCollection(DEFAULT_SERIALIZERS)
 
 
-def test_date_serialization():
-    assert b'{"d":"2010-10-01"}' == JsonSerializer().dumps({"d": date(2010, 10, 1)})
+@pytest.fixture(params=[JsonSerializer, OrjsonSerializer])
+def json_serializer(request: pytest.FixtureRequest):
+    yield request.param()
 
 
-def test_decimal_serialization():
-    assert b'{"d":3.8}' == JsonSerializer().dumps({"d": Decimal("3.8")})
+def test_date_serialization(json_serializer):
+    assert b'{"d":"2010-10-01"}' == json_serializer.dumps({"d": date(2010, 10, 1)})
 
 
-def test_uuid_serialization():
-    assert b'{"d":"00000000-0000-0000-0000-000000000003"}' == JsonSerializer().dumps(
+def test_decimal_serialization(json_serializer):
+    assert b'{"d":3.8}' == json_serializer.dumps({"d": Decimal("3.8")})
+
+
+def test_uuid_serialization(json_serializer):
+    assert b'{"d":"00000000-0000-0000-0000-000000000003"}' == json_serializer.dumps(
         {"d": uuid.UUID("00000000-0000-0000-0000-000000000003")}
     )
 
 
 def test_serializes_nan():
     assert b'{"d":NaN}' == JsonSerializer().dumps({"d": float("NaN")})
+    # NaN is invalid JSON, and orjson silently converts it to null
+    assert b'{"d":null}' == OrjsonSerializer().dumps({"d": float("NaN")})
 
 
-def test_raises_serialization_error_on_dump_error():
+def test_raises_serialization_error_on_dump_error(json_serializer):
     with pytest.raises(SerializationError):
-        JsonSerializer().dumps(object())
+        json_serializer.dumps(object())
     with pytest.raises(SerializationError):
         TextSerializer().dumps({})
 
 
-def test_raises_serialization_error_on_load_error():
+def test_raises_serialization_error_on_load_error(json_serializer):
     with pytest.raises(SerializationError):
-        JsonSerializer().loads(object())
+        json_serializer.loads(object())
     with pytest.raises(SerializationError):
-        JsonSerializer().loads(b"{{")
+        json_serializer.loads(b"{{")
 
 
-def test_unicode_is_handled():
-    j = JsonSerializer()
+def test_json_unicode_is_handled(json_serializer):
     assert (
-        j.dumps({"你好": "你好"})
+        json_serializer.dumps({"你好": "你好"})
         == b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}'
     )
-    assert j.loads(b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}') == {
-        "你好": "你好"
-    }
-
-    t = TextSerializer()
-    assert t.dumps("你好") == b"\xe4\xbd\xa0\xe5\xa5\xbd"
-    assert t.loads(b"\xe4\xbd\xa0\xe5\xa5\xbd") == "你好"
+    assert json_serializer.loads(
+        b'{"\xe4\xbd\xa0\xe5\xa5\xbd":"\xe4\xbd\xa0\xe5\xa5\xbd"}'
+    ) == {"你好": "你好"}
 
 
-def test_unicode_surrogates_handled():
-    j = JsonSerializer()
+def test_text_unicode_is_handled():
+    text_serializer = TextSerializer()
+    assert text_serializer.dumps("你好") == b"\xe4\xbd\xa0\xe5\xa5\xbd"
+    assert text_serializer.loads(b"\xe4\xbd\xa0\xe5\xa5\xbd") == "你好"
+
+
+def test_json_unicode_surrogates_handled():
     assert (
-        j.dumps({"key": "你好\uda6a"})
+        JsonSerializer().dumps({"key": "你好\uda6a"})
         == b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}'
     )
-    assert j.loads(b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}') == {
-        "key": "你好\uda6a"
-    }
+    assert JsonSerializer().loads(
+        b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}'
+    ) == {"key": "你好\uda6a"}
 
-    t = TextSerializer()
-    assert t.dumps("你好\uda6a") == b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
-    assert t.loads(b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa") == "你好\uda6a"
+    # orjson is strict about UTF-8
+    with pytest.raises(SerializationError):
+        OrjsonSerializer().dumps({"key": "你好\uda6a"})
+
+    with pytest.raises(SerializationError):
+        OrjsonSerializer().loads(b'{"key":"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"}')
+
+
+def test_text_unicode_surrogates_handled(json_serializer):
+    text_serializer = TextSerializer()
+    assert (
+        text_serializer.dumps("你好\uda6a") == b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa"
+    )
+    assert (
+        text_serializer.loads(b"\xe4\xbd\xa0\xe5\xa5\xbd\xed\xa9\xaa") == "你好\uda6a"
+    )
 
 
 def test_deserializes_json_by_default():

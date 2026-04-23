@@ -22,10 +22,11 @@ import gzip
 import os
 import re
 import ssl
+import sys
 import warnings
-from typing import Optional, Union
+from typing import Optional, TypedDict, Union
 
-from .._compat import get_running_loop, warn_stacklevel
+from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
@@ -55,14 +56,26 @@ try:
 
     # See aio-libs/aiohttp#1769 and #5012
     _AIOHTTP_FIXED_HEAD_BUG = _AIOHTTP_SEMVER_VERSION >= (3, 7, 0)
+
+    class RequestKwarg(TypedDict, total=False):
+        ssl: aiohttp.Fingerprint
+
 except ImportError:  # pragma: nocover
     _AIOHTTP_AVAILABLE = False
     _AIOHTTP_META_VERSION = ""
     _AIOHTTP_FIXED_HEAD_BUG = False
 
 
+# Avoid aiohttp enabled_cleanup_closed warning: https://github.com/aio-libs/aiohttp/pull/9726
+_NEEDS_CLEANUP_CLOSED_313 = (3, 13, 0) <= sys.version_info < (3, 13, 1)
+_NEEDS_CLEANUP_CLOSED = _NEEDS_CLEANUP_CLOSED_313 or sys.version_info < (3, 12, 7)
+
+
 class AiohttpHttpNode(BaseAsyncNode):
-    """Default asynchronous node class using the ``aiohttp`` library via HTTP"""
+    """Default asynchronous node class using the ``aiohttp`` library via HTTP.
+
+    Supports asyncio.
+    """
 
     _CLIENT_META_HTTP_CLIENT = ("ai", _AIOHTTP_META_VERSION)
 
@@ -131,7 +144,6 @@ class AiohttpHttpNode(BaseAsyncNode):
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> NodeApiResponse:
-        global _AIOHTTP_FIXED_HEAD_BUG
         if self.session is None:
             self._create_aiohttp_session()
         assert self.session is not None
@@ -170,7 +182,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         else:
             body_to_send = None
 
-        kwargs = {}
+        kwargs: RequestKwarg = {}
         if self._ssl_assert_fingerprint:
             kwargs["ssl"] = aiohttp_fingerprint(self._ssl_assert_fingerprint)
 
@@ -248,7 +260,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         a chance to set AiohttpHttpNode.loop
         """
         if self._loop is None:
-            self._loop = get_running_loop()
+            self._loop = asyncio.get_running_loop()
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             skip_auto_headers=("accept", "accept-encoding", "user-agent"),
@@ -258,8 +270,8 @@ class AiohttpHttpNode(BaseAsyncNode):
             connector=aiohttp.TCPConnector(
                 limit_per_host=self._connections_per_node,
                 use_dns_cache=True,
-                enable_cleanup_closed=True,
-                ssl=self._ssl_context,
+                enable_cleanup_closed=_NEEDS_CLEANUP_CLOSED,
+                ssl=self._ssl_context or False,
             ),
         )
 

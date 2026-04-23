@@ -23,6 +23,9 @@ import pytest
 
 from elastic_transport import (
     AiohttpHttpNode,
+    ConnectionError,
+    HttpxAsyncHttpNode,
+    HttpxHttpNode,
     NodeConfig,
     RequestsHttpNode,
     TlsError,
@@ -36,7 +39,14 @@ TLSv1_1_URL = "https://tls-v1-1.badssl.com:1011"
 TLSv1_2_URL = "https://tls-v1-2.badssl.com:1012"
 
 node_classes = pytest.mark.parametrize(
-    "node_class", [AiohttpHttpNode, Urllib3HttpNode, RequestsHttpNode]
+    "node_class",
+    [
+        AiohttpHttpNode,
+        Urllib3HttpNode,
+        RequestsHttpNode,
+        HttpxHttpNode,
+        HttpxAsyncHttpNode,
+    ],
 )
 
 supported_version_params = [
@@ -96,10 +106,15 @@ def tlsv1_1_supported() -> bool:
     ["url", "ssl_version"],
     supported_version_params,
 )
-@pytest.mark.asyncio
-async def test_supported_tls_versions(node_class, url: str, ssl_version: int):
+@pytest.mark.anyio
+async def test_supported_tls_versions(
+    node_class, url: str, ssl_version: int, anyio_backend
+):
     if url in (TLSv1_0_URL, TLSv1_1_URL) and not tlsv1_1_supported():
         pytest.skip("TLSv1.1 isn't supported by this OpenSSL distribution")
+    if anyio_backend == "trio" and node_class is not HttpxAsyncHttpNode:
+        pytest.skip("only httpx supports trio")
+
     node_config = url_to_node_config(url).replace(ssl_version=ssl_version)
     node = node_class(node_config)
 
@@ -112,20 +127,31 @@ async def test_supported_tls_versions(node_class, url: str, ssl_version: int):
     ["url", "ssl_version"],
     unsupported_version_params,
 )
-@pytest.mark.asyncio
-async def test_unsupported_tls_versions(node_class, url: str, ssl_version: int):
+@pytest.mark.anyio
+async def test_unsupported_tls_versions(
+    node_class, url: str, ssl_version: int, anyio_backend
+):
+    if anyio_backend == "trio" and node_class is not HttpxAsyncHttpNode:
+        pytest.skip("only httpx supports trio")
+
     node_config = url_to_node_config(url).replace(ssl_version=ssl_version)
     node = node_class(node_config)
 
-    with pytest.raises(TlsError) as e:
+    # Remove ConnectionError when we have a fix or workaround for
+    # https://github.com/encode/httpx/discussions/3674
+    with pytest.raises((TlsError, ConnectionError)) as e:
         await await_if_coro(node.perform_request("GET", "/"))
+    if anyio_backend == "trio" and node_class is HttpxAsyncHttpNode:
+        return  # Trio errors are not correctly bubbled up by httpx
     assert "unsupported protocol" in str(e.value) or "handshake failure" in str(e.value)
 
 
 @node_classes
 @pytest.mark.parametrize("ssl_version", [0, "TLSv1", object()])
 def test_ssl_version_value_error(node_class, ssl_version):
-    with pytest.raises(ValueError) as e:
+    # Remove ConnectionError when we have a fix or workaround for
+    # https://github.com/encode/httpx/discussions/3674
+    with pytest.raises((ValueError, ConnectionError)) as e:
         node_class(NodeConfig("https", "localhost", 9200, ssl_version=ssl_version))
     assert str(e.value) == (
         f"Unsupported value for 'ssl_version': {ssl_version!r}. Must be either "

@@ -36,10 +36,13 @@ from ._node import (
     AiohttpHttpNode,
     BaseAsyncNode,
     BaseNode,
+    HttpxAsyncHttpNode,
+    HttpxHttpNode,
     RequestsHttpNode,
     Urllib3HttpNode,
 )
 from ._node_pool import NodePool, NodeSelector, RandomSelector, RoundRobinSelector
+from ._otel import OpenTelemetrySpan
 from ._response import ApiResponse as ApiResponse
 from ._response import BinaryApiResponse as BinaryApiResponse
 from ._response import HeadApiResponse as HeadApiResponse
@@ -54,6 +57,7 @@ from ._serializer import (
     TextSerializer,
 )
 from ._transport import Transport as Transport
+from ._transport import TransportApiResponse
 from ._utils import fixup_module_metadata
 from ._version import __version__ as __version__  # noqa
 
@@ -70,6 +74,8 @@ __all__ = [
     "ConnectionTimeout",
     "HeadApiResponse",
     "HttpHeaders",
+    "HttpxAsyncHttpNode",
+    "HttpxHttpNode",
     "JsonSerializer",
     "ListApiResponse",
     "NdjsonSerializer",
@@ -77,6 +83,7 @@ __all__ = [
     "NodePool",
     "NodeSelector",
     "ObjectApiResponse",
+    "OpenTelemetrySpan",
     "RandomSelector",
     "RequestsHttpNode",
     "RoundRobinSelector",
@@ -90,10 +97,18 @@ __all__ = [
     "TextSerializer",
     "TlsError",
     "Transport",
+    "TransportApiResponse",
     "TransportError",
     "TransportWarning",
     "Urllib3HttpNode",
 ]
+
+try:
+    from elastic_transport._serializer import OrjsonSerializer  # noqa: F401
+
+    __all__.append("OrjsonSerializer")
+except ImportError:
+    pass
 
 _logger = logging.getLogger("elastic_transport")
 _logger.addHandler(logging.NullHandler())

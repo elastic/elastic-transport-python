@@ -24,8 +24,15 @@ from typing import Any, ClassVar, Mapping, Optional
 
 from ._exceptions import SerializationError
 
+try:
+    import orjson
+except ModuleNotFoundError:
+    orjson = None  # type: ignore[assignment]
+
 
 class Serializer:
+    """Serializer interface."""
+
     mimetype: ClassVar[str]
 
     def loads(self, data: bytes) -> Any:  # pragma: nocover
@@ -36,6 +43,8 @@ class Serializer:
 
 
 class TextSerializer(Serializer):
+    """Text serializer to and from UTF-8."""
+
     mimetype: ClassVar[str] = "text/*"
 
     def loads(self, data: bytes) -> str:
@@ -62,6 +71,8 @@ class TextSerializer(Serializer):
 
 
 class JsonSerializer(Serializer):
+    """JSON serializer relying on the standard library json module."""
+
     mimetype: ClassVar[str] = "application/json"
 
     def default(self, data: Any) -> Any:
@@ -81,14 +92,15 @@ class JsonSerializer(Serializer):
         ).encode("utf-8", "surrogatepass")
 
     def json_loads(self, data: bytes) -> Any:
+        return json.loads(data)
+
+    def loads(self, data: bytes) -> Any:
         # Sometimes responses use Content-Type: json but actually
         # don't contain any data. We should return something instead
         # of erroring in these cases.
         if data == b"":
             return None
-        return json.loads(data)
 
-    def loads(self, data: bytes) -> Any:
         try:
             return self.json_loads(data)
         except (ValueError, TypeError) as e:
@@ -115,7 +127,26 @@ class JsonSerializer(Serializer):
             )
 
 
+if orjson is not None:
+
+    class OrjsonSerializer(JsonSerializer):
+        """JSON serializer relying on the orjson package.
+
+        Only available if orjson if installed. It is faster, especially for vectors, but is also stricter.
+        """
+
+        def json_dumps(self, data: Any) -> bytes:
+            return orjson.dumps(
+                data, default=self.default, option=orjson.OPT_SERIALIZE_NUMPY
+            )
+
+        def json_loads(self, data: bytes) -> Any:
+            return orjson.loads(data)
+
+
 class NdjsonSerializer(JsonSerializer):
+    """Newline delimited JSON (NDJSON) serializer relying on the standard library json module."""
+
     mimetype: ClassVar[str] = "application/x-ndjson"
 
     def loads(self, data: bytes) -> Any:

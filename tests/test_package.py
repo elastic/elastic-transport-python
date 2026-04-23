@@ -25,8 +25,11 @@ modules = pytest.mark.parametrize("module", [elastic_transport, client_utils])
 
 @modules
 def test__all__sorted(module):
-    print(sorted(module.__all__))
-    assert module.__all__ == sorted(module.__all__)
+    module_all = module.__all__.copy()
+    # Optional dependencies are added at the end
+    if "OrjsonSerializer" in module_all:
+        module_all.remove("OrjsonSerializer")
+    assert module_all == sorted(module_all)
 
 
 @modules

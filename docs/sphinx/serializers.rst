@@ -9,6 +9,9 @@ Serializers
 .. autoclass:: JsonSerializer
    :members:
 
+.. autoclass:: OrjsonSerializer
+   :members:
+
 .. autoclass:: TextSerializer
    :members:
 
