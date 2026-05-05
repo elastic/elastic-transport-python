@@ -1,5 +1,10 @@
 # Changelog
 
+## 9.4.0 (2026-05-05)
+
+* Add support for an httpx synchronous node ([#262](https://github.com/elastic/elastic-transport-python/pull/262))
+
+
 ## 9.2.1 (2025-12-23)
 
 * Use `path_prefix` to compute the base URL in the httpx node class ([#243](https://github.com/elastic/elastic-transport-python/pull/243))
