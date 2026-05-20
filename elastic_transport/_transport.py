@@ -18,6 +18,7 @@
 import dataclasses
 import inspect
 import logging
+import random
 import time
 import warnings
 from platform import python_version
@@ -89,6 +90,11 @@ class TransportApiResponse(NamedTuple):
     body: Any
 
 
+def backoff_time(attempts: int, base: int = 1, cap: int = 60) -> float:
+    # Full Jitter from https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+    return random.uniform(0, min(cap, base * 2 ** (attempts - 1)))
+
+
 class Transport:
     """
     Encapsulation of transport-related to logic. Handles instantiation of the
@@ -111,6 +117,8 @@ class Transport:
         max_retries: int = 3,
         retry_on_status: Collection[int] = (429, 502, 503, 504),
         retry_on_timeout: bool = False,
+        retry_backoff_base: int = 1,
+        retry_backoff_cap: int = 60,
         sniff_on_start: bool = False,
         sniff_before_requests: bool = False,
         sniff_on_node_failure: bool = False,
@@ -146,6 +154,18 @@ class Transport:
             on a different node. defaults to ``(429, 502, 503, 504)``
         :arg retry_on_timeout: should timeout trigger a retry on different
             node? (default ``False``)
+        :arg retry_backoff_base: base argument for the full jitter backoff
+            algorithm, in seconds. To enable backoff delays between retry attempts,
+            set this argument to 1 or higher, and also set ``retry_backoff_cap``.
+            Note that ``retry_backoff_base`` and ``retry_backoff_cap`` must both
+            be greater than zero for backoff delays to be used. The default value
+            for this argument is 0.
+        :arg retry_backoff_cap: cap argument for the full jitter backoff algorithm,
+            in seconds. To enable backoff delays between retry attempts, set this
+            argument to a positive number that is greater than ``retry_backoff_base``.
+            Note that ``retry_backoff_base`` and ``retry_backoff_cap`` must both
+            be greater than zero for backoff delays to be used. The default value
+            for this argument is 0.
         :arg sniff_on_start: If ``True`` will sniff for additional nodes as soon
             as possible, guaranteed before the first request.
         :arg sniff_on_node_failure: If ``True`` will sniff for additional nodees
@@ -227,6 +247,8 @@ class Transport:
         self.max_retries = max_retries
         self.retry_on_status = retry_on_status
         self.retry_on_timeout = retry_on_timeout
+        self.retry_backoff_base = retry_backoff_base
+        self.retry_backoff_cap = retry_backoff_cap
 
         # Build the NodePool from all the options
         node_pool_kwargs: Dict[str, Any] = {}
@@ -265,6 +287,8 @@ class Transport:
         max_retries: Union[int, DefaultType] = DEFAULT,
         retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
+        retry_backoff_base: Union[int, DefaultType] = DEFAULT,
+        retry_backoff_cap: Union[int, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
         otel_span: Union[OpenTelemetrySpan, DefaultType] = DEFAULT,
@@ -302,6 +326,10 @@ class Transport:
         max_retries = resolve_default(max_retries, self.max_retries)
         retry_on_timeout = resolve_default(retry_on_timeout, self.retry_on_timeout)
         retry_on_status = resolve_default(retry_on_status, self.retry_on_status)
+        retry_backoff_base = resolve_default(
+            retry_backoff_base, self.retry_backoff_base
+        )
+        retry_backoff_cap = resolve_default(retry_backoff_cap, self.retry_backoff_cap)
         otel_span = resolve_default(otel_span, OpenTelemetrySpan(None))
 
         if self.meta_header:
@@ -416,6 +444,15 @@ class Transport:
                     e.errors = tuple(errors)
                     raise
                 else:
+                    sleep_time = backoff_time(
+                        attempt, retry_backoff_base, retry_backoff_cap
+                    )
+                    if sleep_time:
+                        _logger.warning(
+                            "Request failure, sleeping for %.1fs before retrying",
+                            sleep_time,
+                        )
+                        time.sleep(backoff_time(attempt))
                     _logger.warning(
                         "Retrying request after failure (attempt %d of %d)",
                         attempt,
