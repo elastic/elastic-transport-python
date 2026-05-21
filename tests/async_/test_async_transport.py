@@ -240,6 +240,34 @@ async def test_retry_on_status():
 
 
 @pytest.mark.anyio
+async def test_request_retry_backoff():
+    t = AsyncTransport(
+        [
+            NodeConfig(
+                "http",
+                "localhost",
+                80,
+                _extras={"exception": ConnectionError("abandon ship")},
+            )
+        ],
+        node_class=AsyncDummyNode,
+        retry_backoff_base=1,
+        retry_backoff_cap=2,
+    )
+
+    with mock.patch("elastic_transport._async_transport.asyncio.sleep") as mock_sleep:
+        with pytest.raises(ConnectionError) as e:
+            await t.perform_request("GET", "/")
+
+    assert 4 == len(t.node_pool.get().calls)
+    assert len(e.value.errors) == 3
+    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+
+    assert mock_sleep.await_count == 3
+    assert all(0 <= arg[0][0] <= 2 for arg in mock_sleep.await_args_list)
+
+
+@pytest.mark.anyio
 async def test_failed_connection_will_be_marked_as_dead():
     t = AsyncTransport(
         [
