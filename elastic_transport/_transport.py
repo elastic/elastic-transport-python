@@ -90,7 +90,7 @@ class TransportApiResponse(NamedTuple):
     body: Any
 
 
-def backoff_time(attempts: int, base: int = 1, cap: int = 60) -> float:
+def backoff_time(attempts: int, base: float = 1, cap: float = 60) -> float:
     # Full Jitter from https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
     return random.uniform(0, min(cap, base * 2 ** (attempts - 1)))
 
@@ -117,8 +117,8 @@ class Transport:
         max_retries: int = 3,
         retry_on_status: Collection[int] = (429, 502, 503, 504),
         retry_on_timeout: bool = False,
-        retry_backoff_base: int = 0,
-        retry_backoff_cap: int = 0,
+        retry_backoff_base: float = 0,
+        retry_backoff_cap: float = 0,
         sniff_on_start: bool = False,
         sniff_before_requests: bool = False,
         sniff_on_node_failure: bool = False,
@@ -154,18 +154,18 @@ class Transport:
             on a different node. defaults to ``(429, 502, 503, 504)``
         :arg retry_on_timeout: should timeout trigger a retry on different
             node? (default ``False``)
-        :arg retry_backoff_base: base argument for the full jitter backoff
+        :arg retry_backoff_base: the "base" argument for the full jitter backoff
             algorithm, in seconds. To enable backoff delays between retry attempts,
-            set this argument to 1 or higher, and also set ``retry_backoff_cap``.
-            Note that ``retry_backoff_base`` and ``retry_backoff_cap`` must both
-            be greater than zero for backoff delays to be used. The default value
-            for this argument is 0.
-        :arg retry_backoff_cap: cap argument for the full jitter backoff algorithm,
-            in seconds. To enable backoff delays between retry attempts, set this
-            argument to a positive number that is greater than ``retry_backoff_base``.
-            Note that ``retry_backoff_base`` and ``retry_backoff_cap`` must both
-            be greater than zero for backoff delays to be used. The default value
-            for this argument is 0.
+            set this argument to a value greater than 0. Note that
+            ``retry_backoff_base`` and ``retry_backoff_cap`` must both be greater
+            than zero for backoff delays to be used. The default value for this
+            argument is 0.
+        :arg retry_backoff_cap: the "cap" argument for the full jitter backoff
+            algorithm, in seconds. To enable backoff delays between retry attempts,
+            set this argument to a positive number that is greater or equal than
+            ``retry_backoff_base``. Note that ``retry_backoff_base`` and
+            ``retry_backoff_cap`` must both be greater than zero for backoff delays
+            to be used. The default value for this argument is 0.
         :arg sniff_on_start: If ``True`` will sniff for additional nodes as soon
             as possible, guaranteed before the first request.
         :arg sniff_on_node_failure: If ``True`` will sniff for additional nodees
@@ -287,8 +287,8 @@ class Transport:
         max_retries: Union[int, DefaultType] = DEFAULT,
         retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
-        retry_backoff_base: Union[int, DefaultType] = DEFAULT,
-        retry_backoff_cap: Union[int, DefaultType] = DEFAULT,
+        retry_backoff_base: Union[float, DefaultType] = DEFAULT,
+        retry_backoff_cap: Union[float, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
         otel_span: Union[OpenTelemetrySpan, DefaultType] = DEFAULT,

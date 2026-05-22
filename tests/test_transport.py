@@ -39,6 +39,7 @@ from elastic_transport import (
     TransportWarning,
     Urllib3HttpNode,
 )
+from elastic_transport._transport import backoff_time
 from elastic_transport.client_utils import DEFAULT
 from tests.conftest import DummyNode
 
@@ -699,3 +700,19 @@ def test_httpbin(httpbin_node_config):
     resp = t.perform_request("GET", "/anything")
     assert resp.meta.status == 200
     assert isinstance(resp.body, dict)
+
+
+def test_backoff_time():
+    for i in range(1, 11):
+        assert backoff_time(i, 0, 0) == 0
+    for i in range(1, 11):
+        assert backoff_time(i, 0, 1) == 0
+    exp = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+    for i in range(10):
+        assert 0 <= backoff_time(i + 1, 0.1, 1) <= min(1, 0.1 * exp[i])
+    for i in range(10):
+        assert 0 <= backoff_time(i + 1, 1, 1) <= 1
+    for i in range(10):
+        assert 0 <= backoff_time(i + 1, 1, 100) <= min(100, exp[i])
+    for i in range(10):
+        assert 0 <= backoff_time(i + 1, 60, 600) <= min(600, 60 * exp[i])
