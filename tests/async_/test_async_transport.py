@@ -264,7 +264,7 @@ async def test_request_retry_backoff():
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
     assert mock_sleep.await_count == 3
-    assert all(0 <= arg[0][0] <= 2 for arg in mock_sleep.await_args_list)
+    assert all(0 < arg[0][0] <= 2 for arg in mock_sleep.await_args_list)
 
 
 @pytest.mark.anyio

@@ -276,7 +276,7 @@ def test_request_retry_backoff():
     assert all(isinstance(error, ConnectionError) for error in e.value.errors)
 
     assert mock_sleep.call_count == 3
-    assert all(0 <= arg[0][0] <= 2 for arg in mock_sleep.call_args_list)
+    assert all(0 < arg[0][0] <= 2 for arg in mock_sleep.call_args_list)
 
 
 def test_failed_connection_will_be_marked_as_dead():
@@ -709,10 +709,14 @@ def test_backoff_time():
         assert backoff_time(i, 0, 1) == 0
     exp = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
     for i in range(10):
-        assert 0 <= backoff_time(i + 1, 0.1, 1) <= min(1, 0.1 * exp[i])
+        ceiling = min(1, 0.1 * exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 0.1, 1) <= ceiling
     for i in range(10):
-        assert 0 <= backoff_time(i + 1, 1, 1) <= 1
+        ceiling = min(1, exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 1, 1) <= ceiling
     for i in range(10):
-        assert 0 <= backoff_time(i + 1, 1, 100) <= min(100, exp[i])
+        ceiling = min(100, exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 1, 100) <= ceiling
     for i in range(10):
-        assert 0 <= backoff_time(i + 1, 60, 600) <= min(600, 60 * exp[i])
+        ceiling = min(600, 60 * exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 60, 600) <= ceiling

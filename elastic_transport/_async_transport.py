@@ -371,7 +371,7 @@ class AsyncTransport(Transport):
                             "Request failure, sleeping for %.1fs before retrying",
                             sleep_time,
                         )
-                        await asyncio.sleep(backoff_time(attempt))
+                        await asyncio.sleep(sleep_time)
                     _logger.warning(
                         "Retrying request after failure (attempt %d of %d)",
                         attempt,

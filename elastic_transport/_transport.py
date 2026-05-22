@@ -91,8 +91,9 @@ class TransportApiResponse(NamedTuple):
 
 
 def backoff_time(attempts: int, base: float = 1, cap: float = 60) -> float:
-    # Full Jitter from https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-    return random.uniform(0, min(cap, base * 2 ** (attempts - 1)))
+    # Equal Jitter from https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+    temp: float = min(cap, base * 2 ** (attempts - 1)) / 2
+    return temp + random.uniform(0, temp)
 
 
 class Transport:
@@ -452,7 +453,7 @@ class Transport:
                             "Request failure, sleeping for %.1fs before retrying",
                             sleep_time,
                         )
-                        time.sleep(backoff_time(attempt))
+                        time.sleep(sleep_time)
                     _logger.warning(
                         "Retrying request after failure (attempt %d of %d)",
                         attempt,
