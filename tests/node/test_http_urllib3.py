@@ -153,6 +153,15 @@ class TestUrllib3HttpNode:
 
         assert kwargs["timeout"] == request_timeout
 
+    def test_default_timeout_is_none(self):
+        node = self._get_mock_node(NodeConfig("http", "localhost", 80))
+        assert node.config.request_timeout is None
+        assert node.pool.timeout.total is None
+
+        node.perform_request("GET", "/")
+        (_, _), kwargs = node.pool.urlopen.call_args
+        assert "timeout" not in kwargs
+
     def test_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:
             con = Urllib3HttpNode(

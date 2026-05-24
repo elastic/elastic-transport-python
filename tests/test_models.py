@@ -35,7 +35,7 @@ def test_empty_node_config():
         "http_compress": False,
         "path_prefix": "",
         "port": 9200,
-        "request_timeout": 10,
+        "request_timeout": None,
         "scheme": "https",
         "ssl_assert_fingerprint": None,
         "ssl_assert_hostname": None,

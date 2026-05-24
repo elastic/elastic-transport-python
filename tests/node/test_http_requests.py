@@ -156,6 +156,14 @@ class TestRequestsHttpNode:
 
         assert kwargs["timeout"] is None
 
+    def test_default_timeout_is_none(self):
+        node = self._get_mock_node(NodeConfig("http", "localhost", 80))
+        assert node.config.request_timeout is None
+
+        node.perform_request("GET", "/")
+        _, kwargs = node.session.send.call_args
+        assert kwargs["timeout"] is None
+
     def test_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:
             RequestsHttpNode(NodeConfig("https", "localhost", 443, verify_certs=False))
