@@ -78,7 +78,7 @@ class TestAiohttpHttpNode:
                 "user-agent": DEFAULT_USER_AGENT,
             },
             "timeout": aiohttp.ClientTimeout(
-                total=10,
+                total=0,
                 connect=None,
                 sock_read=None,
                 sock_connect=None,
@@ -111,7 +111,7 @@ class TestAiohttpHttpNode:
             "data": None,
             "headers": {"connection": "keep-alive", "user-agent": DEFAULT_USER_AGENT},
             "timeout": aiohttp.ClientTimeout(
-                total=10,
+                total=0,
                 connect=None,
                 sock_read=None,
                 sock_connect=None,
