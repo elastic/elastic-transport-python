@@ -39,6 +39,7 @@ from elastic_transport import (
     TransportWarning,
     Urllib3HttpNode,
 )
+from elastic_transport._transport import backoff_time
 from elastic_transport.client_utils import DEFAULT
 from tests.conftest import DummyNode
 
@@ -248,6 +249,34 @@ def test_retry_on_status():
         1,
         1,
     ]
+
+
+def test_request_retry_backoff():
+    t = Transport(
+        [
+            NodeConfig(
+                "http",
+                "localhost",
+                80,
+                _extras={"exception": ConnectionError("abandon ship")},
+            )
+        ],
+        node_class=DummyNode,
+        max_retries=3,
+        retry_backoff_base=1,
+        retry_backoff_cap=2,
+    )
+
+    with mock.patch("elastic_transport._transport.time.sleep") as mock_sleep:
+        with pytest.raises(ConnectionError) as e:
+            t.perform_request("GET", "/")
+
+    assert 4 == len(t.node_pool.get().calls)
+    assert len(e.value.errors) == 3
+    assert all(isinstance(error, ConnectionError) for error in e.value.errors)
+
+    assert mock_sleep.call_count == 3
+    assert all(0 < arg[0][0] <= 2 for arg in mock_sleep.call_args_list)
 
 
 def test_failed_connection_will_be_marked_as_dead():
@@ -671,3 +700,23 @@ def test_httpbin(httpbin_node_config):
     resp = t.perform_request("GET", "/anything")
     assert resp.meta.status == 200
     assert isinstance(resp.body, dict)
+
+
+def test_backoff_time():
+    for i in range(1, 11):
+        assert backoff_time(i, 0, 0) == 0
+    for i in range(1, 11):
+        assert backoff_time(i, 0, 1) == 0
+    exp = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+    for i in range(10):
+        ceiling = min(1, 0.1 * exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 0.1, 1) <= ceiling
+    for i in range(10):
+        ceiling = min(1, exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 1, 1) <= ceiling
+    for i in range(10):
+        ceiling = min(100, exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 1, 100) <= ceiling
+    for i in range(10):
+        ceiling = min(600, 60 * exp[i])
+        assert ceiling / 2 <= backoff_time(i + 1, 60, 600) <= ceiling

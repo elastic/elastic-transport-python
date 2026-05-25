@@ -50,6 +50,7 @@ from ._transport import (
     NOT_DEAD_NODE_HTTP_STATUSES,
     Transport,
     TransportApiResponse,
+    backoff_time,
     validate_sniffing_options,
 )
 from .client_utils import resolve_default
@@ -79,6 +80,8 @@ class AsyncTransport(Transport):
         max_retries: int = 3,
         retry_on_status: Collection[int] = (429, 502, 503, 504),
         retry_on_timeout: bool = False,
+        retry_backoff_base: float = 0,
+        retry_backoff_cap: float = 0,
         sniff_on_start: bool = False,
         sniff_before_requests: bool = False,
         sniff_on_node_failure: bool = False,
@@ -114,6 +117,18 @@ class AsyncTransport(Transport):
             on a different node. defaults to ``(429, 502, 503, 504)``
         :arg retry_on_timeout: should timeout trigger a retry on different
             node? (default ``False``)
+        :arg retry_backoff_base: the "base" argument for the full jitter backoff
+            algorithm, in seconds. To enable backoff delays between retry attempts,
+            set this argument to a value greater than 0. Note that
+            ``retry_backoff_base`` and ``retry_backoff_cap`` must both be greater
+            than zero for backoff delays to be used. The default value for this
+            argument is 0.
+        :arg retry_backoff_cap: the "cap" argument for the full jitter backoff
+            algorithm, in seconds. To enable backoff delays between retry attempts,
+            set this argument to a positive number that is greater or equal than
+            ``retry_backoff_base``. Note that ``retry_backoff_base`` and
+            ``retry_backoff_cap`` must both be greater than zero for backoff delays
+            to be used. The default value for this argument is 0.
         :arg sniff_on_start: If ``True`` will sniff for additional nodes as soon
             as possible, guaranteed before the first request.
         :arg sniff_on_node_failure: If ``True`` will sniff for additional nodees
@@ -154,6 +169,8 @@ class AsyncTransport(Transport):
             max_retries=max_retries,
             retry_on_status=retry_on_status,
             retry_on_timeout=retry_on_timeout,
+            retry_backoff_base=retry_backoff_base,
+            retry_backoff_cap=retry_backoff_cap,
             sniff_timeout=sniff_timeout,
             min_delay_between_sniffing=min_delay_between_sniffing,
             meta_header=meta_header,
@@ -188,6 +205,8 @@ class AsyncTransport(Transport):
         max_retries: Union[int, DefaultType] = DEFAULT,
         retry_on_status: Union[Collection[int], DefaultType] = DEFAULT,
         retry_on_timeout: Union[bool, DefaultType] = DEFAULT,
+        retry_backoff_base: Union[float, DefaultType] = DEFAULT,
+        retry_backoff_cap: Union[float, DefaultType] = DEFAULT,
         request_timeout: Union[Optional[float], DefaultType] = DEFAULT,
         client_meta: Union[Tuple[Tuple[str, str], ...], DefaultType] = DEFAULT,
         otel_span: Union[OpenTelemetrySpan, DefaultType] = DEFAULT,
@@ -226,6 +245,10 @@ class AsyncTransport(Transport):
         max_retries = resolve_default(max_retries, self.max_retries)
         retry_on_timeout = resolve_default(retry_on_timeout, self.retry_on_timeout)
         retry_on_status = resolve_default(retry_on_status, self.retry_on_status)
+        retry_backoff_base = resolve_default(
+            retry_backoff_base, self.retry_backoff_base
+        )
+        retry_backoff_cap = resolve_default(retry_backoff_cap, self.retry_backoff_cap)
         otel_span = resolve_default(otel_span, OpenTelemetrySpan(None))
 
         if self.meta_header:
@@ -340,6 +363,15 @@ class AsyncTransport(Transport):
                     e.errors = tuple(errors)
                     raise
                 else:
+                    sleep_time = backoff_time(
+                        attempt, retry_backoff_base, retry_backoff_cap
+                    )
+                    if sleep_time:
+                        _logger.warning(
+                            "Request failure, sleeping for %.1fs before retrying",
+                            sleep_time,
+                        )
+                        await asyncio.sleep(sleep_time)
                     _logger.warning(
                         "Retrying request after failure (attempt %d of %d)",
                         attempt,
