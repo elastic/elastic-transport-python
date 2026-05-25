@@ -1,5 +1,9 @@
 # Changelog
 
+## 9.4.1 (2026-05-25)
+
+* Optional backoff delays between retries ([#279](https://github.com/elastic/elastic-transport-python/pull/279))
+
 ## 9.4.0 (2026-05-05)
 
 * Add support for an httpx synchronous node ([#262](https://github.com/elastic/elastic-transport-python/pull/262))
