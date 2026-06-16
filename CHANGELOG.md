@@ -1,5 +1,9 @@
 # Changelog
 
+## 9.4.2 (2026-06-16)
+
+* Escape percent characters in logging output ([#284](https://github.com/elastic/elastic-transport-python/pull/284)) (#286)
+
 ## 9.4.1 (2026-05-25)
 
 * Optional backoff delays between retries ([#279](https://github.com/elastic/elastic-transport-python/pull/279))
