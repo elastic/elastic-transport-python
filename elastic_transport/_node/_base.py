@@ -221,7 +221,9 @@ class BaseNode:
             log_args: List[Any] = [method, target, http_version]
             if headers:
                 for header, value in sorted(headers._dict_hide_auth().items()):
-                    lines.append(f"> {header.title()}: {value}")
+                    # escape any % characters in the whole line (name and value), to
+                    # avoid them being misinterpreted as logging template placeholders
+                    lines.append(f"> {header.title()}: {value}".replace("%", "%%"))
             if body is not None:
                 try:
                     body_encoded = body.decode("utf-8", "surrogatepass")
@@ -240,10 +242,10 @@ class BaseNode:
                     log_args.extend((http_version, meta.status))
                 if meta.headers:
                     for header, value in sorted(meta.headers.items()):
-                        # escape any % characters in the value, to avoid them being
-                        # misinterpreted as a logging template placeholder
-                        value = value.replace("%", "%%")
-                        lines.append(f"< {header.title()}: {value}")
+                        # escape any % characters in the whole line (name and value),
+                        # to avoid them being misinterpreted as logging template
+                        # placeholders
+                        lines.append(f"< {header.title()}: {value}".replace("%", "%%"))
                 if response:
                     try:
                         response_decoded = response.decode("utf-8", "surrogatepass")

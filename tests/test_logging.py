@@ -22,10 +22,12 @@ import pytest
 
 from elastic_transport import (
     AiohttpHttpNode,
+    ApiResponseMeta,
     ConnectionError,
     HttpHeaders,
     HttpxAsyncHttpNode,
     HttpxHttpNode,
+    NodeConfig,
     RequestsHttpNode,
     Urllib3HttpNode,
     debug_logging,
@@ -180,3 +182,44 @@ async def test_debug_logging_error(httpbin_node_config, node_class, anyio_backen
     lines = stream.getvalue().split("\n")[:-3]
     assert "> HEAD /anything HTTP/?.?" in lines
     assert all(not line.startswith("<") for line in lines)
+
+
+def test_debug_logging_escapes_percent_in_headers():
+    # A '%' in a header name or value must not be treated as a logging template
+    # placeholder. '%' is a valid tchar in an HTTP field-name (RFC 9110), so a
+    # server (or caller) can supply one; before escaping, the trailing
+    # ``_logger.debug(fmt, *log_args)`` call raised inside logging while
+    # interpolating, dropping the whole request/response line.
+    node = Urllib3HttpNode(NodeConfig("http", "localhost", 9200))
+
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    logger = logging.getLogger("elastic_transport.node")
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    try:
+        meta = ApiResponseMeta(
+            status=200,
+            http_version="1.1",
+            # '%' in both a request header and a response header, in the name
+            # (not covered by escaping only the value) as well as the value.
+            headers=HttpHeaders({"X-%s%s-Trace": "100% ok"}),
+            duration=0.0,
+            node=node.config,
+        )
+        node._log_request(
+            "GET",
+            "/_search",
+            headers=HttpHeaders({"X-Opaque-Id": "req-%d"}),
+            body=None,
+            meta=meta,
+            response=b"{}",
+        )
+    finally:
+        logger.removeHandler(handler)
+
+    output = stream.getvalue()
+    # The literal text must round-trip verbatim (no logging error, no mangling).
+    assert "> X-Opaque-Id: req-%d" in output
+    assert "< X-%S%S-Trace: 100% ok" in output
+    assert "--- Logging error ---" not in output
