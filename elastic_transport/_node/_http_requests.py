@@ -81,7 +81,7 @@ try:
                     pool_kwargs["cert_reqs"] = "CERT_NONE"
                     pool_kwargs["assert_hostname"] = False
 
-            super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)  # type: ignore [no-untyped-call]
+            super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
             self.poolmanager.pool_classes_by_scheme["https"] = HTTPSConnectionPool
 
 except ImportError:  # pragma: nocover
