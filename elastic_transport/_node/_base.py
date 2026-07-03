@@ -240,6 +240,9 @@ class BaseNode:
                     log_args.extend((http_version, meta.status))
                 if meta.headers:
                     for header, value in sorted(meta.headers.items()):
+                        # escape any % characters in the value, to avoid them being
+                        # misinterpreted as a logging template placeholder
+                        value = value.replace("%", "%%")
                         lines.append(f"< {header.title()}: {value}")
                 if response:
                     try:
