@@ -26,6 +26,10 @@
 
 * Update OpenTelemetry conventions ([#245](https://github.com/elastic/elastic-transport-python/pull/245))
 
+## 8.19.0 (2026-07-06)
+
+* Escape percent characters in logging output ([#284](https://github.com/elastic/elastic-transport-python/pull/284)) (#294)
+
 ## 8.17.1 (2025-03-12)
 
 * Ensure compatibility with httpx v0.28.0+ ([#222](https://github.com/elastic/elastic-transport-python/pull/222), contributed by Arch Linux maintainer @carlsmedstad)
