@@ -434,6 +434,7 @@ def test_sniff_on_start():
     calls = []
 
     def sniff_callback(*args):
+        nonlocal calls
         calls.append(args)
         return [NodeConfig("http", "localhost", 80)]
 
@@ -457,6 +458,7 @@ def test_sniff_before_requests():
     calls = []
 
     def sniff_callback(*args):
+        nonlocal calls
         calls.append(args)
         return []
 
@@ -480,6 +482,7 @@ def test_sniff_on_node_failure():
     calls = []
 
     def sniff_callback(*args):
+        nonlocal calls
         calls.append(args)
         return []
 
@@ -652,6 +655,8 @@ def test_threading_test(pool_size):
             self.successful_requests = 0
 
         def run(self) -> None:
+            nonlocal t, start
+
             while time.time() < start + 2:
                 t.perform_request("GET", "/")
                 self.successful_requests += 1
