@@ -141,7 +141,6 @@ class AiohttpHttpNode(BaseAsyncNode):
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> NodeApiResponse:
-        global _AIOHTTP_FIXED_HEAD_BUG
         if self.session is None:
             self._create_aiohttp_session()
         assert self.session is not None
