@@ -1,30 +1,8 @@
 # Changelog
 
-## 9.4.2 (2026-06-16)
+## 8.19.0 (2026-07-06)
 
-* Escape percent characters in logging output ([#284](https://github.com/elastic/elastic-transport-python/pull/284)) (#286)
-
-## 9.4.1 (2026-05-25)
-
-* Optional backoff delays between retries ([#279](https://github.com/elastic/elastic-transport-python/pull/279))
-
-## 9.4.0 (2026-05-05)
-
-* Add support for an httpx synchronous node ([#262](https://github.com/elastic/elastic-transport-python/pull/262))
-
-
-## 9.2.1 (2025-12-23)
-
-* Use `path_prefix` to compute the base URL in the httpx node class ([#243](https://github.com/elastic/elastic-transport-python/pull/243))
-
-## 9.2.0 (2025-10-17)
-
-* Support Trio when using the httpx async client ([#263](https://github.com/elastic/elastic-transport-python/pull/263))
-* Add Python 3.14 to CI builds, and remove 3.8 and 3.9 ([#264](https://github.com/elastic/elastic-transport-python/pull/264))
-
-## 9.1.0 (2025-07-24)
-
-* Update OpenTelemetry conventions ([#245](https://github.com/elastic/elastic-transport-python/pull/245))
+* Escape percent characters in logging output ([#284](https://github.com/elastic/elastic-transport-python/pull/284)) (#294)
 
 ## 8.17.1 (2025-03-12)
 
