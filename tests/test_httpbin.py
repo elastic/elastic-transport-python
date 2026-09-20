@@ -18,6 +18,7 @@
 import dataclasses
 import json
 
+import httpx
 import pytest
 
 from elastic_transport import Transport
@@ -71,7 +72,7 @@ def test_node(node_class, httpbin_node_config, httpbin):
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": (
-            {"Accept": "*/*", "Accept-Encoding": "gzip, deflate, br"}
+            {"Accept": "*/*", "Accept-Encoding": httpx_accept_encoding()}
             if node_class == "httpx"
             else {"Accept-Encoding": "identity"}
         )
@@ -139,6 +140,12 @@ def test_node(node_class, httpbin_node_config, httpbin):
         "method": "POST",
         "url": f"{httpbin.url}/anything",
     }
+
+
+def httpx_accept_encoding():
+    """Default Accept-Encoding sent by httpx, including zstd when installed."""
+    with httpx.Client() as client:
+        return client.headers["Accept-Encoding"]
 
 
 def parse_httpbin(value):

@@ -23,7 +23,7 @@ import pytest
 from elastic_transport import AsyncTransport, HttpxAsyncHttpNode
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
-from ..test_httpbin import parse_httpbin
+from ..test_httpbin import httpx_accept_encoding, parse_httpbin
 
 
 @pytest.mark.anyio
@@ -71,7 +71,7 @@ async def test_node(httpbin_node_config, httpbin):
     assert parsed == {
         "headers": {
             "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": httpx_accept_encoding(),
             "Connection": "keep-alive",
             "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,

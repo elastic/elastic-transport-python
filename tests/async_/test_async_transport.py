@@ -45,6 +45,7 @@ from elastic_transport import (
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 from elastic_transport.client_utils import DEFAULT
 from tests.conftest import AsyncDummyNode
+from tests.test_httpbin import httpx_accept_encoding
 
 
 @pytest.mark.anyio
@@ -62,7 +63,7 @@ async def test_async_transport_httpbin(httpbin_node_config, httpbin):
     data["headers"].pop("X-Amzn-Trace-Id", None)
     assert data["headers"] == {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": httpx_accept_encoding(),
         "User-Agent": DEFAULT_USER_AGENT,
         "Connection": "keep-alive",
         "Host": f"{httpbin.host}:{httpbin.port}",
