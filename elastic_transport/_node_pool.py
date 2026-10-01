@@ -358,9 +358,10 @@ class NodePool:
             return self._all_nodes[self._seed_nodes[0]]
 
         # Filter nodes in 'alive_nodes' to ones not marked as removed.
+        # Iterate over a copy as other threads may mark nodes dead or alive meanwhile.
         nodes = [
             node
-            for node_config, node in self._alive_nodes.items()
+            for node_config, node in self._alive_nodes.copy().items()
             if node_config not in self._removed_nodes
         ]
 
