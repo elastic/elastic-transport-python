@@ -50,18 +50,22 @@ node_classes = pytest.mark.parametrize(
 )
 
 supported_version_params = [
-    (TLSv1_0_URL, ssl.PROTOCOL_TLSv1),
-    (TLSv1_1_URL, ssl.PROTOCOL_TLSv1_1),
-    (TLSv1_2_URL, ssl.PROTOCOL_TLSv1_2),
     (TLSv1_2_URL, None),
 ]
 unsupported_version_params = [
     (TLSv1_0_URL, None),
     (TLSv1_1_URL, None),
-    (TLSv1_0_URL, ssl.PROTOCOL_TLSv1_1),
-    (TLSv1_0_URL, ssl.PROTOCOL_TLSv1_2),
-    (TLSv1_1_URL, ssl.PROTOCOL_TLSv1_2),
 ]
+
+for protocol_attr, supported_url, unsupported_urls in (
+    ("PROTOCOL_TLSv1", TLSv1_0_URL, ()),
+    ("PROTOCOL_TLSv1_1", TLSv1_1_URL, (TLSv1_0_URL,)),
+    ("PROTOCOL_TLSv1_2", TLSv1_2_URL, (TLSv1_0_URL, TLSv1_1_URL)),
+):
+    if hasattr(ssl, protocol_attr):
+        protocol = getattr(ssl, protocol_attr)
+        supported_version_params.append((supported_url, protocol))
+        unsupported_version_params.extend((url, protocol) for url in unsupported_urls)
 
 try:
     from ssl import TLSVersion
@@ -93,7 +97,11 @@ def tlsv1_1_supported() -> bool:
     # So we try to detect that and skip tests when needed.
     try:
         sock = socket.create_connection(("tls-v1-1.badssl.com", 1011))
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_1)
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_1
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_1
         sock = ctx.wrap_socket(sock, server_hostname="tls-v1-1.badssl.com")
         sock.close()
     except ssl.SSLError:
