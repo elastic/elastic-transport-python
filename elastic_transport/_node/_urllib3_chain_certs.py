@@ -15,13 +15,13 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import _ssl  # type: ignore
 import hashlib
 import sys
 from binascii import hexlify, unhexlify
 from hmac import compare_digest
 from typing import Any, List, Optional
 
-import _ssl  # type: ignore
 import urllib3
 import urllib3.connection
 
