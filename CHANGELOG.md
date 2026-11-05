@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* `ssl_assert_fingerprint` on `Urllib3HttpNode` and `RequestsHttpNode` pins the matching certificate as the only trust anchor and leaves TLS verification on. `verify_certs=False`, `ca_certs`, and `ssl_context` cannot be combined with it.
+
 ## 9.4.2 (2026-06-16)
 
 * Escape percent characters in logging output ([#284](https://github.com/elastic/elastic-transport-python/pull/284)) (#286)

@@ -314,6 +314,11 @@ def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
+    apply_ssl_context_options(ctx, node_config)
+    return ctx
+
+
+def apply_ssl_context_options(ctx: ssl.SSLContext, node_config: NodeConfig) -> None:
     # Enable logging of TLS session keys for use with Wireshark.
     if hasattr(ctx, "keylog_filename"):
         sslkeylogfile = os.environ.get("SSLKEYLOGFILE", "")
@@ -338,5 +343,3 @@ def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
             f"Unsupported value for 'ssl_version': {ssl_version!r}. Must be "
             "either 'ssl.PROTOCOL_TLSvX' or 'ssl.TLSVersion.TLSvX'"
         ) from None
-
-    return ctx

@@ -262,15 +262,13 @@ class NodeConfig:
     #: than the one supplied in ``host``. An example of this situation
     #: is connecting to an IP address instead of a hostname.
     #: Set to ``False`` to disable certificate hostname verification.
-    ssl_assert_hostname: Optional[str] = None
-    #: SHA-256 fingerprint of the node's certificate. If this value is
-    #: given then root-of-trust verification isn't done and only the
-    #: node's certificate fingerprint is verified.
+    ssl_assert_hostname: Optional[Union[str, bool]] = None
+    #: Fingerprint (MD5, SHA-1, or SHA-256) of a certificate presented by
+    #: the node. The matching certificate is the only trust anchor, and TLS
+    #: verification stays on (signature, expiry, and hostname).
     #:
-    #: On CPython 3.10+ this also verifies if any certificate in the
-    #: chain including the Root CA matches this fingerprint. However
-    #: because this requires using private APIs support for this is
-    #: **experimental**.
+    #: Cannot be combined with ``verify_certs=False``, ``ca_certs``, or
+    #: ``ssl_context`` on the urllib3 and requests nodes.
     ssl_assert_fingerprint: Optional[str] = None
     #: Minimum TLS version to use to connect to the node. Can be either
     #: :class:`ssl.TLSVersion` or one of the deprecated
@@ -279,6 +277,8 @@ class NodeConfig:
     #: Pre-configured :class:`ssl.SSLContext` object. If this value
     #: is given then no other TLS options (besides ``ssl_assert_fingerprint``)
     #: can be set on the :class:`elastic_transport.NodeConfig`.
+    #: ``Urllib3HttpNode`` and ``RequestsHttpNode`` also reject
+    #: ``ssl_assert_fingerprint`` together with ``ssl_context``.
     ssl_context: Optional[ssl.SSLContext] = field(default=None, hash=False)
     #: Set to ``False`` to disable the :class:`elastic_transport.SecurityWarning`
     #: issued when using ``verify_certs=False``.
