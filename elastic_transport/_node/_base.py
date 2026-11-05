@@ -274,7 +274,6 @@ for i, _protocol_attr in enumerate(_SSL_PROTOCOL_VERSION_ATTRS):
     if _HAS_TLS_VERSION:
         _tls_version_value = getattr(ssl.TLSVersion, _protocol_attr)
         _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_protocol_value] = _tls_version_value
-        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_tls_version_value] = _tls_version_value
 
     # Because we're setting a minimum version we binary OR all the options together.
     _SSL_PROTOCOL_VERSION_TO_OPTIONS[_protocol_value] = (
@@ -285,14 +284,18 @@ for i, _protocol_attr in enumerate(_SSL_PROTOCOL_VERSION_ATTRS):
         )
     )
 
-# TLSv1.3 is unique, doesn't have a PROTOCOL_TLSvX counterpart. So we have to set it manually.
+# ssl.TLSVersion members stay valid when the matching PROTOCOL_TLSvX constant
+# is missing. TLSv1.3 never had one, and Python built against OpenSSL 4 no
+# longer defines PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, or PROTOCOL_TLSv1_2.
+# The default minimum is still TLSVersion.TLSv1_2.
 if _HAS_TLS_VERSION:
-    try:
-        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[ssl.TLSVersion.TLSv1_3] = (
-            ssl.TLSVersion.TLSv1_3
-        )
-    except AttributeError:  # pragma: nocover
-        pass
+    for _tls_version_value in (
+        ssl.TLSVersion.TLSv1,
+        ssl.TLSVersion.TLSv1_1,
+        ssl.TLSVersion.TLSv1_2,
+        ssl.TLSVersion.TLSv1_3,
+    ):
+        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_tls_version_value] = _tls_version_value
 
 
 def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
