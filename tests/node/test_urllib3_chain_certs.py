@@ -90,4 +90,4 @@ def test_assert_fingerprint_in_cert_chain_failure(
         in err
     )
     # This is the root CA for www.elastic.co with a leading comma to denote more than one cert was listed.
-    assert ', "cbb522d7b7f127ad6a0113865bdf1cd4102e7d0759af635a7cf4720dc963c53b"' in err
+    assert ', "4fa3126d8d3a11d1c4855a4f807cbad6cf919d3a5a88b03bea2c6372d93c40c9"' in err
