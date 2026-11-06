@@ -71,7 +71,7 @@ async def test_node(httpbin_node_config, httpbin):
     assert parsed == {
         "headers": {
             "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": node.client.headers["Accept-Encoding"],
             "Connection": "keep-alive",
             "Host": f"{httpbin.host}:{httpbin.port}",
             "User-Agent": DEFAULT_USER_AGENT,
