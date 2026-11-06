@@ -71,7 +71,10 @@ def test_node(node_class, httpbin_node_config, httpbin):
     parsed = parse_httpbin(data)
     assert parsed == {
         "headers": (
-            {"Accept": "*/*", "Accept-Encoding": "gzip, deflate, br"}
+            {
+                "Accept": "*/*",
+                "Accept-Encoding": node.client.headers["Accept-Encoding"],
+            }
             if node_class == "httpx"
             else {"Accept-Encoding": "identity"}
         )

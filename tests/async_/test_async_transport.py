@@ -62,7 +62,7 @@ async def test_async_transport_httpbin(httpbin_node_config, httpbin):
     data["headers"].pop("X-Amzn-Trace-Id", None)
     assert data["headers"] == {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": t.node_pool.get().client.headers["Accept-Encoding"],
         "User-Agent": DEFAULT_USER_AGENT,
         "Connection": "keep-alive",
         "Host": f"{httpbin.host}:{httpbin.port}",

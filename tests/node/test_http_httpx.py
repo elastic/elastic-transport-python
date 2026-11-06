@@ -19,11 +19,38 @@ import gzip
 import ssl
 import warnings
 
+import httpx2
 import pytest
-import respx
 
-from elastic_transport import HttpxAsyncHttpNode, HttpxHttpNode, NodeConfig
+from elastic_transport import (
+    ConnectionError,
+    ConnectionTimeout,
+    HttpxAsyncHttpNode,
+    HttpxHttpNode,
+    NodeConfig,
+    TlsError,
+)
 from elastic_transport._node._base import DEFAULT_USER_AGENT
+
+
+@pytest.fixture
+def requests(monkeypatch):
+    captured = []
+
+    def handle_request(self, request):
+        assert request.method == "GET"
+        assert str(request.url) == "http://localhost/index"
+        captured.append(request)
+        return httpx2.Response(200, content=b"{}")
+
+    async def handle_async_request(self, request):
+        return handle_request(self, request)
+
+    monkeypatch.setattr(httpx2.HTTPTransport, "handle_request", handle_request)
+    monkeypatch.setattr(
+        httpx2.AsyncHTTPTransport, "handle_async_request", handle_async_request
+    )
+    return captured
 
 
 def create_sync_node(node_config: NodeConfig):
@@ -97,12 +124,10 @@ class TestHttpxNodeCreation:
 
 
 class TestHttpxNode:
-    @respx.mock
-    def test_simple_request(self):
+    def test_simple_request(self, requests):
         node = create_sync_node(NodeConfig(scheme="http", host="localhost", port=80))
-        respx.get("http://localhost/index")
         node.perform_request("GET", "/index", b"hello world", headers={"key": "value"})
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.content == b"hello world"
         assert {
             "key": "value",
@@ -110,47 +135,39 @@ class TestHttpxNode:
             "user-agent": DEFAULT_USER_AGENT,
         }.items() <= request.headers.items()
 
-    @respx.mock
-    def test_compression(self):
+    def test_compression(self, requests):
         node = create_sync_node(
             NodeConfig(scheme="http", host="localhost", port=80, http_compress=True)
         )
-        respx.get("http://localhost/index")
         node.perform_request("GET", "/index", b"hello world")
-        request = respx.calls.last.request
+        request = requests[-1]
         assert gzip.decompress(request.content) == b"hello world"
         assert {"content-encoding": "gzip"}.items() <= request.headers.items()
 
-    @respx.mock
-    def test_default_timeout(self):
+    def test_default_timeout(self, requests):
         node = create_sync_node(
             NodeConfig(scheme="http", host="localhost", port=80, request_timeout=10)
         )
-        respx.get("http://localhost/index")
         node.perform_request("GET", "/index", b"hello world")
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.extensions["timeout"]["connect"] == 10
 
-    @respx.mock
-    def test_overwritten_timeout(self):
+    def test_overwritten_timeout(self, requests):
         node = create_sync_node(
             NodeConfig(scheme="http", host="localhost", port=80, request_timeout=10)
         )
-        respx.get("http://localhost/index")
         node.perform_request("GET", "/index", b"hello world", request_timeout=15)
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.extensions["timeout"]["connect"] == 15
 
-    @respx.mock
-    def test_merge_headers(self):
+    def test_merge_headers(self, requests):
         node = create_sync_node(
             NodeConfig("http", "localhost", 80, headers={"h1": "v1", "h2": "v2"})
         )
-        respx.get("http://localhost/index")
         node.perform_request(
             "GET", "/index", b"hello world", headers={"h2": "v2p", "h3": "v3"}
         )
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.headers["h1"] == "v1"
         assert request.headers["h2"] == "v2p"
         assert request.headers["h3"] == "v3"
@@ -228,14 +245,12 @@ class TestHttpxAsyncNodeCreation:
 
 @pytest.mark.anyio
 class TestHttpxAsyncNode:
-    @respx.mock
-    async def test_simple_request(self):
+    async def test_simple_request(self, requests):
         node = create_async_node(NodeConfig(scheme="http", host="localhost", port=80))
-        respx.get("http://localhost/index")
         await node.perform_request(
             "GET", "/index", b"hello world", headers={"key": "value"}
         )
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.content == b"hello world"
         assert {
             "key": "value",
@@ -243,47 +258,39 @@ class TestHttpxAsyncNode:
             "user-agent": DEFAULT_USER_AGENT,
         }.items() <= request.headers.items()
 
-    @respx.mock
-    async def test_compression(self):
+    async def test_compression(self, requests):
         node = create_async_node(
             NodeConfig(scheme="http", host="localhost", port=80, http_compress=True)
         )
-        respx.get("http://localhost/index")
         await node.perform_request("GET", "/index", b"hello world")
-        request = respx.calls.last.request
+        request = requests[-1]
         assert gzip.decompress(request.content) == b"hello world"
         assert {"content-encoding": "gzip"}.items() <= request.headers.items()
 
-    @respx.mock
-    async def test_default_timeout(self):
+    async def test_default_timeout(self, requests):
         node = create_async_node(
             NodeConfig(scheme="http", host="localhost", port=80, request_timeout=10)
         )
-        respx.get("http://localhost/index")
         await node.perform_request("GET", "/index", b"hello world")
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.extensions["timeout"]["connect"] == 10
 
-    @respx.mock
-    async def test_overwritten_timeout(self):
+    async def test_overwritten_timeout(self, requests):
         node = create_async_node(
             NodeConfig(scheme="http", host="localhost", port=80, request_timeout=10)
         )
-        respx.get("http://localhost/index")
         await node.perform_request("GET", "/index", b"hello world", request_timeout=15)
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.extensions["timeout"]["connect"] == 15
 
-    @respx.mock
-    async def test_merge_headers(self):
+    async def test_merge_headers(self, requests):
         node = create_async_node(
             NodeConfig("http", "localhost", 80, headers={"h1": "v1", "h2": "v2"})
         )
-        respx.get("http://localhost/index")
         await node.perform_request(
             "GET", "/index", b"hello world", headers={"h2": "v2p", "h3": "v3"}
         )
-        request = respx.calls.last.request
+        request = requests[-1]
         assert request.headers["h1"] == "v1"
         assert request.headers["h2"] == "v2p"
         assert request.headers["h3"] == "v3"
@@ -291,7 +298,7 @@ class TestHttpxAsyncNode:
 
 @pytest.mark.parametrize("node_class", [HttpxHttpNode, HttpxAsyncHttpNode])
 def test_ssl_assert_fingerprint(node_class, cert_fingerprint, httpbin_secure):
-    with pytest.raises(ValueError, match="httpx does not support certificate pinning"):
+    with pytest.raises(ValueError, match="HTTPX2 does not support certificate pinning"):
         node_class(
             NodeConfig(
                 scheme="https",
@@ -300,3 +307,44 @@ def test_ssl_assert_fingerprint(node_class, cert_fingerprint, httpbin_secure):
                 ssl_assert_fingerprint=cert_fingerprint,
             )
         )
+
+
+@pytest.mark.parametrize("node_class", [HttpxHttpNode, HttpxAsyncHttpNode])
+@pytest.mark.parametrize(
+    "error,expected",
+    [
+        (httpx2.ReadTimeout("timed out"), ConnectionTimeout),
+        (httpx2.ConnectError("connection failed"), ConnectionError),
+        (ssl.SSLError("certificate verification failed"), TlsError),
+    ],
+)
+@pytest.mark.anyio
+async def test_httpx2_exception_translation(node_class, error, expected, anyio_backend):
+    if node_class is HttpxHttpNode and anyio_backend == "trio":
+        pytest.skip("sync node only needs to run once")
+
+    node = node_class(NodeConfig("http", "localhost", 9200))
+
+    def fail(request):
+        raise error
+
+    async def async_fail(request):
+        raise error
+
+    try:
+        if node_class is HttpxHttpNode:
+            node.client.close()
+            node.client = httpx2.Client(transport=httpx2.MockTransport(fail))
+            with pytest.raises(expected) as exc:
+                node.perform_request("GET", "http://localhost:9200/")
+        else:
+            await node.client.aclose()
+            node.client = httpx2.AsyncClient(transport=httpx2.MockTransport(async_fail))
+            with pytest.raises(expected) as exc:
+                await node.perform_request("GET", "http://localhost:9200/")
+        assert exc.value.errors == (error,)
+    finally:
+        if node_class is HttpxHttpNode:
+            node.close()
+        else:
+            await node.close()

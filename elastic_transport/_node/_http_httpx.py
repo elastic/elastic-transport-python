@@ -37,30 +37,32 @@ from ._base import (
 from ._base_async import BaseAsyncNode
 
 try:
-    import httpx
+    import httpx2
 
-    _HTTPX_AVAILABLE = True
-    _HTTPX_META_VERSION = client_meta_version(httpx.__version__)
+    _HTTPX2_AVAILABLE = True
+    _HTTPX2_META_VERSION = client_meta_version(httpx2.__version__)
 except ImportError:
-    _HTTPX_AVAILABLE = False
-    _HTTPX_META_VERSION = ""
+    _HTTPX2_AVAILABLE = False
+    _HTTPX2_META_VERSION = ""
 
 
 class HttpxHttpNode(BaseNode):
     """
-    HTTP node using httpx.
+    HTTP node using httpx2.
+
+    Certificate fingerprint pinning via ``ssl_assert_fingerprint`` is unsupported.
     """
 
-    _CLIENT_META_HTTP_CLIENT = ("hx", _HTTPX_META_VERSION)
+    _CLIENT_META_HTTP_CLIENT = ("hx", _HTTPX2_META_VERSION)
 
     def __init__(self, config: NodeConfig):
-        if not _HTTPX_AVAILABLE:  # pragma: nocover
-            raise ValueError("You must have 'httpx' installed to use HttpxNode")
+        if not _HTTPX2_AVAILABLE:  # pragma: nocover
+            raise ValueError("You must have 'httpx2' installed to use HTTPX2 nodes")
         super().__init__(config)
 
         if config.ssl_assert_fingerprint:
             raise ValueError(
-                "httpx does not support certificate pinning. https://github.com/encode/httpx/issues/761"
+                "HTTPX2 does not support certificate pinning. https://github.com/pydantic/httpx2/issues/275"
             )
 
         ssl_context: Union[ssl.SSLContext, Literal[False]] = False
@@ -106,9 +108,9 @@ class HttpxHttpNode(BaseNode):
                 elif config.client_cert:
                     ssl_context.load_cert_chain(config.client_cert)
 
-        self.client = httpx.Client(
+        self.client = httpx2.Client(
             base_url=f"{config.scheme}://{config.host}:{config.port}{config.path_prefix}",
-            limits=httpx.Limits(max_connections=config.connections_per_node),
+            limits=httpx2.Limits(max_connections=config.connections_per_node),
             verify=ssl_context or False,
             timeout=config.request_timeout,
         )
@@ -157,15 +159,15 @@ class HttpxHttpNode(BaseNode):
             raise
         except Exception as e:
             err: Exception
-            if isinstance(e, (TimeoutError, httpx.TimeoutException)):
+            if isinstance(e, (TimeoutError, httpx2.TimeoutException)):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
             elif isinstance(e, ssl.SSLError):
                 err = TlsError(str(e), errors=(e,))
-            # Detect SSL errors for httpx v0.28.0+
-            # Needed until https://github.com/encode/httpx/issues/3350 is fixed
-            elif isinstance(e, httpx.ConnectError) and e.__cause__:
+            # Detect SSL errors wrapped by HTTPX2
+            # Needed until https://github.com/pydantic/httpx2/issues/854 is fixed
+            elif isinstance(e, httpx2.ConnectError) and e.__cause__:
                 context = e.__cause__.__context__
                 if isinstance(context, ssl.SSLError):
                     err = TlsError(str(context), errors=(e,))
@@ -207,19 +209,21 @@ class HttpxHttpNode(BaseNode):
 
 class HttpxAsyncHttpNode(BaseAsyncNode):
     """
-    Async HTTP node using httpx. Supports both Trio and asyncio.
+    Async HTTP node using httpx2. Supports both Trio and asyncio.
+
+    Certificate fingerprint pinning via ``ssl_assert_fingerprint`` is unsupported.
     """
 
-    _CLIENT_META_HTTP_CLIENT = ("hx", _HTTPX_META_VERSION)
+    _CLIENT_META_HTTP_CLIENT = ("hx", _HTTPX2_META_VERSION)
 
     def __init__(self, config: NodeConfig):
-        if not _HTTPX_AVAILABLE:  # pragma: nocover
-            raise ValueError("You must have 'httpx' installed to use HttpxNode")
+        if not _HTTPX2_AVAILABLE:  # pragma: nocover
+            raise ValueError("You must have 'httpx2' installed to use HTTPX2 nodes")
         super().__init__(config)
 
         if config.ssl_assert_fingerprint:
             raise ValueError(
-                "httpx does not support certificate pinning. https://github.com/encode/httpx/issues/761"
+                "HTTPX2 does not support certificate pinning. https://github.com/pydantic/httpx2/issues/275"
             )
 
         ssl_context: Union[ssl.SSLContext, Literal[False]] = False
@@ -265,9 +269,9 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                 elif config.client_cert:
                     ssl_context.load_cert_chain(config.client_cert)
 
-        self.client = httpx.AsyncClient(
+        self.client = httpx2.AsyncClient(
             base_url=f"{config.scheme}://{config.host}:{config.port}{config.path_prefix}",
-            limits=httpx.Limits(max_connections=config.connections_per_node),
+            limits=httpx2.Limits(max_connections=config.connections_per_node),
             verify=ssl_context or False,
             timeout=config.request_timeout,
         )
@@ -316,15 +320,15 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
             raise
         except Exception as e:
             err: Exception
-            if isinstance(e, (TimeoutError, httpx.TimeoutException)):
+            if isinstance(e, (TimeoutError, httpx2.TimeoutException)):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
             elif isinstance(e, ssl.SSLError):
                 err = TlsError(str(e), errors=(e,))
-            # Detect SSL errors for httpx v0.28.0+
-            # Needed until https://github.com/encode/httpx/issues/3350 is fixed
-            elif isinstance(e, httpx.ConnectError) and e.__cause__:
+            # Detect SSL errors wrapped by HTTPX2
+            # Needed until https://github.com/pydantic/httpx2/issues/854 is fixed
+            elif isinstance(e, httpx2.ConnectError) and e.__cause__:
                 context = e.__cause__.__context__
                 if isinstance(context, ssl.SSLError):
                     err = TlsError(str(context), errors=(e,))
