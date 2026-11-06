@@ -79,6 +79,22 @@ try:
 
             super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
 
+        def build_connection_pool_key_attributes(
+            self, request: Any, verify: Any, cert: Any = None
+        ) -> Any:
+            # A proxy uses a separate pool. init_poolmanager never sees it,
+            # and urllib3 2 reads TLS from these kwargs, not conn.ssl_context.
+            host_params, pool_kwargs = super().build_connection_pool_key_attributes(
+                request, verify, cert
+            )
+            if self._pinned_context is not None:
+                pool_kwargs.pop("ca_certs", None)
+                pool_kwargs.pop("ca_cert_dir", None)
+                pool_kwargs["cert_reqs"] = "CERT_REQUIRED"
+                pool_kwargs["ssl_context"] = self._pinned_context
+                apply_assert_hostname(pool_kwargs, self._node_config)
+            return host_params, pool_kwargs
+
         def cert_verify(self, conn: Any, url: str, verify: Any, cert: Any) -> None:
             # requests would otherwise load the system CA bundle next to the pin.
             if self._pinned_context is not None:
@@ -86,6 +102,11 @@ try:
                 conn.ca_certs = None
                 conn.ca_cert_dir = None
                 conn.ssl_context = self._pinned_context
+                # urllib3 2 reads the context from conn_kw. The pool attributes
+                # above are passed separately, so they must not be copied in.
+                conn_kw = getattr(conn, "conn_kw", None)
+                if isinstance(conn_kw, dict):
+                    conn_kw["ssl_context"] = self._pinned_context
                 apply_assert_hostname(conn, self._node_config)
                 if cert:
                     if isinstance(cert, tuple):
@@ -297,12 +318,23 @@ class RequestsHttpNode(BaseNode):
         with self._pin_lock:
             if self._adapter._pinned_context is not None:
                 return
-            self._adapter._pinned_context = build_pinned_ssl_context(self.config)
+            self._adapter._pinned_context = build_pinned_ssl_context(
+                self.config, proxy=self._https_proxy()
+            )
             self._adapter.init_poolmanager(
                 self.config.connections_per_node,
                 self.config.connections_per_node,
                 block=True,
             )
+
+    def _https_proxy(self) -> Optional[str]:
+        url = f"https://{self.config.host}:{self.config.port}/"
+        settings = self.session.merge_environment_settings(url, {}, False, True, None)
+        proxies = settings.get("proxies") or {}
+        proxy = proxies.get("https") or proxies.get("all")
+        if not proxy:
+            return None
+        return str(proxy)
 
     def close(self) -> None:
         """

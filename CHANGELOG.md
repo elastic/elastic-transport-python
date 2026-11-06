@@ -2,7 +2,7 @@
 
 ## 9.6.0
 
-* `ssl_assert_fingerprint` on `Urllib3HttpNode` and `RequestsHttpNode` pins the matching certificate as the only trust anchor and leaves TLS verification on. `verify_certs=False`, `ca_certs`, and `ssl_context` cannot be combined with it.
+* `ssl_assert_fingerprint` on `Urllib3HttpNode` and `RequestsHttpNode` pins the matching certificate as the only trust anchor and leaves TLS verification on. `verify_certs=False` and `ca_certs` do not add another trust anchor. A caller `ssl_context` supplies TLS version bounds, and the requests node dials the probe through the same proxy as the request.
 * Accept `ssl.TLSVersion` for `ssl_version` when OpenSSL 4 drops the `PROTOCOL_TLSv*` constants ([#308](https://github.com/elastic/elastic-transport-python/pull/308))
 
 ## 9.4.2 (2026-06-16)

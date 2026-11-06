@@ -15,15 +15,17 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
+import base64
 import hashlib
 import http.server
+import socket
 import ssl
 import tempfile
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterator, Tuple, Type
+from typing import Iterator, List, Optional, Tuple, Type
 
 import pytest
 from cryptography import x509
@@ -188,16 +190,18 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 class _Server(http.server.HTTPServer):
     hits: int
     auths: list
+    names: List[Optional[str]]
 
     def __init__(self, address: Tuple[str, int], context: ssl.SSLContext) -> None:
         super().__init__(address, _Handler)
         self.hits = 0
         self.auths = []
+        self.names = []
         self.socket = context.wrap_socket(self.socket, server_side=True)
 
 
 @contextmanager
-def serve(leaf: bytes, key: bytes) -> Iterator[_Server]:
+def serve(leaf: bytes, key: bytes, require_client: bool = False) -> Iterator[_Server]:
     with tempfile.TemporaryDirectory() as tmp:
         chain = Path(tmp) / "chain.pem"
         key_path = Path(tmp) / "key.pem"
@@ -205,7 +209,19 @@ def serve(leaf: bytes, key: bytes) -> Iterator[_Server]:
         key_path.write_bytes(key)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(certfile=str(chain), keyfile=str(key_path))
+        names: List[Optional[str]] = []
+
+        def _sni(
+            _sock: ssl.SSLObject, server_name: Optional[str], _ctx: ssl.SSLContext
+        ) -> None:
+            names.append(server_name)
+
+        context.sni_callback = _sni
+        if require_client:
+            context.load_verify_locations(cadata=CA_PEM.decode())
+            context.verify_mode = ssl.CERT_REQUIRED
         server = _Server(("127.0.0.1", 0), context)
+        server.names = names
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
@@ -213,6 +229,70 @@ def serve(leaf: bytes, key: bytes) -> Iterator[_Server]:
         finally:
             server.shutdown()
             server.server_close()
+
+
+class _Proxy:
+    def __init__(self, target_port: int, user: str, password: str) -> None:
+        self.target_port = target_port
+        self.expected = base64.b64encode(f"{user}:{password}".encode()).decode("ascii")
+        self.connects = 0
+        self._sock = socket.socket()
+        self._sock.bind(("127.0.0.1", 0))
+        self._sock.listen(8)
+        self.port = self._sock.getsockname()[1]
+        self._thread = threading.Thread(target=self._accept, daemon=True)
+        self._thread.start()
+
+    def close(self) -> None:
+        self._sock.close()
+
+    def _accept(self) -> None:
+        while True:
+            try:
+                client, _addr = self._sock.accept()
+            except OSError:
+                return
+            threading.Thread(target=self._handle, args=(client,), daemon=True).start()
+
+    def _handle(self, client: socket.socket) -> None:
+        try:
+            data = b""
+            while b"\r\n\r\n" not in data:
+                chunk = client.recv(4096)
+                if not chunk:
+                    return
+                data += chunk
+            header, rest = data.split(b"\r\n\r\n", 1)
+            if f"Proxy-Authorization: Basic {self.expected}".encode() not in header:
+                client.sendall(b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+                return
+            self.connects += 1
+            upstream = socket.create_connection(("127.0.0.1", self.target_port))
+            client.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+            if rest:
+                upstream.sendall(rest)
+            left = threading.Thread(target=_pipe, args=(client, upstream), daemon=True)
+            right = threading.Thread(target=_pipe, args=(upstream, client), daemon=True)
+            left.start()
+            right.start()
+        except OSError:
+            client.close()
+
+
+def _pipe(src: socket.socket, dst: socket.socket) -> None:
+    try:
+        while True:
+            chunk = src.recv(8192)
+            if not chunk:
+                break
+            dst.sendall(chunk)
+    except OSError:
+        return
+    finally:
+        try:
+            dst.shutdown(socket.SHUT_WR)
+        except OSError:
+            return
 
 
 def _port(server: _Server) -> int:
@@ -268,37 +348,143 @@ def test_bad_fingerprint_sends_no_http(
 
 
 @pytest.mark.parametrize("node_cls", NODES)
-def test_rejects_other_trust_settings(node_cls: Type[BaseNode]) -> None:
-    with pytest.raises(ValueError, match="verify_certs=False"):
-        node_cls(
+def test_caller_trust_settings_do_not_replace_the_pin(
+    node_cls: Type[BaseNode],
+) -> None:
+    with serve(GOOD, GOOD_KEY) as server:
+        node = node_cls(
             NodeConfig(
                 "https",
                 "localhost",
-                1,
+                _port(server),
                 ssl_assert_fingerprint=FINGERPRINT,
                 verify_certs=False,
-            )
-        )
-    with pytest.raises(ValueError, match="ca_certs"):
-        node_cls(
-            NodeConfig(
-                "https",
-                "localhost",
-                1,
-                ssl_assert_fingerprint=FINGERPRINT,
                 ca_certs="../",
             )
         )
-    with pytest.raises(ValueError, match="ssl_context"):
-        node_cls(
+        try:
+            meta, body = node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert body == b"ok"
+            assert server.hits == 1
+            _pinned_context(node)
+        finally:
+            node.close()
+
+
+@pytest.mark.parametrize("node_cls", NODES)
+def test_ssl_context_sets_tls_bounds(node_cls: Type[BaseNode]) -> None:
+    user_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    user_context.minimum_version = ssl.TLSVersion.TLSv1_2
+    user_context.maximum_version = ssl.TLSVersion.TLSv1_2
+    with serve(GOOD, GOOD_KEY) as server:
+        node = node_cls(
             NodeConfig(
                 "https",
                 "localhost",
-                1,
+                _port(server),
                 ssl_assert_fingerprint=FINGERPRINT,
-                ssl_context=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
+                ssl_context=user_context,
             )
         )
+        try:
+            meta, _body = node.perform_request("GET", "/")
+            assert meta.status == 200
+            context = _pinned_context(node)
+            assert context.minimum_version == ssl.TLSVersion.TLSv1_2
+            assert context.maximum_version == ssl.TLSVersion.TLSv1_2
+        finally:
+            node.close()
+
+
+@pytest.mark.parametrize("node_cls", NODES)
+def test_probe_presents_the_client_cert(node_cls: Type[BaseNode]) -> None:
+    with serve(GOOD, GOOD_KEY, require_client=True) as server:
+        with tempfile.TemporaryDirectory() as tmp:
+            cert = Path(tmp) / "client.pem"
+            key = Path(tmp) / "client.key"
+            cert.write_bytes(GOOD)
+            key.write_bytes(GOOD_KEY)
+            node = node_cls(
+                NodeConfig(
+                    "https",
+                    "localhost",
+                    _port(server),
+                    ssl_assert_fingerprint=FINGERPRINT,
+                    client_cert=str(cert),
+                    client_key=str(key),
+                )
+            )
+            try:
+                meta, _body = node.perform_request("GET", "/")
+                assert meta.status == 200
+                assert server.hits == 1
+            finally:
+                node.close()
+
+
+@pytest.mark.parametrize("node_cls", NODES)
+def test_probe_uses_assert_hostname_for_sni(node_cls: Type[BaseNode]) -> None:
+    with serve(GOOD, GOOD_KEY) as server:
+        node = node_cls(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                _port(server),
+                ssl_assert_fingerprint=FINGERPRINT,
+                ssl_assert_hostname="localhost",
+            )
+        )
+        try:
+            meta, _body = node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert server.names[0] == "localhost"
+        finally:
+            node.close()
+
+
+def test_urllib3_probe_ignores_env_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("https_proxy", "http://127.0.0.1:1")
+    with serve(GOOD, GOOD_KEY) as server:
+        node = Urllib3HttpNode(
+            NodeConfig(
+                "https",
+                "localhost",
+                _port(server),
+                ssl_assert_fingerprint=FINGERPRINT,
+            )
+        )
+        try:
+            meta, _body = node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert server.hits == 1
+        finally:
+            node.close()
+
+
+def test_requests_probe_uses_the_session_proxy() -> None:
+    with serve(GOOD, GOOD_KEY) as server:
+        proxy = _Proxy(_port(server), "a", "p@ss")
+        node = RequestsHttpNode(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                1,
+                ssl_assert_fingerprint=FINGERPRINT,
+                ssl_assert_hostname="localhost",
+            )
+        )
+        node.session.trust_env = False  # type: ignore[attr-defined]
+        node.session.proxies["https"] = f"http://a:p%40ss@127.0.0.1:{proxy.port}"  # type: ignore[attr-defined]
+        try:
+            meta, body = node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert body == b"ok"
+            assert server.hits == 1
+            assert proxy.connects >= 2
+        finally:
+            node.close()
+            proxy.close()
 
 
 @pytest.mark.parametrize("node_cls", NODES)

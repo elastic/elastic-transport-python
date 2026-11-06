@@ -266,9 +266,9 @@ class NodeConfig:
     #: Fingerprint (MD5, SHA-1, or SHA-256) of a certificate presented by
     #: the node. The matching certificate is the only trust anchor, and TLS
     #: verification stays on (signature, expiry, and hostname).
-    #:
-    #: Cannot be combined with ``verify_certs=False``, ``ca_certs``, or
-    #: ``ssl_context`` on the urllib3 and requests nodes.
+    #: ``verify_certs=False`` and ``ca_certs`` do not add another trust anchor.
+    #: ``ssl_context`` supplies TLS version bounds. The requests node dials
+    #: the probe through the same proxy as the request.
     ssl_assert_fingerprint: Optional[str] = None
     #: Minimum TLS version to use to connect to the node. Can be either
     #: :class:`ssl.TLSVersion` or one of the deprecated
@@ -277,8 +277,8 @@ class NodeConfig:
     #: Pre-configured :class:`ssl.SSLContext` object. If this value
     #: is given then no other TLS options (besides ``ssl_assert_fingerprint``)
     #: can be set on the :class:`elastic_transport.NodeConfig`.
-    #: ``Urllib3HttpNode`` and ``RequestsHttpNode`` also reject
-    #: ``ssl_assert_fingerprint`` together with ``ssl_context``.
+    #: With ``ssl_assert_fingerprint``, the pinned certificate stays the
+    #: trust anchor and this context supplies the TLS version bounds.
     ssl_context: Optional[ssl.SSLContext] = field(default=None, hash=False)
     #: Set to ``False`` to disable the :class:`elastic_transport.SecurityWarning`
     #: issued when using ``verify_certs=False``.

@@ -16,9 +16,11 @@
 #  under the License.
 
 import _ssl  # type: ignore
+import base64
 import hashlib
 import socket
 import ssl
+import urllib.parse
 from binascii import Error as BinasciiError
 from binascii import hexlify, unhexlify
 from hmac import compare_digest
@@ -49,24 +51,18 @@ def normalize_fingerprint(value: str) -> str:
 
 
 def validate_fingerprint_options(config: NodeConfig) -> None:
-    """The pinned certificate has to be the only trust anchor."""
+    """Reject a fingerprint that is not a hex digest of a known length."""
     if config.ssl_assert_fingerprint is None:
         return
     normalize_fingerprint(config.ssl_assert_fingerprint)
-    if config.verify_certs is False:
-        raise ValueError(
-            "ssl_assert_fingerprint cannot be combined with verify_certs=False"
-        )
-    if config.ca_certs:
-        raise ValueError("ssl_assert_fingerprint cannot be combined with ca_certs")
-    if config.ssl_context is not None:
-        raise ValueError("ssl_assert_fingerprint cannot be combined with ssl_context")
 
 
-def build_pinned_ssl_context(config: NodeConfig) -> ssl.SSLContext:
+def build_pinned_ssl_context(
+    config: NodeConfig, proxy: Optional[str] = None
+) -> ssl.SSLContext:
     """Fetch the cert chain and trust only the certificate that matches."""
     assert config.ssl_assert_fingerprint is not None
-    pem = _matching_certificate_pem(config)
+    pem = _matching_certificate_pem(config, proxy)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.verify_mode = ssl.CERT_REQUIRED
     partial = getattr(ssl, "VERIFY_X509_PARTIAL_CHAIN", None)
@@ -74,9 +70,7 @@ def build_pinned_ssl_context(config: NodeConfig) -> ssl.SSLContext:
         ctx.verify_flags |= partial
     ctx.check_hostname = _check_hostname(config)
     ctx.load_verify_locations(cadata=pem)
-    if config.client_cert:
-        ctx.load_cert_chain(config.client_cert, config.client_key)
-    apply_ssl_context_options(ctx, config)
+    _apply_caller_tls(ctx, config)
     return ctx
 
 
@@ -102,12 +96,23 @@ def _check_hostname(config: NodeConfig) -> bool:
     return not is_ipaddress(config.host)
 
 
-def _matching_certificate_pem(config: NodeConfig) -> str:
+def _apply_caller_tls(ctx: ssl.SSLContext, config: NodeConfig) -> None:
+    if config.client_cert:
+        ctx.load_cert_chain(config.client_cert, config.client_key)
+    apply_ssl_context_options(ctx, config)
+    source = config.ssl_context
+    if source is None:
+        return
+    ctx.minimum_version = source.minimum_version
+    ctx.maximum_version = source.maximum_version
+
+
+def _matching_certificate_pem(config: NodeConfig, proxy: Optional[str]) -> str:
     assert config.ssl_assert_fingerprint is not None
     normalized = normalize_fingerprint(config.ssl_assert_fingerprint)
     expected = unhexlify(normalized)
     digestmod = _HASHES_BY_LENGTH[len(normalized)]
-    ders = _peer_ders(config)
+    ders = _peer_ders(config, proxy)
     seen: List[str] = []
     matched: Optional[bytes] = None
     for der in ders:
@@ -123,16 +128,22 @@ def _matching_certificate_pem(config: NodeConfig) -> str:
     return ssl.DER_cert_to_PEM_cert(matched)
 
 
-def _peer_ders(config: NodeConfig) -> List[bytes]:
-    # CERT_NONE still requires the peer to prove the leaf private key.
-    # Nothing is sent on this socket except the handshake.
+def _probe_context(config: NodeConfig) -> ssl.SSLContext:
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    _apply_caller_tls(ctx, config)
+    # The probe only reads the chain. The pinned context does the verification.
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def _peer_ders(config: NodeConfig, proxy: Optional[str]) -> List[bytes]:
+    # CERT_NONE still requires the peer to prove the leaf private key.
+    # Nothing is sent on this socket except the handshake.
+    ctx = _probe_context(config)
     server_hostname = _sni_hostname(config)
-    with socket.create_connection(
-        (config.host, config.port), timeout=config.request_timeout
-    ) as raw:
+    raw = _connect(config.host, config.port, config.request_timeout, proxy)
+    try:
         with ctx.wrap_socket(raw, server_hostname=server_hostname) as ssock:
             sslobj = getattr(ssock, "_sslobj", None)
             get_chain = getattr(sslobj, "get_unverified_chain", None)
@@ -149,7 +160,60 @@ def _peer_ders(config: NodeConfig) -> List[bytes]:
             leaf = ssock.getpeercert(binary_form=True)
             if isinstance(leaf, bytes):
                 return [leaf]
+    finally:
+        raw.close()
     return []
+
+
+def _connect(
+    host: str,
+    port: int,
+    timeout: Optional[float],
+    proxy: Optional[str],
+) -> socket.socket:
+    if proxy is None:
+        return socket.create_connection((host, port), timeout=timeout)
+    parsed = urllib.parse.urlsplit(proxy)
+    if parsed.scheme not in ("http", "https") or parsed.hostname is None:
+        raise TlsError(f"Unsupported proxy URL for certificate pinning: {proxy!r}")
+    proxy_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    sock = socket.create_connection((parsed.hostname, proxy_port), timeout=timeout)
+    try:
+        if parsed.scheme == "https":
+            sock = ssl.create_default_context().wrap_socket(
+                sock, server_hostname=parsed.hostname
+            )
+        target = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
+        lines = [f"CONNECT {target} HTTP/1.1", f"Host: {target}"]
+        if parsed.username is not None:
+            user = urllib.parse.unquote(parsed.username)
+            password = urllib.parse.unquote(parsed.password or "")
+            token = base64.b64encode(f"{user}:{password}".encode()).decode("ascii")
+            lines.append(f"Proxy-Authorization: Basic {token}")
+        sock.sendall(("\r\n".join(lines) + "\r\n\r\n").encode("ascii"))
+        status = _proxy_status(sock)
+        if status != 200:
+            raise TlsError(f"Proxy CONNECT failed: {status}")
+        return sock
+    except Exception:
+        sock.close()
+        raise
+
+
+def _proxy_status(sock: socket.socket) -> int:
+    buf = b""
+    while b"\r\n\r\n" not in buf:
+        chunk = sock.recv(4096)
+        if not chunk:
+            break
+        buf += chunk
+        if len(buf) > 65536:
+            break
+    line = buf.split(b"\r\n", 1)[0].decode("ascii", "replace")
+    parts = line.split(" ")
+    if len(parts) < 2 or not parts[1].isdigit():
+        raise TlsError(f"Proxy CONNECT failed: {line!r}")
+    return int(parts[1])
 
 
 def _sni_hostname(config: NodeConfig) -> Optional[str]:
