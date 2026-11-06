@@ -348,28 +348,23 @@ def test_bad_fingerprint_sends_no_http(
 
 
 @pytest.mark.parametrize("node_cls", NODES)
-def test_caller_trust_settings_do_not_replace_the_pin(
-    node_cls: Type[BaseNode],
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [({"verify_certs": False}, "verify_certs"), ({"ca_certs": "../"}, "ca_certs")],
+)
+def test_rejects_other_trust_settings(
+    node_cls: Type[BaseNode], extra: dict, match: str
 ) -> None:
-    with serve(GOOD, GOOD_KEY) as server:
-        node = node_cls(
+    with pytest.raises(ValueError, match=match):
+        node_cls(
             NodeConfig(
                 "https",
                 "localhost",
-                _port(server),
+                1,
                 ssl_assert_fingerprint=FINGERPRINT,
-                verify_certs=False,
-                ca_certs="../",
+                **extra,
             )
         )
-        try:
-            meta, body = node.perform_request("GET", "/")
-            assert meta.status == 200
-            assert body == b"ok"
-            assert server.hits == 1
-            _pinned_context(node)
-        finally:
-            node.close()
 
 
 @pytest.mark.parametrize("node_cls", NODES)
@@ -506,7 +501,7 @@ def test_pin_sends_one_request(node_cls: Type[BaseNode]) -> None:
             assert server.hits == 1
             assert server.auths == ["ApiKey secret"]
             context = _pinned_context(node)
-            assert context.check_hostname is True
+            assert context.check_hostname is False
             meta, body = node.perform_request("GET", "/")
             assert meta.status == 200
             assert server.hits == 2
@@ -593,6 +588,7 @@ def test_hostname_mismatch_sends_no_request(node_cls: Type[BaseNode]) -> None:
                 "localhost",
                 _port(server),
                 ssl_assert_fingerprint=FINGERPRINT,
+                ssl_assert_hostname=True,
             )
         )
         try:
@@ -600,6 +596,26 @@ def test_hostname_mismatch_sends_no_request(node_cls: Type[BaseNode]) -> None:
                 node.perform_request("GET", "/")
             assert "Fingerprints did not match" not in str(exc.value)
             assert server.hits == 0
+        finally:
+            node.close()
+
+
+@pytest.mark.parametrize("node_cls", NODES)
+def test_hostname_off_by_default(node_cls: Type[BaseNode]) -> None:
+    with serve(OTHER, OTHER_KEY) as server:
+        node = node_cls(
+            NodeConfig(
+                "https",
+                "localhost",
+                _port(server),
+                ssl_assert_fingerprint=FINGERPRINT,
+            )
+        )
+        try:
+            meta, body = node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert body == b"ok"
+            assert server.hits == 1
         finally:
             node.close()
 
@@ -644,6 +660,63 @@ def test_wrong_fingerprint_sends_no_request(node_cls: Type[BaseNode]) -> None:
             assert server.hits == 0
         finally:
             node.close()
+
+
+def test_leaf_only_fallback_names_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    from elastic_transport._node import _ca_fingerprint as ca
+
+    monkeypatch.setattr(ca, "_peer_ders", lambda config, proxy: ([b"\x00"], True))
+    with pytest.raises(TlsError, match="Only the leaf certificate was available"):
+        ca._matching_certificate_pem(
+            NodeConfig("https", "localhost", 1, ssl_assert_fingerprint="ab" * 32),
+            None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_pins_the_ca() -> None:
+    from elastic_transport import AiohttpHttpNode
+
+    with serve(GOOD, GOOD_KEY) as server:
+        node = AiohttpHttpNode(
+            NodeConfig(
+                "https",
+                "localhost",
+                _port(server),
+                ssl_assert_fingerprint=FINGERPRINT,
+            )
+        )
+        try:
+            meta, body = await node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert body == b"ok"
+            assert server.hits == 1
+            assert node._ssl_context is not None
+            assert node._ssl_context.check_hostname is False
+            assert node._ssl_context.verify_mode == ssl.CERT_REQUIRED
+        finally:
+            await node.close()
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_forged_leaf_sends_no_request() -> None:
+    from elastic_transport import AiohttpHttpNode
+
+    with serve(FORGED, FORGED_KEY) as server:
+        node = AiohttpHttpNode(
+            NodeConfig(
+                "https",
+                "localhost",
+                _port(server),
+                ssl_assert_fingerprint=FINGERPRINT,
+            )
+        )
+        try:
+            with pytest.raises(TlsError, match="signature|certificate|verify"):
+                await node.perform_request("GET", "/")
+            assert server.hits == 0
+        finally:
+            await node.close()
 
 
 def test_invalid_length_message() -> None:

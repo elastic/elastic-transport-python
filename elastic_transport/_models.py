@@ -264,11 +264,15 @@ class NodeConfig:
     #: Set to ``False`` to disable certificate hostname verification.
     ssl_assert_hostname: Optional[Union[str, bool]] = None
     #: Fingerprint (MD5, SHA-1, or SHA-256) of a certificate presented by
-    #: the node. The matching certificate is the only trust anchor, and TLS
-    #: verification stays on (signature, expiry, and hostname).
-    #: ``verify_certs=False`` and ``ca_certs`` do not add another trust anchor.
-    #: ``ssl_context`` supplies TLS version bounds. The requests node dials
-    #: the probe through the same proxy as the request.
+    #: the node. The matching certificate is the only trust anchor. Signature
+    #: and expiry stay checked. Hostname checks stay off unless
+    #: ``ssl_assert_hostname`` is ``True`` or a hostname.
+    #: ``verify_certs=False`` and ``ca_certs`` raise ``ValueError``.
+    #: The pin is taken on the first request and kept. Pin the CA certificate
+    #: Elasticsearch prints at startup, or restart when a pinned leaf rotates.
+    #: Chain lookup uses ``SSLSocket.get_unverified_chain`` on Python 3.13+
+    #: and a private CPython API before that. Other interpreters only see the
+    #: leaf. That private path is experimental.
     ssl_assert_fingerprint: Optional[str] = None
     #: Minimum TLS version to use to connect to the node. Can be either
     #: :class:`ssl.TLSVersion` or one of the deprecated

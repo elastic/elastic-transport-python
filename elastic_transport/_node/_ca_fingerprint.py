@@ -15,7 +15,11 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import _ssl  # type: ignore
+try:
+    import _ssl  # type: ignore[import-not-found]
+except ImportError:  # pragma: nocover
+    _ssl = None
+
 import base64
 import hashlib
 import socket
@@ -31,7 +35,6 @@ from .._models import NodeConfig
 from .._utils import is_ipaddress
 from ._base import apply_ssl_context_options
 
-_ENCODING_DER: int = _ssl.ENCODING_DER
 _HASHES_BY_LENGTH = {32: hashlib.md5, 40: hashlib.sha1, 64: hashlib.sha256}
 
 
@@ -51,10 +54,16 @@ def normalize_fingerprint(value: str) -> str:
 
 
 def validate_fingerprint_options(config: NodeConfig) -> None:
-    """Reject a fingerprint that is not a hex digest of a known length."""
+    """Reject a bad fingerprint, or trust settings the pin would ignore."""
     if config.ssl_assert_fingerprint is None:
         return
     normalize_fingerprint(config.ssl_assert_fingerprint)
+    if config.verify_certs is False:
+        raise ValueError(
+            "verify_certs=False cannot be combined with ssl_assert_fingerprint"
+        )
+    if config.ca_certs is not None:
+        raise ValueError("ca_certs cannot be combined with ssl_assert_fingerprint")
 
 
 def build_pinned_ssl_context(
@@ -76,12 +85,9 @@ def build_pinned_ssl_context(
 
 def apply_assert_hostname(target: Any, config: NodeConfig) -> None:
     hostname = config.ssl_assert_hostname
-    if hostname is False or (hostname is None and is_ipaddress(config.host)):
-        value: Union[str, bool] = False
-    elif isinstance(hostname, str):
-        value = hostname
-    else:
+    if hostname is True:
         return
+    value: Union[str, bool] = hostname if isinstance(hostname, str) else False
     if isinstance(target, dict):
         target["assert_hostname"] = value
     else:
@@ -89,11 +95,9 @@ def apply_assert_hostname(target: Any, config: NodeConfig) -> None:
 
 
 def _check_hostname(config: NodeConfig) -> bool:
-    if config.ssl_assert_hostname is False:
-        return False
-    if isinstance(config.ssl_assert_hostname, str):
-        return True
-    return not is_ipaddress(config.host)
+    return config.ssl_assert_hostname is True or isinstance(
+        config.ssl_assert_hostname, str
+    )
 
 
 def _apply_caller_tls(ctx: ssl.SSLContext, config: NodeConfig) -> None:
@@ -112,7 +116,7 @@ def _matching_certificate_pem(config: NodeConfig, proxy: Optional[str]) -> str:
     normalized = normalize_fingerprint(config.ssl_assert_fingerprint)
     expected = unhexlify(normalized)
     digestmod = _HASHES_BY_LENGTH[len(normalized)]
-    ders = _peer_ders(config, proxy)
+    ders, leaf_only = _peer_ders(config, proxy)
     seen: List[str] = []
     matched: Optional[bytes] = None
     for der in ders:
@@ -122,9 +126,12 @@ def _matching_certificate_pem(config: NodeConfig, proxy: Optional[str]) -> str:
             matched = der
     if matched is None:
         presented = '", "'.join(seen)
-        raise TlsError(
+        message = (
             f'Fingerprints did not match. Expected "{normalized}", got "{presented}".'
         )
+        if leaf_only:
+            message = f"Only the leaf certificate was available. {message}"
+        raise TlsError(message)
     return ssl.DER_cert_to_PEM_cert(matched)
 
 
@@ -137,7 +144,16 @@ def _probe_context(config: NodeConfig) -> ssl.SSLContext:
     return ctx
 
 
-def _peer_ders(config: NodeConfig, proxy: Optional[str]) -> List[bytes]:
+def _cert_der(cert: Any) -> Optional[bytes]:
+    if isinstance(cert, bytes):
+        return cert
+    public_bytes = getattr(cert, "public_bytes", None)
+    if public_bytes is None or _ssl is None:
+        return None
+    return public_bytes(_ssl.ENCODING_DER)  # type: ignore[no-any-return]
+
+
+def _peer_ders(config: NodeConfig, proxy: Optional[str]) -> tuple[List[bytes], bool]:
     # CERT_NONE still requires the peer to prove the leaf private key.
     # Nothing is sent on this socket except the handshake.
     ctx = _probe_context(config)
@@ -145,24 +161,24 @@ def _peer_ders(config: NodeConfig, proxy: Optional[str]) -> List[bytes]:
     raw = _connect(config.host, config.port, config.request_timeout, proxy)
     try:
         with ctx.wrap_socket(raw, server_hostname=server_hostname) as ssock:
-            sslobj = getattr(ssock, "_sslobj", None)
-            get_chain = getattr(sslobj, "get_unverified_chain", None)
+            get_chain = getattr(ssock, "get_unverified_chain", None)
+            if get_chain is None:
+                sslobj = getattr(ssock, "_sslobj", None)
+                get_chain = getattr(sslobj, "get_unverified_chain", None)
+            ders: List[bytes] = []
             if get_chain is not None:
-                ders: List[bytes] = []
                 for cert in get_chain():
-                    public_bytes = getattr(cert, "public_bytes", None)
-                    if public_bytes is not None:
-                        ders.append(public_bytes(_ENCODING_DER))
-                    elif isinstance(cert, bytes):
-                        ders.append(cert)
-                if ders:
-                    return ders
+                    der = _cert_der(cert)
+                    if der is not None:
+                        ders.append(der)
+            if ders:
+                return ders, False
             leaf = ssock.getpeercert(binary_form=True)
             if isinstance(leaf, bytes):
-                return [leaf]
+                return [leaf], True
     finally:
         raw.close()
-    return []
+    return [], True
 
 
 def _connect(
