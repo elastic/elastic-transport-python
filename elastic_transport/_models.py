@@ -262,15 +262,17 @@ class NodeConfig:
     #: than the one supplied in ``host``. An example of this situation
     #: is connecting to an IP address instead of a hostname.
     #: Set to ``False`` to disable certificate hostname verification.
-    ssl_assert_hostname: Optional[str] = None
-    #: SHA-256 fingerprint of the node's certificate. If this value is
-    #: given then root-of-trust verification isn't done and only the
-    #: node's certificate fingerprint is verified.
-    #:
-    #: On CPython 3.10+ this also verifies if any certificate in the
-    #: chain including the Root CA matches this fingerprint. However
-    #: because this requires using private APIs support for this is
-    #: **experimental**.
+    ssl_assert_hostname: Optional[Union[str, bool]] = None
+    #: Fingerprint (MD5, SHA-1, or SHA-256) of a certificate presented by
+    #: the node. The matching certificate is the only trust anchor. Signature
+    #: and expiry stay checked. Hostname checks stay off unless
+    #: ``ssl_assert_hostname`` is ``True`` or a hostname.
+    #: ``verify_certs=False`` and ``ca_certs`` raise ``ValueError``.
+    #: The pin is taken on the first request and kept. Pin the CA certificate
+    #: Elasticsearch prints at startup, or restart when a pinned leaf rotates.
+    #: Chain lookup uses ``SSLSocket.get_unverified_chain`` on Python 3.13+
+    #: and a private CPython API before that. Other interpreters only see the
+    #: leaf. That private path is experimental.
     ssl_assert_fingerprint: Optional[str] = None
     #: Minimum TLS version to use to connect to the node. Can be either
     #: :class:`ssl.TLSVersion` or one of the deprecated
@@ -279,6 +281,8 @@ class NodeConfig:
     #: Pre-configured :class:`ssl.SSLContext` object. If this value
     #: is given then no other TLS options (besides ``ssl_assert_fingerprint``)
     #: can be set on the :class:`elastic_transport.NodeConfig`.
+    #: With ``ssl_assert_fingerprint``, the pinned certificate stays the
+    #: trust anchor and this context supplies the TLS version bounds.
     ssl_context: Optional[ssl.SSLContext] = field(default=None, hash=False)
     #: Set to ``False`` to disable the :class:`elastic_transport.SecurityWarning`
     #: issued when using ``verify_certs=False``.

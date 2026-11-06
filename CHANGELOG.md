@@ -1,5 +1,10 @@
 # Changelog
 
+## 9.6.0
+
+* `ssl_assert_fingerprint` on `Urllib3HttpNode`, `RequestsHttpNode`, and `AiohttpHttpNode` pins the matching certificate as the only trust anchor. Signature and expiry stay checked. Hostname checks stay off unless `ssl_assert_hostname` is `True` or a hostname, and that option can be combined with the fingerprint. `verify_certs=False` and `ca_certs` raise `ValueError`. The pin is taken on the first request and kept: pin the CA Elasticsearch prints at startup, or restart when a pinned leaf rotates. A caller `ssl_context` supplies TLS version bounds. The requests node dials the probe through the same proxy as the request. `HttpxHttpNode` still refuses pinning.
+* Accept `ssl.TLSVersion` for `ssl_version` when OpenSSL 4 drops the `PROTOCOL_TLSv*` constants ([#308](https://github.com/elastic/elastic-transport-python/pull/308))
+
 ## 9.4.2 (2026-06-16)
 
 * Escape percent characters in logging output ([#284](https://github.com/elastic/elastic-transport-python/pull/284)) (#286)
