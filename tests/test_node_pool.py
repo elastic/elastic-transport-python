@@ -258,3 +258,20 @@ def test_threading_test(pool_size):
     [thread.join() for thread in threads]
 
     assert sum(thread.nodes_gotten for thread in threads) >= 10000
+
+
+def test_get_when_alive_nodes_change_during_iteration():
+    node_configs = [NodeConfig("http", "localhost", x) for x in range(3)]
+    pool = NodePool(node_configs, node_class=Urllib3HttpNode)
+    node = pool.all()[0]
+
+    class MarkDeadOnFirstLookup(set):
+        # Simulates another thread calling mark_dead() while get() iterates over the alive nodes.
+        def __contains__(self, item):
+            if node.config in pool._alive_nodes:
+                pool.mark_dead(node)
+            return super().__contains__(item)
+
+    pool._removed_nodes = MarkDeadOnFirstLookup()
+
+    assert pool.get().config in node_configs
