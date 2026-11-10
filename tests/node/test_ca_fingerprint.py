@@ -34,7 +34,13 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.x509.oid import NameOID
 
-from elastic_transport import NodeConfig, RequestsHttpNode, TlsError, Urllib3HttpNode
+from elastic_transport import (
+    AiohttpHttpNode,
+    NodeConfig,
+    RequestsHttpNode,
+    TlsError,
+    Urllib3HttpNode,
+)
 from elastic_transport._node._base import BaseNode
 
 
@@ -673,24 +679,28 @@ def test_leaf_only_fallback_names_itself(monkeypatch: pytest.MonkeyPatch) -> Non
         )
 
 
+def _aiohttp_node(port: int, **kwargs: object) -> AiohttpHttpNode:
+    return AiohttpHttpNode(
+        NodeConfig(
+            "https",
+            "127.0.0.1",
+            port,
+            headers={"authorization": "ApiKey secret"},
+            **kwargs,  # type: ignore[arg-type]
+        )
+    )
+
+
 @pytest.mark.asyncio
 async def test_aiohttp_pins_the_ca() -> None:
-    from elastic_transport import AiohttpHttpNode
-
     with serve(GOOD, GOOD_KEY) as server:
-        node = AiohttpHttpNode(
-            NodeConfig(
-                "https",
-                "localhost",
-                _port(server),
-                ssl_assert_fingerprint=FINGERPRINT,
-            )
-        )
+        node = _aiohttp_node(_port(server), ssl_assert_fingerprint=FINGERPRINT)
         try:
             meta, body = await node.perform_request("GET", "/")
             assert meta.status == 200
             assert body == b"ok"
             assert server.hits == 1
+            assert server.auths == ["ApiKey secret"]
             assert node._ssl_context is not None
             assert node._ssl_context.check_hostname is False
             assert node._ssl_context.verify_mode == ssl.CERT_REQUIRED
@@ -699,22 +709,27 @@ async def test_aiohttp_pins_the_ca() -> None:
 
 
 @pytest.mark.asyncio
-async def test_aiohttp_forged_leaf_sends_no_request() -> None:
-    from elastic_transport import AiohttpHttpNode
-
-    with serve(FORGED, FORGED_KEY) as server:
-        node = AiohttpHttpNode(
-            NodeConfig(
-                "https",
-                "localhost",
-                _port(server),
-                ssl_assert_fingerprint=FINGERPRINT,
-            )
-        )
+@pytest.mark.parametrize(
+    ("leaf", "key", "kwargs", "match"),
+    [
+        (FORGED, FORGED_KEY, {}, "signature|certificate|verify"),
+        (EXPIRED, EXPIRED_KEY, {}, "expired"),
+        (GOOD, GOOD_KEY, {"ssl_assert_fingerprint": "0" * 64}, "did not match"),
+        (OTHER, OTHER_KEY, {"ssl_assert_hostname": True}, "mismatch"),
+    ],
+    ids=["forged", "expired", "wrong-fingerprint", "hostname-mismatch"],
+)
+async def test_aiohttp_rejection_sends_no_request(
+    leaf: bytes, key: bytes, kwargs: dict, match: str
+) -> None:
+    kwargs = {"ssl_assert_fingerprint": FINGERPRINT, **kwargs}
+    with serve(leaf, key) as server:
+        node = _aiohttp_node(_port(server), **kwargs)
         try:
-            with pytest.raises(TlsError, match="signature|certificate|verify"):
+            with pytest.raises(TlsError, match=match):
                 await node.perform_request("GET", "/")
             assert server.hits == 0
+            assert server.auths == []
         finally:
             await node.close()
 
