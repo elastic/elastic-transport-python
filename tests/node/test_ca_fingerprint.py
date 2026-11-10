@@ -467,6 +467,19 @@ def test_requests_probe_uses_the_session_proxy() -> None:
             proxy.close()
 
 
+def test_requests_probe_rejects_https_proxy() -> None:
+    node = RequestsHttpNode(
+        NodeConfig("https", "127.0.0.1", 1, ssl_assert_fingerprint=FINGERPRINT)
+    )
+    node.session.trust_env = False  # type: ignore[attr-defined]
+    node.session.proxies["https"] = "https://127.0.0.1:1"  # type: ignore[attr-defined]
+    try:
+        with pytest.raises(TlsError, match="https:// proxy"):
+            node.perform_request("GET", "/")
+    finally:
+        node.close()
+
+
 @pytest.mark.parametrize("node_cls", NODES)
 def test_pin_sends_one_request(node_cls: Type[BaseNode]) -> None:
     with serve(GOOD, GOOD_KEY) as server:

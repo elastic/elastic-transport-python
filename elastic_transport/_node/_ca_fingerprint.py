@@ -191,15 +191,15 @@ def _connect(
     if proxy is None:
         return socket.create_connection((host, port), timeout=timeout)
     parsed = urllib.parse.urlsplit(proxy)
-    if parsed.scheme not in ("http", "https") or parsed.hostname is None:
+    # ponytail: TLS inside a TLS proxy tunnel needs ssl.MemoryBIO; add it when asked for
+    if parsed.scheme == "https":
+        raise TlsError("Certificate pinning does not support an https:// proxy")
+    if parsed.scheme != "http" or parsed.hostname is None:
         raise TlsError(f"Unsupported proxy URL for certificate pinning: {proxy!r}")
-    proxy_port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    sock = socket.create_connection((parsed.hostname, proxy_port), timeout=timeout)
+    sock = socket.create_connection(
+        (parsed.hostname, parsed.port or 80), timeout=timeout
+    )
     try:
-        if parsed.scheme == "https":
-            sock = ssl.create_default_context().wrap_socket(
-                sock, server_hostname=parsed.hostname
-            )
         target = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
         lines = [f"CONNECT {target} HTTP/1.1", f"Host: {target}"]
         if parsed.username is not None:
