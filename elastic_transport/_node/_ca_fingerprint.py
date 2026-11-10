@@ -64,6 +64,12 @@ def validate_fingerprint_options(config: NodeConfig) -> None:
         )
     if config.ca_certs is not None:
         raise ValueError("ca_certs cannot be combined with ssl_assert_fingerprint")
+    # ponytail: an SSLContext can't be copied without its trust store, so reject it
+    if config.ssl_context is not None:
+        raise ValueError(
+            "ssl_context cannot be combined with ssl_assert_fingerprint. "
+            "Use client_cert, client_key and ssl_version instead"
+        )
 
 
 def build_pinned_ssl_context(
@@ -104,11 +110,6 @@ def _apply_caller_tls(ctx: ssl.SSLContext, config: NodeConfig) -> None:
     if config.client_cert:
         ctx.load_cert_chain(config.client_cert, config.client_key)
     apply_ssl_context_options(ctx, config)
-    source = config.ssl_context
-    if source is None:
-        return
-    ctx.minimum_version = source.minimum_version
-    ctx.maximum_version = source.maximum_version
 
 
 def _matching_certificate_pem(config: NodeConfig, proxy: Optional[str]) -> str:

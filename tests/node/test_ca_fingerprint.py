@@ -353,10 +353,14 @@ def test_bad_fingerprint_sends_no_http(
         assert server.hits == 0
 
 
-@pytest.mark.parametrize("node_cls", NODES)
+@pytest.mark.parametrize("node_cls", [*NODES, AiohttpHttpNode])
 @pytest.mark.parametrize(
     ("extra", "match"),
-    [({"verify_certs": False}, "verify_certs"), ({"ca_certs": "../"}, "ca_certs")],
+    [
+        ({"verify_certs": False}, "verify_certs"),
+        ({"ca_certs": "../"}, "ca_certs"),
+        ({"ssl_context": ssl.create_default_context()}, "ssl_context"),
+    ],
 )
 def test_rejects_other_trust_settings(
     node_cls: Type[BaseNode], extra: dict, match: str
@@ -371,31 +375,6 @@ def test_rejects_other_trust_settings(
                 **extra,
             )
         )
-
-
-@pytest.mark.parametrize("node_cls", NODES)
-def test_ssl_context_sets_tls_bounds(node_cls: Type[BaseNode]) -> None:
-    user_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    user_context.minimum_version = ssl.TLSVersion.TLSv1_2
-    user_context.maximum_version = ssl.TLSVersion.TLSv1_2
-    with serve(GOOD, GOOD_KEY) as server:
-        node = node_cls(
-            NodeConfig(
-                "https",
-                "localhost",
-                _port(server),
-                ssl_assert_fingerprint=FINGERPRINT,
-                ssl_context=user_context,
-            )
-        )
-        try:
-            meta, _body = node.perform_request("GET", "/")
-            assert meta.status == 200
-            context = _pinned_context(node)
-            assert context.minimum_version == ssl.TLSVersion.TLSv1_2
-            assert context.maximum_version == ssl.TLSVersion.TLSv1_2
-        finally:
-            node.close()
 
 
 @pytest.mark.parametrize("node_cls", NODES)
@@ -704,6 +683,27 @@ async def test_aiohttp_pins_the_ca() -> None:
             assert node._ssl_context is not None
             assert node._ssl_context.check_hostname is False
             assert node._ssl_context.verify_mode == ssl.CERT_REQUIRED
+        finally:
+            await node.close()
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_presents_the_client_cert(tmp_path: Path) -> None:
+    cert = tmp_path / "client.pem"
+    key = tmp_path / "client.key"
+    cert.write_bytes(GOOD)
+    key.write_bytes(GOOD_KEY)
+    with serve(GOOD, GOOD_KEY, require_client=True) as server:
+        node = _aiohttp_node(
+            _port(server),
+            ssl_assert_fingerprint=FINGERPRINT,
+            client_cert=str(cert),
+            client_key=str(key),
+        )
+        try:
+            meta, _body = await node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert server.hits == 1
         finally:
             await node.close()
 
