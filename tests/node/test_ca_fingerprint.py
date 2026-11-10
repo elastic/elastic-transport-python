@@ -700,6 +700,13 @@ async def test_aiohttp_pins_the_ca() -> None:
             await node.close()
 
 
+def test_aiohttp_rejects_string_assert_hostname() -> None:
+    with pytest.raises(ValueError, match="ssl_assert_hostname"):
+        _aiohttp_node(
+            1, ssl_assert_fingerprint=FINGERPRINT, ssl_assert_hostname="localhost"
+        )
+
+
 @pytest.mark.asyncio
 async def test_aiohttp_presents_the_client_cert(tmp_path: Path) -> None:
     cert = tmp_path / "client.pem"

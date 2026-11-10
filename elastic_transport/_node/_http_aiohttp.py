@@ -86,6 +86,12 @@ class AiohttpHttpNode(BaseAsyncNode):
         ssl_context: Optional[ssl.SSLContext] = None
         if config.scheme == "https" and config.ssl_assert_fingerprint is not None:
             validate_fingerprint_options(config)
+            # ponytail: aiohttp checks the URL host; pass server_hostname once aiohttp>=3.9 is the floor
+            if isinstance(config.ssl_assert_hostname, str):
+                raise ValueError(
+                    "AiohttpHttpNode does not support a string ssl_assert_hostname "
+                    "with ssl_assert_fingerprint. Use True or False"
+                )
             self._needs_pin = True
         elif config.scheme == "https":
             if config.ssl_context is not None:
