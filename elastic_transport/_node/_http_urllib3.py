@@ -61,13 +61,11 @@ class Urllib3HttpNode(BaseNode):
         pool_class: type[urllib3.HTTPConnectionPool] = urllib3.HTTPConnectionPool
         kw: Dict[str, Any] = {}
 
-        self._defer_fingerprint = False
         if config.scheme == "https":
             pool_class = urllib3.HTTPSConnectionPool
             if config.ssl_assert_fingerprint is not None:
                 # Probe on the first request. Construction stays offline if the node is down.
                 validate_fingerprint_options(config)
-                self._defer_fingerprint = True
             else:
                 ssl_context = ssl_context_from_node_config(config)
                 kw["ssl_context"] = ssl_context
@@ -109,10 +107,8 @@ class Urllib3HttpNode(BaseNode):
         self._pool_class = pool_class
         self._pool_kw = kw
         self._pin_lock = threading.Lock()
-        self.pool: Optional[urllib3.HTTPConnectionPool]
-        if self._defer_fingerprint:
-            self.pool = None
-        else:
+        self.pool: Optional[urllib3.HTTPConnectionPool] = None
+        if config.ssl_assert_fingerprint is None:
             self.pool = self._open_pool()
 
     def perform_request(
@@ -225,7 +221,7 @@ class Urllib3HttpNode(BaseNode):
         )
 
     def _ensure_pinned(self) -> None:
-        if not self._defer_fingerprint or self.pool is not None:
+        if self.pool is not None:
             return
         with self._pin_lock:
             if self.pool is not None:
