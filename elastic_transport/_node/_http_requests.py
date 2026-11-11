@@ -267,7 +267,7 @@ class RequestsHttpNode(BaseNode):
             raise
         except Exception as e:
             err: Exception
-            if isinstance(e, requests.Timeout):
+            if isinstance(e, (requests.Timeout, TimeoutError)):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )

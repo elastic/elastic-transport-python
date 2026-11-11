@@ -163,7 +163,7 @@ class Urllib3HttpNode(BaseNode):
             err: Exception
             if isinstance(e, NewConnectionError):
                 err = ConnectionError(str(e), errors=(e,))
-            elif isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
+            elif isinstance(e, (ConnectTimeoutError, ReadTimeoutError, TimeoutError)):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )

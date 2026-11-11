@@ -208,7 +208,12 @@ class AiohttpHttpNode(BaseAsyncNode):
         except Exception as e:
             err: Exception
             if isinstance(
-                e, (asyncio.TimeoutError, aiohttp_exceptions.ServerTimeoutError)
+                e,
+                (
+                    asyncio.TimeoutError,
+                    TimeoutError,
+                    aiohttp_exceptions.ServerTimeoutError,
+                ),
             ):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)

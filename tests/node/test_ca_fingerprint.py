@@ -37,6 +37,7 @@ from cryptography.x509.oid import NameOID
 from elastic_transport import (
     AiohttpHttpNode,
     ConnectionError,
+    ConnectionTimeout,
     NodeConfig,
     RequestsHttpNode,
     TlsError,
@@ -503,6 +504,53 @@ def test_probe_connection_failure_is_a_connection_error(
             node.perform_request("GET", "/")
     finally:
         node.close()
+
+
+@contextmanager
+def silent_server() -> Iterator[int]:
+    """Accepts TCP but never answers the TLS handshake."""
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(8)
+        yield sock.getsockname()[1]
+
+
+@pytest.mark.parametrize("node_cls", NODES)
+def test_probe_timeout_is_a_connection_timeout(node_cls: Type[BaseNode]) -> None:
+    with silent_server() as port:
+        node = node_cls(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                port,
+                ssl_assert_fingerprint=FINGERPRINT,
+                request_timeout=0.2,
+            )
+        )
+        try:
+            with pytest.raises(ConnectionTimeout):
+                node.perform_request("GET", "/")
+        finally:
+            node.close()
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_probe_timeout_is_a_connection_timeout() -> None:
+    with silent_server() as port:
+        node = AiohttpHttpNode(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                port,
+                ssl_assert_fingerprint=FINGERPRINT,
+                request_timeout=0.2,
+            )
+        )
+        try:
+            with pytest.raises(ConnectionTimeout):
+                await node.perform_request("GET", "/")
+        finally:
+            await node.close()
 
 
 @pytest.mark.parametrize("node_cls", NODES)
