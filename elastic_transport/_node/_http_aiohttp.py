@@ -274,6 +274,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         """
         if self._loop is None:
             self._loop = asyncio.get_running_loop()
+        assert self.scheme != "https" or self._ssl_context is not None
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             skip_auto_headers=("accept", "accept-encoding", "user-agent"),

@@ -684,6 +684,14 @@ def _aiohttp_node(port: int, **kwargs: object) -> AiohttpHttpNode:
 
 
 @pytest.mark.asyncio
+async def test_aiohttp_https_session_needs_a_context() -> None:
+    node = _aiohttp_node(1, ssl_assert_fingerprint=FINGERPRINT)
+    # Never fall back to ssl=False for https.
+    with pytest.raises(AssertionError):
+        node._create_aiohttp_session()
+
+
+@pytest.mark.asyncio
 async def test_aiohttp_pins_the_ca() -> None:
     with serve(GOOD, GOOD_KEY) as server:
         node = _aiohttp_node(_port(server), ssl_assert_fingerprint=FINGERPRINT)
