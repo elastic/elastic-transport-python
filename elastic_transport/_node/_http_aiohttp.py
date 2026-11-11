@@ -16,15 +16,13 @@
 #  under the License.
 
 import asyncio
-import base64
-import functools
 import gzip
 import os
 import re
 import ssl
 import sys
 import warnings
-from typing import Optional, TypedDict, Union
+from typing import Optional, Union
 
 from .._compat import warn_stacklevel
 from .._exceptions import ConnectionError, ConnectionTimeout, SecurityWarning, TlsError
@@ -38,6 +36,7 @@ from ._base import (
     ssl_context_from_node_config,
 )
 from ._base_async import BaseAsyncNode
+from ._ca_fingerprint import fetch_pinned_ssl_context, validate_fingerprint_options
 
 try:
     import aiohttp
@@ -56,9 +55,6 @@ try:
 
     # See aio-libs/aiohttp#1769 and #5012
     _AIOHTTP_FIXED_HEAD_BUG = _AIOHTTP_SEMVER_VERSION >= (3, 7, 0)
-
-    class RequestKwarg(TypedDict, total=False):
-        ssl: aiohttp.Fingerprint
 
 except ImportError:  # pragma: nocover
     _AIOHTTP_AVAILABLE = False
@@ -85,9 +81,19 @@ class AiohttpHttpNode(BaseAsyncNode):
 
         super().__init__(config)
 
-        self._ssl_assert_fingerprint = config.ssl_assert_fingerprint
+        self._needs_pin = False
+        self._pin_lock = asyncio.Lock()
         ssl_context: Optional[ssl.SSLContext] = None
-        if config.scheme == "https":
+        if config.scheme == "https" and config.ssl_assert_fingerprint is not None:
+            validate_fingerprint_options(config)
+            # ponytail: aiohttp checks the URL host; pass server_hostname once aiohttp>=3.9 is the floor
+            if isinstance(config.ssl_assert_hostname, str):
+                raise ValueError(
+                    "AiohttpHttpNode does not support a string ssl_assert_hostname "
+                    "with ssl_assert_fingerprint. Use True or False"
+                )
+            self._needs_pin = True
+        elif config.scheme == "https":
             if config.ssl_context is not None:
                 ssl_context = ssl_context_from_node_config(config)
             else:
@@ -144,10 +150,6 @@ class AiohttpHttpNode(BaseAsyncNode):
         headers: Optional[HttpHeaders] = None,
         request_timeout: Union[DefaultType, Optional[float]] = DEFAULT,
     ) -> NodeApiResponse:
-        if self.session is None:
-            self._create_aiohttp_session()
-        assert self.session is not None
-
         url = self.base_url + target
 
         is_head = False
@@ -182,11 +184,9 @@ class AiohttpHttpNode(BaseAsyncNode):
         else:
             body_to_send = None
 
-        kwargs: RequestKwarg = {}
-        if self._ssl_assert_fingerprint:
-            kwargs["ssl"] = aiohttp_fingerprint(self._ssl_assert_fingerprint)
-
         try:
+            await self._ensure_pinned(resolved_timeout)
+            assert self.session is not None
             start = self._loop.time()
             async with self.session.request(
                 method,
@@ -194,7 +194,6 @@ class AiohttpHttpNode(BaseAsyncNode):
                 data=body_to_send,
                 headers=request_headers,
                 timeout=aiohttp_timeout,
-                **kwargs,
             ) as response:
                 if is_head:  # We actually called 'GET' so throw away the data.
                     await response.release()
@@ -209,7 +208,12 @@ class AiohttpHttpNode(BaseAsyncNode):
         except Exception as e:
             err: Exception
             if isinstance(
-                e, (asyncio.TimeoutError, aiohttp_exceptions.ServerTimeoutError)
+                e,
+                (
+                    asyncio.TimeoutError,
+                    TimeoutError,
+                    aiohttp_exceptions.ServerTimeoutError,
+                ),
             ):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
@@ -254,6 +258,18 @@ class AiohttpHttpNode(BaseAsyncNode):
             await self.session.close()
             self.session = None
 
+    async def _ensure_pinned(self, timeout: Optional[float]) -> None:
+        if self.session is not None and not self._needs_pin:
+            return
+        async with self._pin_lock:
+            if self._needs_pin:
+                self._ssl_context = await asyncio.to_thread(
+                    fetch_pinned_ssl_context, self.config, timeout
+                )
+                self._needs_pin = False
+            if self.session is None:
+                self._create_aiohttp_session()
+
     def _create_aiohttp_session(self) -> None:
         """Creates an aiohttp.ClientSession(). This is delayed until
         the first call to perform_request() so that AsyncTransport has
@@ -261,6 +277,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         """
         if self._loop is None:
             self._loop = asyncio.get_running_loop()
+        assert self.scheme != "https" or self._ssl_context is not None
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             skip_auto_headers=("accept", "accept-encoding", "user-agent"),
@@ -274,13 +291,3 @@ class AiohttpHttpNode(BaseAsyncNode):
                 ssl=self._ssl_context or False,
             ),
         )
-
-
-@functools.lru_cache(maxsize=64, typed=True)
-def aiohttp_fingerprint(ssl_assert_fingerprint: str) -> "aiohttp.Fingerprint":
-    """Changes 'ssl_assert_fingerprint' into a configured 'aiohttp.Fingerprint' instance.
-    Uses a cache to prevent creating tons of objects needlessly.
-    """
-    return aiohttp.Fingerprint(
-        base64.b16decode(ssl_assert_fingerprint.replace(":", ""), casefold=True)
-    )
