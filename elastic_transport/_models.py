@@ -266,8 +266,9 @@ class NodeConfig:
     #: Fingerprint (MD5, SHA-1, or SHA-256) of a certificate presented by
     #: the node. The matching certificate is the only trust anchor. Signature
     #: and expiry stay checked. Hostname checks stay off unless
-    #: ``ssl_assert_hostname`` is ``True`` or a hostname.
-    #: ``verify_certs=False`` and ``ca_certs`` raise ``ValueError``.
+    #: ``ssl_assert_hostname`` is ``True`` or a hostname. Pinning a shared CA
+    #: without ``ssl_assert_hostname`` trusts every certificate it issues.
+    #: ``verify_certs=False``, ``ca_certs`` and ``ssl_context`` raise ``ValueError``.
     #: The pin is taken on the first request and kept. Pin the CA certificate
     #: Elasticsearch prints at startup, or restart when a pinned leaf rotates.
     #: Chain lookup uses ``SSLSocket.get_unverified_chain`` on Python 3.13+
@@ -281,8 +282,6 @@ class NodeConfig:
     #: Pre-configured :class:`ssl.SSLContext` object. If this value
     #: is given then no other TLS options (besides ``ssl_assert_fingerprint``)
     #: can be set on the :class:`elastic_transport.NodeConfig`.
-    #: With ``ssl_assert_fingerprint``, the pinned certificate stays the
-    #: trust anchor and this context supplies the TLS version bounds.
     ssl_context: Optional[ssl.SSLContext] = field(default=None, hash=False)
     #: Set to ``False`` to disable the :class:`elastic_transport.SecurityWarning`
     #: issued when using ``verify_certs=False``.
