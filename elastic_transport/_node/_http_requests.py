@@ -50,13 +50,15 @@ try:
     _REQUESTS_META_VERSION = client_meta_version(requests.__version__)
 
     class _ElasticHTTPAdapter(HTTPAdapter):
-        def __init__(self, node_config: NodeConfig, **kwargs: Any) -> None:
+        def __init__(
+            self,
+            node_config: NodeConfig,
+            pinned_context: Optional[ssl.SSLContext] = None,
+            **kwargs: Any,
+        ) -> None:
             self._node_config = node_config
-            self._pinned_context: Optional[ssl.SSLContext] = None
-            # adapter init builds a pool before the pin exists
-            self._defer_pin = node_config.ssl_assert_fingerprint is not None
+            self._pinned_context = pinned_context
             super().__init__(**kwargs)
-            self._defer_pin = False
 
         def init_poolmanager(
             self,
@@ -66,12 +68,9 @@ try:
             **pool_kwargs: Any,
         ) -> None:
             if self._node_config.scheme == "https":
-                if self._node_config.ssl_assert_fingerprint is not None:
-                    if self._pinned_context is not None:
-                        pool_kwargs["ssl_context"] = self._pinned_context
-                        apply_assert_hostname(pool_kwargs, self._node_config)
-                    elif not self._defer_pin:
-                        raise RuntimeError("CA fingerprint is not pinned")
+                if self._pinned_context is not None:
+                    pool_kwargs["ssl_context"] = self._pinned_context
+                    apply_assert_hostname(pool_kwargs, self._node_config)
                 else:
                     pool_kwargs.setdefault(
                         "ssl_context", ssl_context_from_node_config(self._node_config)
@@ -188,22 +187,16 @@ class RequestsHttpNode(BaseNode):
             else:
                 self.session.cert = config.client_cert
 
-        # Create and mount custom adapter for constraining number of connections
-        adapter = _ElasticHTTPAdapter(
-            node_config=config,
-            pool_connections=config.connections_per_node,
-            pool_maxsize=config.connections_per_node,
-            pool_block=True,
-        )
-        self._adapter = adapter
         self._pin_lock = threading.Lock()
+        self._adapter: Optional[_ElasticHTTPAdapter] = None
+        # The fingerprint pin needs a handshake, so its adapter is
+        # mounted on the first request.
+        if config.ssl_assert_fingerprint is not None:
+            return
+        adapter = self._mount_adapter()
 
         # Preload the HTTPConnectionPool so initialization issues
-        # are raised here instead of in perform_request(). The fingerprint
-        # pin needs a handshake, so that waits until the first request.
-        if config.ssl_assert_fingerprint is not None:
-            self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
-            return
+        # are raised here instead of in perform_request().
         if hasattr(adapter, "get_connection_with_tls_context"):
             request = requests.Request(method="GET", url=self.base_url)
             prepared_request = self.session.prepare_request(request)
@@ -215,8 +208,6 @@ class RequestsHttpNode(BaseNode):
             # requests.Session and an SSLContext without using the verify parameter.
             # We should remove this branch when requiring requests 2.32 or later.
             adapter.get_connection(self.base_url)
-
-        self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
 
     def perform_request(
         self,
@@ -314,16 +305,26 @@ class RequestsHttpNode(BaseNode):
         if self.config.ssl_assert_fingerprint is None:
             return
         with self._pin_lock:
-            if self._adapter._pinned_context is not None:
+            if self._adapter is not None:
                 return
-            self._adapter._pinned_context = fetch_pinned_ssl_context(
-                self.config, proxy=self._https_proxy()
+            self._mount_adapter(
+                fetch_pinned_ssl_context(self.config, proxy=self._https_proxy())
             )
-            self._adapter.init_poolmanager(
-                self.config.connections_per_node,
-                self.config.connections_per_node,
-                block=True,
-            )
+
+    def _mount_adapter(
+        self, pinned_context: Optional[ssl.SSLContext] = None
+    ) -> "_ElasticHTTPAdapter":
+        # Custom adapter for constraining number of connections
+        adapter = _ElasticHTTPAdapter(
+            node_config=self.config,
+            pinned_context=pinned_context,
+            pool_connections=self.config.connections_per_node,
+            pool_maxsize=self.config.connections_per_node,
+            pool_block=True,
+        )
+        self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
+        self._adapter = adapter
+        return adapter
 
     def _https_proxy(self) -> Optional[str]:
         url = f"https://{self.config.host}:{self.config.port}/"
