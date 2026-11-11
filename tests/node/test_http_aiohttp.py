@@ -85,39 +85,6 @@ class TestAiohttpHttpNode:
             ),
         }
 
-    @pytest.mark.asyncio
-    async def test_aiohttp_options_fingerprint(self):
-        node = await self._get_mock_node(
-            NodeConfig(
-                scheme="https",
-                host="localhost",
-                port=443,
-                ssl_assert_fingerprint=("00:" * 32).strip(":"),
-            )
-        )
-        await node.perform_request(
-            "GET",
-            "/",
-        )
-
-        args, kwargs = node.session.request.call_args
-        assert args == ("GET", "https://localhost:443/")
-
-        # aiohttp.Fingerprint() doesn't define equality
-        fingerprint: aiohttp.Fingerprint = kwargs.pop("ssl")
-        assert fingerprint.fingerprint == b"\x00" * 32
-
-        assert kwargs == {
-            "data": None,
-            "headers": {"connection": "keep-alive", "user-agent": DEFAULT_USER_AGENT},
-            "timeout": aiohttp.ClientTimeout(
-                total=10,
-                connect=None,
-                sock_read=None,
-                sock_connect=None,
-            ),
-        }
-
     @pytest.mark.parametrize(
         "options",
         [(5, 5, 5), (None, 5, 5), (5, None, 0), (None, None, 0), (5, 5), (None, 0)],

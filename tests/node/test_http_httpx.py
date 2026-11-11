@@ -290,6 +290,20 @@ class TestHttpxAsyncNode:
 
 
 @pytest.mark.parametrize("node_class", [HttpxHttpNode, HttpxAsyncHttpNode])
+def test_httpx_fingerprint_rejects_verify_certs_false(node_class):
+    with pytest.raises(ValueError, match="verify_certs"):
+        node_class(
+            NodeConfig(
+                "https",
+                "localhost",
+                1,
+                ssl_assert_fingerprint="ab" * 32,
+                verify_certs=False,
+            )
+        )
+
+
+@pytest.mark.parametrize("node_class", [HttpxHttpNode, HttpxAsyncHttpNode])
 def test_ssl_assert_fingerprint(node_class, cert_fingerprint, httpbin_secure):
     with pytest.raises(ValueError, match="httpx does not support certificate pinning"):
         node_class(
