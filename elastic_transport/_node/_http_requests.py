@@ -37,7 +37,7 @@ from ._base import (
 )
 from ._ca_fingerprint import (
     apply_assert_hostname,
-    build_pinned_ssl_context,
+    fetch_pinned_ssl_context,
     validate_fingerprint_options,
 )
 
@@ -316,7 +316,7 @@ class RequestsHttpNode(BaseNode):
         with self._pin_lock:
             if self._adapter._pinned_context is not None:
                 return
-            self._adapter._pinned_context = build_pinned_ssl_context(
+            self._adapter._pinned_context = fetch_pinned_ssl_context(
                 self.config, proxy=self._https_proxy()
             )
             self._adapter.init_poolmanager(

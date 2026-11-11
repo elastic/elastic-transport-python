@@ -36,7 +36,7 @@ from ._base import (
     ssl_context_from_node_config,
 )
 from ._base_async import BaseAsyncNode
-from ._ca_fingerprint import build_pinned_ssl_context, validate_fingerprint_options
+from ._ca_fingerprint import fetch_pinned_ssl_context, validate_fingerprint_options
 
 try:
     import aiohttp
@@ -259,7 +259,7 @@ class AiohttpHttpNode(BaseAsyncNode):
         async with self._pin_lock:
             if self._needs_pin:
                 self._ssl_context = await asyncio.to_thread(
-                    build_pinned_ssl_context, self.config
+                    fetch_pinned_ssl_context, self.config
                 )
                 self._needs_pin = False
             if self.session is None:

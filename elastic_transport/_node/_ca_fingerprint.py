@@ -72,7 +72,7 @@ def validate_fingerprint_options(config: NodeConfig) -> None:
         )
 
 
-def build_pinned_ssl_context(
+def fetch_pinned_ssl_context(
     config: NodeConfig, proxy: Optional[str] = None
 ) -> ssl.SSLContext:
     """Fetch the cert chain and trust only the certificate that matches."""

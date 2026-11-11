@@ -45,7 +45,7 @@ from ._base import (
 )
 from ._ca_fingerprint import (
     apply_assert_hostname,
-    build_pinned_ssl_context,
+    fetch_pinned_ssl_context,
     validate_fingerprint_options,
 )
 
@@ -230,7 +230,7 @@ class Urllib3HttpNode(BaseNode):
         with self._pin_lock:
             if self.pool is not None:
                 return
-            ctx = build_pinned_ssl_context(self.config)
+            ctx = fetch_pinned_ssl_context(self.config)
             extra: Dict[str, Any] = {"ssl_context": ctx}
             apply_assert_hostname(extra, self.config)
             self.pool = self._open_pool(**extra)
