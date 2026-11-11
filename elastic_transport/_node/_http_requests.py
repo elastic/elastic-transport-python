@@ -336,8 +336,7 @@ class RequestsHttpNode(BaseNode):
     def _https_proxy(self) -> Optional[str]:
         url = f"https://{self.config.host}:{self.config.port}/"
         settings = self.session.merge_environment_settings(url, {}, False, True, None)
-        proxies = settings.get("proxies") or {}
-        proxy = proxies.get("https") or proxies.get("all")
+        proxy = requests.utils.select_proxy(url, settings.get("proxies") or {})
         if not proxy:
             return None
         return str(proxy)

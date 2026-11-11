@@ -470,6 +470,30 @@ def test_requests_probe_uses_the_session_proxy() -> None:
             proxy.close()
 
 
+def test_requests_probe_uses_a_host_specific_proxy() -> None:
+    with serve(GOOD, GOOD_KEY) as server:
+        proxy = _Proxy(_port(server), "a", "p")
+        node = RequestsHttpNode(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                1,
+                ssl_assert_fingerprint=FINGERPRINT,
+                ssl_assert_hostname="localhost",
+            )
+        )
+        node.session.trust_env = False  # type: ignore[attr-defined]
+        node.session.proxies["https://127.0.0.1"] = f"http://a:p@127.0.0.1:{proxy.port}"  # type: ignore[attr-defined]
+        try:
+            meta, _body = node.perform_request("GET", "/")
+            assert meta.status == 200
+            assert server.hits == 1
+            assert proxy.connects >= 2
+        finally:
+            node.close()
+            proxy.close()
+
+
 def test_requests_probe_rejects_https_proxy() -> None:
     node = RequestsHttpNode(
         NodeConfig("https", "127.0.0.1", 1, ssl_assert_fingerprint=FINGERPRINT)
