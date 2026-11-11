@@ -36,6 +36,7 @@ from cryptography.x509.oid import NameOID
 
 from elastic_transport import (
     AiohttpHttpNode,
+    ConnectionError,
     NodeConfig,
     RequestsHttpNode,
     TlsError,
@@ -475,6 +476,30 @@ def test_requests_probe_rejects_https_proxy() -> None:
     node.session.proxies["https"] = "https://127.0.0.1:1"  # type: ignore[attr-defined]
     try:
         with pytest.raises(TlsError, match="https:// proxy"):
+            node.perform_request("GET", "/")
+    finally:
+        node.close()
+
+
+def _closed_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    assert isinstance(port, int)
+    return port
+
+
+@pytest.mark.parametrize("node_cls", NODES)
+def test_probe_connection_failure_is_a_connection_error(
+    node_cls: Type[BaseNode],
+) -> None:
+    node = node_cls(
+        NodeConfig(
+            "https", "127.0.0.1", _closed_port(), ssl_assert_fingerprint=FINGERPRINT
+        )
+    )
+    try:
+        with pytest.raises(ConnectionError):
             node.perform_request("GET", "/")
     finally:
         node.close()

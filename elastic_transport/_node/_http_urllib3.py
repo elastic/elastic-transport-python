@@ -124,8 +124,6 @@ class Urllib3HttpNode(BaseNode):
 
         start = time.time()
         try:
-            self._ensure_pinned()
-            assert self.pool is not None
             kw = {}
             if request_timeout is not DEFAULT:
                 kw["timeout"] = request_timeout
@@ -144,6 +142,9 @@ class Urllib3HttpNode(BaseNode):
             else:
                 body_to_send = None
 
+            # After the headers exist, so a failed probe can be logged.
+            self._ensure_pinned()
+            assert self.pool is not None
             response = self.pool.urlopen(
                 method,
                 target,
