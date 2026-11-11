@@ -116,6 +116,10 @@ try:
                 return
             super().cert_verify(conn, url, verify, cert)  # type: ignore[no-untyped-call]
 
+    class _UnpinnedAdapter(HTTPAdapter):
+        def send(self, *args: Any, **kwargs: Any) -> Any:
+            raise TlsError("CA fingerprint is not pinned")
+
 except ImportError:  # pragma: nocover
     _REQUESTS_AVAILABLE = False
     _REQUESTS_META_VERSION = ""
@@ -192,6 +196,7 @@ class RequestsHttpNode(BaseNode):
         # The fingerprint pin needs a handshake, so its adapter is
         # mounted on the first request.
         if config.ssl_assert_fingerprint is not None:
+            self.session.mount(f"{self.scheme}://", _UnpinnedAdapter())
             return
         adapter = self._mount_adapter()
 

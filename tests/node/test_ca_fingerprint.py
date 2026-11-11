@@ -535,6 +535,26 @@ def test_leaf_fingerprint_is_a_trust_anchor(node_cls: Type[BaseNode]) -> None:
             node.close()
 
 
+def test_requests_session_fails_closed_before_pin() -> None:
+    import requests
+
+    with serve(GOOD, GOOD_KEY) as server:
+        node = RequestsHttpNode(
+            NodeConfig(
+                "https", "localhost", _port(server), ssl_assert_fingerprint=FINGERPRINT
+            )
+        )
+        try:
+            request = node.session.prepare_request(
+                requests.Request("GET", node.base_url)
+            )
+            with pytest.raises(TlsError, match="not pinned"):
+                node.session.send(request, verify=False)
+            assert server.hits == 0
+        finally:
+            node.close()
+
+
 @pytest.mark.parametrize("node_cls", NODES)
 def test_forged_leaf_sends_no_request(node_cls: Type[BaseNode]) -> None:
     with serve(FORGED, FORGED_KEY) as server:
