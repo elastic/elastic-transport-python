@@ -143,7 +143,11 @@ class Urllib3HttpNode(BaseNode):
                 body_to_send = None
 
             # After the headers exist, so a failed probe can be logged.
-            self._ensure_pinned()
+            self._ensure_pinned(
+                self.config.request_timeout
+                if request_timeout is DEFAULT
+                else request_timeout
+            )
             assert self.pool is not None
             response = self.pool.urlopen(
                 method,
@@ -221,13 +225,13 @@ class Urllib3HttpNode(BaseNode):
             **kw,
         )
 
-    def _ensure_pinned(self) -> None:
+    def _ensure_pinned(self, timeout: Optional[float]) -> None:
         if self.pool is not None:
             return
         with self._pin_lock:
             if self.pool is not None:
                 return
-            ctx = fetch_pinned_ssl_context(self.config)
+            ctx = fetch_pinned_ssl_context(self.config, timeout)
             extra: Dict[str, Any] = {"ssl_context": ctx}
             apply_assert_hostname(extra, self.config)
             self.pool = self._open_pool(**extra)

@@ -185,7 +185,7 @@ class AiohttpHttpNode(BaseAsyncNode):
             body_to_send = None
 
         try:
-            await self._ensure_pinned()
+            await self._ensure_pinned(resolved_timeout)
             assert self.session is not None
             start = self._loop.time()
             async with self.session.request(
@@ -258,13 +258,13 @@ class AiohttpHttpNode(BaseAsyncNode):
             await self.session.close()
             self.session = None
 
-    async def _ensure_pinned(self) -> None:
+    async def _ensure_pinned(self, timeout: Optional[float]) -> None:
         if self.session is not None and not self._needs_pin:
             return
         async with self._pin_lock:
             if self._needs_pin:
                 self._ssl_context = await asyncio.to_thread(
-                    fetch_pinned_ssl_context, self.config
+                    fetch_pinned_ssl_context, self.config, timeout
                 )
                 self._needs_pin = False
             if self.session is None:

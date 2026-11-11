@@ -257,7 +257,7 @@ class RequestsHttpNode(BaseNode):
             )
         )
         try:
-            self._ensure_pinned()
+            self._ensure_pinned(send_kwargs["timeout"])
             response = self.session.send(prepared_request, **send_kwargs)  # type: ignore[arg-type]
             data = response.content
             duration = time.time() - start
@@ -306,14 +306,16 @@ class RequestsHttpNode(BaseNode):
             data,
         )
 
-    def _ensure_pinned(self) -> None:
+    def _ensure_pinned(self, timeout: Optional[float]) -> None:
         if self.config.ssl_assert_fingerprint is None:
             return
         with self._pin_lock:
             if self._adapter is not None:
                 return
             self._mount_adapter(
-                fetch_pinned_ssl_context(self.config, proxy=self._https_proxy())
+                fetch_pinned_ssl_context(
+                    self.config, timeout, proxy=self._https_proxy()
+                )
             )
 
     def _mount_adapter(

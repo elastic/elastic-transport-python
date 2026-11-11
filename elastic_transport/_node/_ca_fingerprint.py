@@ -73,11 +73,11 @@ def validate_fingerprint_options(config: NodeConfig) -> None:
 
 
 def fetch_pinned_ssl_context(
-    config: NodeConfig, proxy: Optional[str] = None
+    config: NodeConfig, timeout: Optional[float], proxy: Optional[str] = None
 ) -> ssl.SSLContext:
     """Fetch the cert chain and trust only the certificate that matches."""
     assert config.ssl_assert_fingerprint is not None
-    pem = _matching_certificate_pem(config, proxy)
+    pem = _matching_certificate_pem(config, timeout, proxy)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.verify_mode = ssl.CERT_REQUIRED
     partial = getattr(ssl, "VERIFY_X509_PARTIAL_CHAIN", None)
@@ -112,12 +112,14 @@ def _apply_caller_tls(ctx: ssl.SSLContext, config: NodeConfig) -> None:
     apply_ssl_context_options(ctx, config)
 
 
-def _matching_certificate_pem(config: NodeConfig, proxy: Optional[str]) -> str:
+def _matching_certificate_pem(
+    config: NodeConfig, timeout: Optional[float], proxy: Optional[str]
+) -> str:
     assert config.ssl_assert_fingerprint is not None
     normalized = normalize_fingerprint(config.ssl_assert_fingerprint)
     expected = unhexlify(normalized)
     digestmod = _HASHES_BY_LENGTH[len(normalized)]
-    ders, leaf_only = _peer_ders(config, proxy)
+    ders, leaf_only = _peer_ders(config, timeout, proxy)
     seen: List[str] = []
     matched: Optional[bytes] = None
     for der in ders:
@@ -154,12 +156,14 @@ def _cert_der(cert: Any) -> Optional[bytes]:
     return public_bytes(_ssl.ENCODING_DER)  # type: ignore[no-any-return]
 
 
-def _peer_ders(config: NodeConfig, proxy: Optional[str]) -> tuple[List[bytes], bool]:
+def _peer_ders(
+    config: NodeConfig, timeout: Optional[float], proxy: Optional[str]
+) -> tuple[List[bytes], bool]:
     # CERT_NONE still requires the peer to prove the leaf private key.
     # Nothing is sent on this socket except the handshake.
     ctx = _probe_context(config)
     server_hostname = _sni_hostname(config)
-    raw = _connect(config.host, config.port, config.request_timeout, proxy)
+    raw = _connect(config.host, config.port, timeout, proxy)
     try:
         with ctx.wrap_socket(raw, server_hostname=server_hostname) as ssock:
             get_chain = getattr(ssock, "get_unverified_chain", None)

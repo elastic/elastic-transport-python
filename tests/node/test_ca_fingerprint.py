@@ -22,6 +22,7 @@ import socket
 import ssl
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -554,6 +555,48 @@ async def test_aiohttp_probe_timeout_is_a_connection_timeout() -> None:
 
 
 @pytest.mark.parametrize("node_cls", NODES)
+def test_probe_uses_the_request_timeout(node_cls: Type[BaseNode]) -> None:
+    with silent_server() as port:
+        node = node_cls(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                port,
+                ssl_assert_fingerprint=FINGERPRINT,
+                request_timeout=3,
+            )
+        )
+        try:
+            start = time.monotonic()
+            with pytest.raises(ConnectionTimeout):
+                node.perform_request("GET", "/", request_timeout=0.2)
+            assert time.monotonic() - start < 2
+        finally:
+            node.close()
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_probe_uses_the_request_timeout() -> None:
+    with silent_server() as port:
+        node = AiohttpHttpNode(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                port,
+                ssl_assert_fingerprint=FINGERPRINT,
+                request_timeout=3,
+            )
+        )
+        try:
+            start = time.monotonic()
+            with pytest.raises(ConnectionTimeout):
+                await node.perform_request("GET", "/", request_timeout=0.2)
+            assert time.monotonic() - start < 2
+        finally:
+            await node.close()
+
+
+@pytest.mark.parametrize("node_cls", NODES)
 def test_pin_sends_one_request(node_cls: Type[BaseNode]) -> None:
     with serve(GOOD, GOOD_KEY) as server:
         node = node_cls(
@@ -756,10 +799,13 @@ def test_wrong_fingerprint_sends_no_request(node_cls: Type[BaseNode]) -> None:
 def test_leaf_only_fallback_names_itself(monkeypatch: pytest.MonkeyPatch) -> None:
     from elastic_transport._node import _ca_fingerprint as ca
 
-    monkeypatch.setattr(ca, "_peer_ders", lambda config, proxy: ([b"\x00"], True))
+    monkeypatch.setattr(
+        ca, "_peer_ders", lambda config, timeout, proxy: ([b"\x00"], True)
+    )
     with pytest.raises(TlsError, match="Only the leaf certificate was available"):
         ca._matching_certificate_pem(
             NodeConfig("https", "localhost", 1, ssl_assert_fingerprint="ab" * 32),
+            None,
             None,
         )
 
