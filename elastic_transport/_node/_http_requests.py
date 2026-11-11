@@ -269,8 +269,6 @@ class RequestsHttpNode(BaseNode):
 
         except RERAISE_EXCEPTIONS:
             raise
-        except TlsError:
-            raise
         except Exception as e:
             err: Exception
             if isinstance(e, requests.Timeout):

@@ -21,6 +21,7 @@ import os
 import ssl
 from typing import Any, ClassVar, List, NamedTuple, Optional, Tuple, Union
 
+from .._exceptions import TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from .._utils import is_ipaddress
 from .._version import __version__
@@ -31,7 +32,8 @@ _logger.propagate = False  # This logger is very verbose so disable propogation.
 
 DEFAULT_CA_CERTS: Optional[str] = None
 DEFAULT_USER_AGENT = f"elastic-transport-python/{__version__}"
-RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError)
+# TlsError is raised by the fingerprint pin and must not be wrapped again.
+RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError, TlsError)
 BUILTIN_EXCEPTIONS = (
     ValueError,
     KeyError,

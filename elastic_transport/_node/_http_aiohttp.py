@@ -205,8 +205,6 @@ class AiohttpHttpNode(BaseAsyncNode):
         # We want to reraise a cancellation or recursion error.
         except RERAISE_EXCEPTIONS:
             raise
-        except TlsError:
-            raise
         except Exception as e:
             err: Exception
             if isinstance(
