@@ -426,6 +426,25 @@ def test_probe_uses_assert_hostname_for_sni(node_cls: Type[BaseNode]) -> None:
             node.close()
 
 
+@pytest.mark.parametrize("node_cls", NODES)
+def test_request_uses_assert_hostname_for_sni(node_cls: Type[BaseNode]) -> None:
+    with serve(GOOD, GOOD_KEY) as server:
+        node = node_cls(
+            NodeConfig(
+                "https",
+                "127.0.0.1",
+                _port(server),
+                ssl_assert_fingerprint=FINGERPRINT,
+                ssl_assert_hostname="localhost",
+            )
+        )
+        try:
+            node.perform_request("GET", "/")
+            assert server.names == ["localhost", "localhost"]
+        finally:
+            node.close()
+
+
 def test_urllib3_probe_ignores_env_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("https_proxy", "http://127.0.0.1:1")
     with serve(GOOD, GOOD_KEY) as server:

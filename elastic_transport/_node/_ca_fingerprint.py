@@ -96,6 +96,9 @@ def apply_assert_hostname(target: Any, config: NodeConfig) -> None:
     value: Union[str, bool] = hostname if isinstance(hostname, str) else False
     if isinstance(target, dict):
         target["assert_hostname"] = value
+        # Send the same SNI as the probe.
+        if isinstance(hostname, str):
+            target["server_hostname"] = hostname
     else:
         target.assert_hostname = value
 
