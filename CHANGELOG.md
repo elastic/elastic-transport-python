@@ -1,5 +1,9 @@
 # Changelog
 
+## 8.19.1 (2026-11-16)
+
+* Accept `ssl.TLSVersion` for `ssl_version` when OpenSSL 4 drops the `PROTOCOL_TLSv*` constants ([#308](https://github.com/elastic/elastic-transport-python/pull/308)) ([#309](https://github.com/elastic/elastic-transport-python/pull/309))
+
 ## 8.19.0 (2026-07-06)
 
 * Escape percent characters in logging output ([#284](https://github.com/elastic/elastic-transport-python/pull/284)) (#294)
