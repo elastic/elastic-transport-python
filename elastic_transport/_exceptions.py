@@ -79,6 +79,8 @@ class TlsError(ConnectionError):
     def __str__(self) -> str:
         if self.errors:
             return f"TLS error caused by: {self.errors[0].__class__.__name__}({self.errors[0]})"
+        if self.message:
+            return str(self.message)
         return "TLS error"
 
 
