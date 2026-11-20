@@ -29,6 +29,7 @@ from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
     DEFAULT_CA_CERTS,
+    DEFAULT_CONNECT_TIMEOUT,
     RERAISE_EXCEPTIONS,
     BaseNode,
     NodeApiResponse,
@@ -56,6 +57,14 @@ def _reject_fingerprint(config: NodeConfig) -> None:
         "Use Urllib3HttpNode, RequestsHttpNode, or AiohttpHttpNode. "
         "https://github.com/encode/httpx/issues/761"
     )
+
+
+def _httpx_timeout(request_timeout: Optional[float]) -> "httpx.Timeout":
+    if request_timeout is None:
+        # Wait indefinitely for the response, but still
+        # fail fast if the node is unreachable.
+        return httpx.Timeout(None, connect=DEFAULT_CONNECT_TIMEOUT)
+    return httpx.Timeout(request_timeout)
 
 
 class HttpxHttpNode(BaseNode):
@@ -118,7 +127,7 @@ class HttpxHttpNode(BaseNode):
             base_url=f"{config.scheme}://{config.host}:{config.port}{config.path_prefix}",
             limits=httpx.Limits(max_connections=config.connections_per_node),
             verify=ssl_context or False,
-            timeout=config.request_timeout,
+            timeout=_httpx_timeout(config.request_timeout),
         )
 
     def perform_request(
@@ -159,7 +168,7 @@ class HttpxHttpNode(BaseNode):
                     target,
                     content=resolved_body,
                     headers=dict(resolved_headers),
-                    timeout=request_timeout,
+                    timeout=_httpx_timeout(request_timeout),
                 )
             response_body = resp.read()
             duration = time.perf_counter() - start
@@ -275,7 +284,7 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
             base_url=f"{config.scheme}://{config.host}:{config.port}{config.path_prefix}",
             limits=httpx.Limits(max_connections=config.connections_per_node),
             verify=ssl_context or False,
-            timeout=config.request_timeout,
+            timeout=_httpx_timeout(config.request_timeout),
         )
 
     async def perform_request(  # type: ignore[override]
@@ -316,7 +325,7 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
                     target,
                     content=resolved_body,
                     headers=dict(resolved_headers),
-                    timeout=request_timeout,
+                    timeout=_httpx_timeout(request_timeout),
                 )
             response_body = resp.read()
             duration = time.perf_counter() - start

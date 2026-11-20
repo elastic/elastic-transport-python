@@ -52,6 +52,9 @@ class TestRequestsHttpNode:
         assert b"{}" == data
 
         timeout = kwargs.pop("request_timeout", node.config.request_timeout)
+        if timeout is None:
+            # (connect, read): connecting is limited even without a timeout
+            timeout = (10, None)
         args, kwargs = node.session.send.call_args
         assert timeout == kwargs["timeout"]
         assert 1 == len(args)
@@ -149,8 +152,10 @@ class TestRequestsHttpNode:
         # makes the payload larger than the original body.
         assert len(req.body) > len(body)
 
-    @pytest.mark.parametrize("request_timeout", [None, 15])
-    def test_timeout_override_default(self, request_timeout):
+    @pytest.mark.parametrize(
+        ["request_timeout", "expected"], [(None, (10, None)), (15, 15)]
+    )
+    def test_timeout_override_default(self, request_timeout, expected):
         node = self._get_mock_node(
             NodeConfig("http", "localhost", 80, request_timeout=request_timeout)
         )
@@ -159,7 +164,7 @@ class TestRequestsHttpNode:
         node.perform_request("GET", "/")
         _, kwargs = node.session.send.call_args
 
-        assert kwargs["timeout"] == request_timeout
+        assert kwargs["timeout"] == expected
 
         node.perform_request("GET", "/", request_timeout=5)
         _, kwargs = node.session.send.call_args
@@ -169,7 +174,17 @@ class TestRequestsHttpNode:
         node.perform_request("GET", "/", request_timeout=None)
         _, kwargs = node.session.send.call_args
 
-        assert kwargs["timeout"] is None
+        # (connect, read): no read timeout, connecting is still limited
+        assert kwargs["timeout"] == (10, None)
+
+    def test_no_request_timeout_by_default(self):
+        node = self._get_mock_node(NodeConfig("http", "localhost", 80))
+        assert node.config.request_timeout is None
+
+        node.perform_request("GET", "/")
+        _, kwargs = node.session.send.call_args
+
+        assert kwargs["timeout"] == (10, None)
 
     def test_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:

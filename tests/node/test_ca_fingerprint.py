@@ -639,6 +639,58 @@ async def test_aiohttp_probe_uses_the_request_timeout() -> None:
             await node.close()
 
 
+def _record_probe_timeouts(monkeypatch: pytest.MonkeyPatch) -> List[Optional[float]]:
+    from elastic_transport._node import _ca_fingerprint as ca
+
+    timeouts: List[Optional[float]] = []
+
+    def _peer_ders(
+        config: NodeConfig, timeout: Optional[float], proxy: Optional[str]
+    ) -> Tuple[List[bytes], bool]:
+        timeouts.append(timeout)
+        return [b"\x00"], True
+
+    monkeypatch.setattr(ca, "_peer_ders", _peer_ders)
+    return timeouts
+
+
+@pytest.mark.parametrize("node_cls", NODES)
+def test_probe_is_bounded_without_a_request_timeout(
+    node_cls: Type[BaseNode], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    timeouts = _record_probe_timeouts(monkeypatch)
+    # request_timeout defaults to None
+    node = node_cls(
+        NodeConfig("https", "127.0.0.1", 1, ssl_assert_fingerprint=FINGERPRINT)
+    )
+    try:
+        with pytest.raises(TlsError):
+            node.perform_request("GET", "/")
+        with pytest.raises(TlsError):
+            node.perform_request("GET", "/", request_timeout=None)
+    finally:
+        node.close()
+    assert timeouts == [10, 10]
+
+
+@pytest.mark.asyncio
+async def test_aiohttp_probe_is_bounded_without_a_request_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    timeouts = _record_probe_timeouts(monkeypatch)
+    node = AiohttpHttpNode(
+        NodeConfig("https", "127.0.0.1", 1, ssl_assert_fingerprint=FINGERPRINT)
+    )
+    try:
+        with pytest.raises(TlsError):
+            await node.perform_request("GET", "/")
+        with pytest.raises(TlsError):
+            await node.perform_request("GET", "/", request_timeout=None)
+    finally:
+        await node.close()
+    assert timeouts == [10, 10]
+
+
 @pytest.mark.parametrize("node_cls", NODES)
 def test_pin_sends_one_request(node_cls: Type[BaseNode]) -> None:
     with serve(GOOD, GOOD_KEY) as server:

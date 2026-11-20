@@ -30,6 +30,7 @@ from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
+    DEFAULT_CONNECT_TIMEOUT,
     RERAISE_EXCEPTIONS,
     BaseNode,
     NodeApiResponse,
@@ -246,20 +247,27 @@ class RequestsHttpNode(BaseNode):
             method=method, headers=request_headers, url=url, data=body_to_send
         )
         prepared_request = self.session.prepare_request(request)
+        resolved_timeout = (
+            request_timeout
+            if request_timeout is not DEFAULT
+            else self.config.request_timeout
+        )
         send_kwargs = {
             "timeout": (
-                request_timeout
-                if request_timeout is not DEFAULT
-                else self.config.request_timeout
+                # (connect, read): wait indefinitely for the response,
+                # but still fail fast if the node is unreachable.
+                (DEFAULT_CONNECT_TIMEOUT, None)
+                if resolved_timeout is None
+                else resolved_timeout
             )
         }
         send_kwargs.update(
-            self.session.merge_environment_settings(  # type: ignore[arg-type]
+            self.session.merge_environment_settings(
                 prepared_request.url, {}, None, None, None
             )
         )
         try:
-            self._ensure_pinned(send_kwargs["timeout"])
+            self._ensure_pinned(resolved_timeout)
             response = self.session.send(prepared_request, **send_kwargs)  # type: ignore[arg-type]
             data = response.content
             duration = time.time() - start

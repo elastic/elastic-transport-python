@@ -149,13 +149,10 @@ class TestUrllib3HttpNode:
             "user-agent": DEFAULT_USER_AGENT,
         }
 
-    @pytest.mark.parametrize("request_timeout", [None, 15])
-    def test_timeout_override_default(self, request_timeout):
-        node = Urllib3HttpNode(
-            NodeConfig("http", "localhost", 80, request_timeout=request_timeout)
-        )
-        assert node.config.request_timeout == request_timeout
-        assert node.pool.timeout.total == request_timeout
+    def test_timeout_override_default(self):
+        node = Urllib3HttpNode(NodeConfig("http", "localhost", 80, request_timeout=15))
+        assert node.config.request_timeout == 15
+        assert node.pool.timeout.total == 15
 
         with patch.object(node.pool, "urlopen") as pool_urlopen:
             resp = Mock()
@@ -163,10 +160,39 @@ class TestUrllib3HttpNode:
             resp.headers = {}
             pool_urlopen.return_value = resp
 
-            node.perform_request("GET", "/", request_timeout=request_timeout)
+            node.perform_request("GET", "/", request_timeout=15)
         _, kwargs = pool_urlopen.call_args
 
-        assert kwargs["timeout"] == request_timeout
+        assert kwargs["timeout"] == 15
+
+    @pytest.mark.parametrize(
+        "config_kwargs", [{}, {"request_timeout": None}, {"request_timeout": 15}]
+    )
+    def test_no_request_timeout_keeps_connect_timeout(self, config_kwargs):
+        node = Urllib3HttpNode(NodeConfig("http", "localhost", 80, **config_kwargs))
+
+        if node.config.request_timeout is None:
+            assert node.pool.timeout.total is None
+            assert node.pool.timeout.connect_timeout == 10
+            assert node.pool.timeout.read_timeout is None
+
+        with patch.object(node.pool, "urlopen") as pool_urlopen:
+            resp = Mock()
+            resp.status = 200
+            resp.headers = {}
+            pool_urlopen.return_value = resp
+
+            # The pool timeout applies unless overridden per request.
+            node.perform_request("GET", "/")
+            _, kwargs = pool_urlopen.call_args
+            assert "timeout" not in kwargs
+
+            node.perform_request("GET", "/", request_timeout=None)
+            _, kwargs = pool_urlopen.call_args
+
+        assert kwargs["timeout"].total is None
+        assert kwargs["timeout"].connect_timeout == 10
+        assert kwargs["timeout"].read_timeout is None
 
     def test_uses_https_if_verify_certs_is_off(self):
         with warnings.catch_warnings(record=True) as w:

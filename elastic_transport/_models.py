@@ -237,8 +237,10 @@ class NodeConfig:
     #: for higher concurrency of requests.
     connections_per_node: int = 10
 
-    #: Number of seconds to wait before a request should timeout.
-    request_timeout: Optional[float] = 10.0
+    #: Number of seconds to wait for a response before a request times out.
+    #: ``None`` (the default) waits indefinitely for the response;
+    #: connecting to the node is still limited to 10 seconds.
+    request_timeout: Optional[float] = None
 
     #: Set to ``True`` to enable HTTP compression
     #: of request and response bodies via gzip.

@@ -25,6 +25,9 @@ import respx
 from elastic_transport import HttpxAsyncHttpNode, HttpxHttpNode, NodeConfig
 from elastic_transport._node._base import DEFAULT_USER_AGENT
 
+# Without a request timeout, only connecting to the node is limited.
+NO_READ_TIMEOUT = {"connect": 10, "read": None, "write": None, "pool": None}
+
 
 def create_sync_node(node_config: NodeConfig):
     return HttpxHttpNode(node_config)
@@ -160,6 +163,24 @@ class TestHttpxNode:
         node.perform_request("GET", "/index", b"hello world", request_timeout=15)
         request = respx.calls.last.request
         assert request.extensions["timeout"]["connect"] == 15
+
+    @respx.mock
+    def test_no_request_timeout_by_default(self):
+        node = create_sync_node(NodeConfig(scheme="http", host="localhost", port=80))
+        respx.get("http://localhost/index")
+        node.perform_request("GET", "/index", b"hello world")
+        request = respx.calls.last.request
+        assert request.extensions["timeout"] == NO_READ_TIMEOUT
+
+    @respx.mock
+    def test_request_timeout_none(self):
+        node = create_sync_node(
+            NodeConfig(scheme="http", host="localhost", port=80, request_timeout=5)
+        )
+        respx.get("http://localhost/index")
+        node.perform_request("GET", "/index", b"hello world", request_timeout=None)
+        request = respx.calls.last.request
+        assert request.extensions["timeout"] == NO_READ_TIMEOUT
 
     @respx.mock
     def test_merge_headers(self):
@@ -313,6 +334,26 @@ class TestHttpxAsyncNode:
         await node.perform_request("GET", "/index", b"hello world", request_timeout=15)
         request = respx.calls.last.request
         assert request.extensions["timeout"]["connect"] == 15
+
+    @respx.mock
+    async def test_no_request_timeout_by_default(self):
+        node = create_async_node(NodeConfig(scheme="http", host="localhost", port=80))
+        respx.get("http://localhost/index")
+        await node.perform_request("GET", "/index", b"hello world")
+        request = respx.calls.last.request
+        assert request.extensions["timeout"] == NO_READ_TIMEOUT
+
+    @respx.mock
+    async def test_request_timeout_none(self):
+        node = create_async_node(
+            NodeConfig(scheme="http", host="localhost", port=80, request_timeout=5)
+        )
+        respx.get("http://localhost/index")
+        await node.perform_request(
+            "GET", "/index", b"hello world", request_timeout=None
+        )
+        request = respx.calls.last.request
+        assert request.extensions["timeout"] == NO_READ_TIMEOUT
 
     @respx.mock
     async def test_merge_headers(self):

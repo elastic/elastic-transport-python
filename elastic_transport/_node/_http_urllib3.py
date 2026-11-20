@@ -38,6 +38,7 @@ from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
     DEFAULT_CA_CERTS,
+    DEFAULT_CONNECT_TIMEOUT,
     RERAISE_EXCEPTIONS,
     BaseNode,
     NodeApiResponse,
@@ -48,6 +49,13 @@ from ._ca_fingerprint import (
     fetch_pinned_ssl_context,
     validate_fingerprint_options,
 )
+
+
+def _connect_only_timeout() -> urllib3.Timeout:
+    """Timeout used when ``request_timeout`` is ``None``: wait indefinitely
+    for the response, but still fail fast if the node is unreachable.
+    """
+    return urllib3.Timeout(connect=DEFAULT_CONNECT_TIMEOUT, read=None)
 
 
 class Urllib3HttpNode(BaseNode):
@@ -124,8 +132,10 @@ class Urllib3HttpNode(BaseNode):
 
         start = time.time()
         try:
-            kw = {}
-            if request_timeout is not DEFAULT:
+            kw: Dict[str, Any] = {}
+            if request_timeout is None:
+                kw["timeout"] = _connect_only_timeout()
+            elif request_timeout is not DEFAULT:
                 kw["timeout"] = request_timeout
 
             request_headers = self._headers.copy()
@@ -157,7 +167,7 @@ class Urllib3HttpNode(BaseNode):
                 body=body_to_send,
                 retries=Retry(False),
                 headers=request_headers,
-                **kw,  # type: ignore[arg-type]
+                **kw,
             )
             response_headers = HttpHeaders(response.headers)
             data = response.data
@@ -221,7 +231,11 @@ class Urllib3HttpNode(BaseNode):
         return self._pool_class(
             self.config.host,
             port=self.config.port,
-            timeout=urllib3.Timeout(total=self.config.request_timeout),
+            timeout=(
+                _connect_only_timeout()
+                if self.config.request_timeout is None
+                else urllib3.Timeout(total=self.config.request_timeout)
+            ),
             maxsize=self.config.connections_per_node,
             block=True,
             **kw,

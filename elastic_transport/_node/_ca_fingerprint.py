@@ -33,7 +33,7 @@ from typing import Any, List, Optional, Union
 from .._exceptions import TlsError
 from .._models import NodeConfig
 from .._utils import is_ipaddress
-from ._base import apply_ssl_context_options
+from ._base import DEFAULT_CONNECT_TIMEOUT, apply_ssl_context_options
 
 _HASHES_BY_LENGTH = {32: hashlib.md5, 40: hashlib.sha1, 64: hashlib.sha256}
 
@@ -77,6 +77,10 @@ def fetch_pinned_ssl_context(
 ) -> ssl.SSLContext:
     """Fetch the cert chain and trust only the certificate that matches."""
     assert config.ssl_assert_fingerprint is not None
+    if timeout is None:
+        # The probe only connects and handshakes, so it stays
+        # bounded even when requests have no timeout.
+        timeout = DEFAULT_CONNECT_TIMEOUT
     pem = _matching_certificate_pem(config, timeout, proxy)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.verify_mode = ssl.CERT_REQUIRED
