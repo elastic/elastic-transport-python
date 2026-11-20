@@ -122,6 +122,26 @@ class TestHttpxNode:
         assert {"content-encoding": "gzip"}.items() <= request.headers.items()
 
     @respx.mock
+    def test_compression_level(self):
+        node = create_sync_node(
+            NodeConfig(
+                scheme="http",
+                host="localhost",
+                port=80,
+                http_compress=True,
+                http_compress_level=0,
+            )
+        )
+        respx.post("http://localhost/index")
+        body = b"a" * 1000
+        node.perform_request("POST", "/index", body)
+        request = respx.calls.last.request
+        assert gzip.decompress(request.content) == body
+        # Level 0 stores data without compressing it, so gzip framing
+        # makes the payload larger than the original body.
+        assert len(request.content) > len(body)
+
+    @respx.mock
     def test_default_timeout(self):
         node = create_sync_node(
             NodeConfig(scheme="http", host="localhost", port=80, request_timeout=10)
@@ -253,6 +273,26 @@ class TestHttpxAsyncNode:
         request = respx.calls.last.request
         assert gzip.decompress(request.content) == b"hello world"
         assert {"content-encoding": "gzip"}.items() <= request.headers.items()
+
+    @respx.mock
+    async def test_compression_level(self):
+        node = create_async_node(
+            NodeConfig(
+                scheme="http",
+                host="localhost",
+                port=80,
+                http_compress=True,
+                http_compress_level=0,
+            )
+        )
+        respx.post("http://localhost/index")
+        body = b"a" * 1000
+        await node.perform_request("POST", "/index", body)
+        request = respx.calls.last.request
+        assert gzip.decompress(request.content) == body
+        # Level 0 stores data without compressing it, so gzip framing
+        # makes the payload larger than the original body.
+        assert len(request.content) > len(body)
 
     @respx.mock
     async def test_default_timeout(self):

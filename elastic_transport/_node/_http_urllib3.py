@@ -157,7 +157,9 @@ class Urllib3HttpNode(BaseNode):
             body_to_send: Optional[bytes]
             if body:
                 if self._http_compress:
-                    body_to_send = gzip.compress(body)
+                    body_to_send = gzip.compress(
+                        body, compresslevel=self._http_compress_level
+                    )
                     request_headers["content-encoding"] = "gzip"
                 else:
                     body_to_send = body

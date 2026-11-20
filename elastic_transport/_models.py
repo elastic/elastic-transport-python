@@ -244,6 +244,11 @@ class NodeConfig:
     #: of request and response bodies via gzip.
     http_compress: Optional[bool] = False
 
+    #: Compression level (0-9) used to gzip request bodies when
+    #: ``http_compress`` is ``True``. ``None`` uses gzip's default (9).
+    #: Lower values are faster but compress less.
+    http_compress_level: Optional[int] = field(default=None, kw_only=True)
+
     #: Set to ``True`` to verify the node's TLS certificate against 'ca_certs'
     #: Setting to ``False`` will disable verifying the node's certificate.
     verify_certs: Optional[bool] = True
@@ -307,6 +312,12 @@ class NodeConfig:
             raise ValueError("'port' must be a positive integer")
         if self.connections_per_node <= 0:
             raise ValueError("'connections_per_node' must be a positive integer")
+        if self.http_compress_level is not None and (
+            not isinstance(self.http_compress_level, int)
+            or isinstance(self.http_compress_level, bool)
+            or not 0 <= self.http_compress_level <= 9
+        ):
+            raise ValueError("'http_compress_level' must be an integer between 0 and 9")
         if self.path_prefix:
             self.path_prefix = (
                 ("/" + self.path_prefix.strip("/")) if self.path_prefix else ""

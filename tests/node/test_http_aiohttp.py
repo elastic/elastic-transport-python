@@ -180,6 +180,26 @@ class TestAiohttpHttpNode:
         }
         assert gzip.decompress(kwargs["data"]) == b"{}"
 
+    @pytest.mark.asyncio
+    async def test_http_compression_level(self):
+        node = await self._get_mock_node(
+            NodeConfig(
+                scheme="http",
+                host="localhost",
+                port=80,
+                http_compress=True,
+                http_compress_level=0,
+            )
+        )
+        body = b"a" * 1000
+        await node.perform_request("POST", "/", body=body)
+
+        args, kwargs = node.session.request.call_args
+        assert gzip.decompress(kwargs["data"]) == body
+        # Level 0 stores data without compressing it, so gzip framing
+        # makes the payload larger than the original body.
+        assert len(kwargs["data"]) > len(body)
+
     @pytest.mark.parametrize("http_compress", [None, False])
     @pytest.mark.asyncio
     async def test_no_http_compression(self, http_compress):

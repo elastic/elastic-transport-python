@@ -125,6 +125,21 @@ class TestUrllib3HttpNode:
         assert kwargs["headers"]["accept-encoding"] == "gzip"
         assert "content-encoding" not in kwargs["headers"]
 
+    def test_http_compression_level(self):
+        node = self._get_mock_node(
+            NodeConfig(
+                "http", "localhost", 80, http_compress=True, http_compress_level=0
+            )
+        )
+        body = b"a" * 1000
+        node.perform_request("POST", "/", body=body)
+
+        (_, _), kwargs = node.pool.urlopen.call_args
+        assert gzip.decompress(kwargs["body"]) == body
+        # Level 0 stores data without compressing it, so gzip framing
+        # makes the payload larger than the original body.
+        assert len(kwargs["body"]) > len(body)
+
     def test_default_headers(self):
         node = self._get_mock_node(NodeConfig("http", "localhost", 80))
         node.perform_request("GET", "/")

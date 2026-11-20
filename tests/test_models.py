@@ -33,6 +33,7 @@ def test_empty_node_config():
         "headers": {},
         "host": "localhost",
         "http_compress": False,
+        "http_compress_level": None,
         "path_prefix": "",
         "port": 9200,
         "request_timeout": 10,
@@ -49,6 +50,23 @@ def test_empty_node_config():
     # Default HttpHeaders should be empty and frozen
     assert len(config.headers) == 0
     assert config.headers.frozen
+
+
+@pytest.mark.parametrize("level", [None, 0, 1, 9])
+def test_node_config_http_compress_level(level):
+    config = NodeConfig(
+        "http", "localhost", 80, http_compress=True, http_compress_level=level
+    )
+    assert config.http_compress_level == level
+
+
+@pytest.mark.parametrize("level", [-1, 10, True, "1", 1.0])
+def test_node_config_http_compress_level_invalid(level):
+    with pytest.raises(ValueError) as e:
+        NodeConfig(
+            "http", "localhost", 80, http_compress=True, http_compress_level=level
+        )
+    assert str(e.value) == "'http_compress_level' must be an integer between 0 and 9"
 
 
 def test_headers_frozen():
