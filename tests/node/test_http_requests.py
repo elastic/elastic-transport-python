@@ -134,6 +134,21 @@ class TestRequestsHttpNode:
         print(req.headers)
         assert "content-encoding" not in req.headers
 
+    def test_http_compression_level(self):
+        node = self._get_mock_node(
+            NodeConfig(
+                "http", "localhost", 80, http_compress=True, http_compress_level=0
+            )
+        )
+        body = b"a" * 1000
+        node.perform_request("POST", "/", body=body)
+
+        (req,), _ = node.session.send.call_args
+        assert gzip.decompress(req.body) == body
+        # Level 0 stores data without compressing it, so gzip framing
+        # makes the payload larger than the original body.
+        assert len(req.body) > len(body)
+
     @pytest.mark.parametrize("request_timeout", [None, 15])
     def test_timeout_override_default(self, request_timeout):
         node = self._get_mock_node(
