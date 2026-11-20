@@ -106,6 +106,9 @@ class BaseNode:
         self.headers.setdefault("connection", "keep-alive")
         self.headers.setdefault("user-agent", DEFAULT_USER_AGENT)
         self._http_compress = bool(config.http_compress or False)
+        self._http_compress_level = (
+            9 if config.http_compress_level is None else config.http_compress_level
+        )
         if config.http_compress:
             self.headers["accept-encoding"] = "gzip"
 
