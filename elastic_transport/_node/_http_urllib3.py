@@ -17,6 +17,7 @@
 
 import gzip
 import ssl
+import threading
 import time
 import warnings
 from typing import Any, Dict, Optional, Union
@@ -42,11 +43,11 @@ from ._base import (
     NodeApiResponse,
     ssl_context_from_node_config,
 )
-
-try:
-    from ._urllib3_chain_certs import HTTPSConnectionPool
-except (ImportError, AttributeError):
-    HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[assignment,misc]
+from ._ca_fingerprint import (
+    apply_assert_hostname,
+    fetch_pinned_ssl_context,
+    validate_fingerprint_options,
+)
 
 
 class Urllib3HttpNode(BaseNode):
@@ -57,38 +58,17 @@ class Urllib3HttpNode(BaseNode):
     def __init__(self, config: NodeConfig):
         super().__init__(config)
 
-        pool_class = urllib3.HTTPConnectionPool
+        pool_class: type[urllib3.HTTPConnectionPool] = urllib3.HTTPConnectionPool
         kw: Dict[str, Any] = {}
 
         if config.scheme == "https":
-            pool_class = HTTPSConnectionPool
-            ssl_context = ssl_context_from_node_config(config)
-            kw["ssl_context"] = ssl_context
-
-            if config.ssl_assert_hostname and config.ssl_assert_fingerprint:
-                raise ValueError(
-                    "Can't specify both 'ssl_assert_hostname' and 'ssl_assert_fingerprint'"
-                )
-
-            # Fingerprint verification doesn't require CA certificates being loaded.
-            # We also want to disable other verification methods as we only care
-            # about the fingerprint of the certificates, not whether they form
-            # a verified chain to a trust anchor.
-            elif config.ssl_assert_fingerprint:
-                # Manually disable these in the right order on the SSLContext
-                # so urllib3 won't think we want conflicting things.
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
-
-                kw.update(
-                    {
-                        "assert_fingerprint": config.ssl_assert_fingerprint,
-                        "assert_hostname": False,
-                        "cert_reqs": "CERT_NONE",
-                    }
-                )
-
+            pool_class = urllib3.HTTPSConnectionPool
+            if config.ssl_assert_fingerprint is not None:
+                # Probe on the first request. Construction stays offline if the node is down.
+                validate_fingerprint_options(config)
             else:
+                ssl_context = ssl_context_from_node_config(config)
+                kw["ssl_context"] = ssl_context
                 kw["assert_hostname"] = config.ssl_assert_hostname
 
                 # Convert all sentinel values to their actual default
@@ -124,14 +104,12 @@ class Urllib3HttpNode(BaseNode):
                     else:
                         urllib3.disable_warnings()
 
-        self.pool = pool_class(
-            config.host,
-            port=config.port,
-            timeout=urllib3.Timeout(total=config.request_timeout),
-            maxsize=config.connections_per_node,
-            block=True,
-            **kw,
-        )
+        self._pool_class = pool_class
+        self._pool_kw = kw
+        self._pin_lock = threading.Lock()
+        self.pool: Optional[urllib3.HTTPConnectionPool] = None
+        if config.ssl_assert_fingerprint is None:
+            self.pool = self._open_pool()
 
     def perform_request(
         self,
@@ -164,6 +142,13 @@ class Urllib3HttpNode(BaseNode):
             else:
                 body_to_send = None
 
+            # After the headers exist, so a failed probe can be logged.
+            self._ensure_pinned(
+                self.config.request_timeout
+                if request_timeout is DEFAULT
+                else request_timeout
+            )
+            assert self.pool is not None
             response = self.pool.urlopen(
                 method,
                 target,
@@ -182,7 +167,7 @@ class Urllib3HttpNode(BaseNode):
             err: Exception
             if isinstance(e, NewConnectionError):
                 err = ConnectionError(str(e), errors=(e,))
-            elif isinstance(e, (ConnectTimeoutError, ReadTimeoutError)):
+            elif isinstance(e, (ConnectTimeoutError, ReadTimeoutError, TimeoutError)):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
@@ -225,4 +210,28 @@ class Urllib3HttpNode(BaseNode):
         """
         Explicitly closes connection
         """
-        self.pool.close()
+        if self.pool is not None:
+            self.pool.close()
+
+    def _open_pool(self, **extra: Any) -> urllib3.HTTPConnectionPool:
+        kw = dict(self._pool_kw)
+        kw.update(extra)
+        return self._pool_class(
+            self.config.host,
+            port=self.config.port,
+            timeout=urllib3.Timeout(total=self.config.request_timeout),
+            maxsize=self.config.connections_per_node,
+            block=True,
+            **kw,
+        )
+
+    def _ensure_pinned(self, timeout: Optional[float]) -> None:
+        if self.pool is not None:
+            return
+        with self._pin_lock:
+            if self.pool is not None:
+                return
+            ctx = fetch_pinned_ssl_context(self.config, timeout)
+            extra: Dict[str, Any] = {"ssl_context": ctx}
+            apply_assert_hostname(extra, self.config)
+            self.pool = self._open_pool(**extra)

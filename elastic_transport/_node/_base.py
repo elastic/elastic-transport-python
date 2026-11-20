@@ -21,6 +21,7 @@ import os
 import ssl
 from typing import Any, ClassVar, List, NamedTuple, Optional, Tuple, Union
 
+from .._exceptions import TlsError
 from .._models import ApiResponseMeta, HttpHeaders, NodeConfig
 from .._utils import is_ipaddress
 from .._version import __version__
@@ -31,7 +32,8 @@ _logger.propagate = False  # This logger is very verbose so disable propogation.
 
 DEFAULT_CA_CERTS: Optional[str] = None
 DEFAULT_USER_AGENT = f"elastic-transport-python/{__version__}"
-RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError)
+# TlsError is raised by the fingerprint pin and must not be wrapped again.
+RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError, TlsError)
 BUILTIN_EXCEPTIONS = (
     ValueError,
     KeyError,
@@ -274,7 +276,6 @@ for i, _protocol_attr in enumerate(_SSL_PROTOCOL_VERSION_ATTRS):
     if _HAS_TLS_VERSION:
         _tls_version_value = getattr(ssl.TLSVersion, _protocol_attr)
         _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_protocol_value] = _tls_version_value
-        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_tls_version_value] = _tls_version_value
 
     # Because we're setting a minimum version we binary OR all the options together.
     _SSL_PROTOCOL_VERSION_TO_OPTIONS[_protocol_value] = (
@@ -285,14 +286,18 @@ for i, _protocol_attr in enumerate(_SSL_PROTOCOL_VERSION_ATTRS):
         )
     )
 
-# TLSv1.3 is unique, doesn't have a PROTOCOL_TLSvX counterpart. So we have to set it manually.
+# ssl.TLSVersion members stay valid when the matching PROTOCOL_TLSvX constant
+# is missing. TLSv1.3 never had one, and Python built against OpenSSL 4 no
+# longer defines PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, or PROTOCOL_TLSv1_2.
+# The default minimum is still TLSVersion.TLSv1_2.
 if _HAS_TLS_VERSION:
-    try:
-        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[ssl.TLSVersion.TLSv1_3] = (
-            ssl.TLSVersion.TLSv1_3
-        )
-    except AttributeError:  # pragma: nocover
-        pass
+    for _tls_version_value in (
+        ssl.TLSVersion.TLSv1,
+        ssl.TLSVersion.TLSv1_1,
+        ssl.TLSVersion.TLSv1_2,
+        ssl.TLSVersion.TLSv1_3,
+    ):
+        _SSL_PROTOCOL_VERSION_TO_TLS_VERSION[_tls_version_value] = _tls_version_value
 
 
 def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
@@ -311,6 +316,11 @@ def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
+    apply_ssl_context_options(ctx, node_config)
+    return ctx
+
+
+def apply_ssl_context_options(ctx: ssl.SSLContext, node_config: NodeConfig) -> None:
     # Enable logging of TLS session keys for use with Wireshark.
     if hasattr(ctx, "keylog_filename"):
         sslkeylogfile = os.environ.get("SSLKEYLOGFILE", "")
@@ -335,5 +345,3 @@ def ssl_context_from_node_config(node_config: NodeConfig) -> ssl.SSLContext:
             f"Unsupported value for 'ssl_version': {ssl_version!r}. Must be "
             "either 'ssl.PROTOCOL_TLSvX' or 'ssl.TLSVersion.TLSvX'"
         ) from None
-
-    return ctx

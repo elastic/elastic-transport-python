@@ -35,6 +35,7 @@ from ._base import (
     ssl_context_from_node_config,
 )
 from ._base_async import BaseAsyncNode
+from ._ca_fingerprint import validate_fingerprint_options
 
 try:
     import httpx
@@ -44,6 +45,17 @@ try:
 except ImportError:
     _HTTPX_AVAILABLE = False
     _HTTPX_META_VERSION = ""
+
+
+def _reject_fingerprint(config: NodeConfig) -> None:
+    if config.ssl_assert_fingerprint is None:
+        return
+    validate_fingerprint_options(config)
+    raise ValueError(
+        "httpx does not support certificate pinning. "
+        "Use Urllib3HttpNode, RequestsHttpNode, or AiohttpHttpNode. "
+        "https://github.com/encode/httpx/issues/761"
+    )
 
 
 class HttpxHttpNode(BaseNode):
@@ -57,11 +69,7 @@ class HttpxHttpNode(BaseNode):
         if not _HTTPX_AVAILABLE:  # pragma: nocover
             raise ValueError("You must have 'httpx' installed to use HttpxNode")
         super().__init__(config)
-
-        if config.ssl_assert_fingerprint:
-            raise ValueError(
-                "httpx does not support certificate pinning. https://github.com/encode/httpx/issues/761"
-            )
+        _reject_fingerprint(config)
 
         ssl_context: Union[ssl.SSLContext, Literal[False]] = False
         if config.scheme == "https":
@@ -216,11 +224,7 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
         if not _HTTPX_AVAILABLE:  # pragma: nocover
             raise ValueError("You must have 'httpx' installed to use HttpxNode")
         super().__init__(config)
-
-        if config.ssl_assert_fingerprint:
-            raise ValueError(
-                "httpx does not support certificate pinning. https://github.com/encode/httpx/issues/761"
-            )
+        _reject_fingerprint(config)
 
         ssl_context: Union[ssl.SSLContext, Literal[False]] = False
         if config.scheme == "https":

@@ -17,6 +17,7 @@
 
 import gzip
 import ssl
+import threading
 import time
 import warnings
 from typing import Any, Optional, Union
@@ -34,6 +35,11 @@ from ._base import (
     NodeApiResponse,
     ssl_context_from_node_config,
 )
+from ._ca_fingerprint import (
+    apply_assert_hostname,
+    fetch_pinned_ssl_context,
+    validate_fingerprint_options,
+)
 
 try:
     import requests
@@ -43,15 +49,15 @@ try:
     _REQUESTS_AVAILABLE = True
     _REQUESTS_META_VERSION = client_meta_version(requests.__version__)
 
-    # Use our custom HTTPSConnectionPool for chain cert fingerprint support.
-    try:
-        from ._urllib3_chain_certs import HTTPSConnectionPool
-    except (ImportError, AttributeError):
-        HTTPSConnectionPool = urllib3.HTTPSConnectionPool  # type: ignore[assignment,misc]
-
     class _ElasticHTTPAdapter(HTTPAdapter):
-        def __init__(self, node_config: NodeConfig, **kwargs: Any) -> None:
+        def __init__(
+            self,
+            node_config: NodeConfig,
+            pinned_context: Optional[ssl.SSLContext] = None,
+            **kwargs: Any,
+        ) -> None:
             self._node_config = node_config
+            self._pinned_context = pinned_context
             super().__init__(**kwargs)
 
         def init_poolmanager(
@@ -62,27 +68,57 @@ try:
             **pool_kwargs: Any,
         ) -> None:
             if self._node_config.scheme == "https":
-                ssl_context = ssl_context_from_node_config(self._node_config)
-                pool_kwargs.setdefault("ssl_context", ssl_context)
-
-                # Fingerprint verification doesn't require CA certificates being loaded.
-                # We also want to disable other verification methods as we only care
-                # about the fingerprint of the certificates, not whether they form
-                # a verified chain to a trust anchor.
-                if self._node_config.ssl_assert_fingerprint:
-                    # Manually disable these in the right order on the SSLContext
-                    # so urllib3 won't think we want conflicting things.
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
-
-                    pool_kwargs["assert_fingerprint"] = (
-                        self._node_config.ssl_assert_fingerprint
+                if self._pinned_context is not None:
+                    pool_kwargs["ssl_context"] = self._pinned_context
+                    apply_assert_hostname(pool_kwargs, self._node_config)
+                else:
+                    pool_kwargs.setdefault(
+                        "ssl_context", ssl_context_from_node_config(self._node_config)
                     )
-                    pool_kwargs["cert_reqs"] = "CERT_NONE"
-                    pool_kwargs["assert_hostname"] = False
 
             super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
-            self.poolmanager.pool_classes_by_scheme["https"] = HTTPSConnectionPool
+
+        def build_connection_pool_key_attributes(
+            self, request: Any, verify: Any, cert: Any = None
+        ) -> Any:
+            # A proxy uses a separate pool. init_poolmanager never sees it,
+            # and urllib3 2 reads TLS from these kwargs, not conn.ssl_context.
+            host_params, pool_kwargs = super().build_connection_pool_key_attributes(
+                request, verify, cert
+            )
+            if self._pinned_context is not None:
+                pool_kwargs.pop("ca_certs", None)
+                pool_kwargs.pop("ca_cert_dir", None)
+                pool_kwargs["cert_reqs"] = "CERT_REQUIRED"
+                pool_kwargs["ssl_context"] = self._pinned_context
+                apply_assert_hostname(pool_kwargs, self._node_config)
+            return host_params, pool_kwargs
+
+        def cert_verify(self, conn: Any, url: str, verify: Any, cert: Any) -> None:
+            # requests would otherwise load the system CA bundle next to the pin.
+            if self._pinned_context is not None:
+                conn.cert_reqs = "CERT_REQUIRED"
+                conn.ca_certs = None
+                conn.ca_cert_dir = None
+                conn.ssl_context = self._pinned_context
+                # urllib3 2 reads the context from conn_kw. The pool attributes
+                # above are passed separately, so they must not be copied in.
+                conn_kw = getattr(conn, "conn_kw", None)
+                if isinstance(conn_kw, dict):
+                    conn_kw["ssl_context"] = self._pinned_context
+                apply_assert_hostname(conn, self._node_config)
+                if cert:
+                    if isinstance(cert, tuple):
+                        conn.cert_file, conn.key_file = cert
+                    else:
+                        conn.cert_file = cert
+                        conn.key_file = None
+                return
+            super().cert_verify(conn, url, verify, cert)  # type: ignore[no-untyped-call]
+
+    class _UnpinnedAdapter(HTTPAdapter):
+        def send(self, *args: Any, **kwargs: Any) -> Any:
+            raise TlsError("CA fingerprint is not pinned")
 
 except ImportError:  # pragma: nocover
     _REQUESTS_AVAILABLE = False
@@ -112,13 +148,8 @@ class RequestsHttpNode(BaseNode):
         self.session.headers.clear()  # Empty out all the default session headers
 
         if config.scheme == "https":
-            # If we're using ssl_assert_fingerprint we don't want
-            # to verify certificates the typical way. Instead we
-            # rely on the custom ElasticHTTPAdapter and urllib3.
-            if config.ssl_assert_fingerprint:
-                self.session.verify = False
-
-            # Otherwise we go the traditional route of verifying certs.
+            if config.ssl_assert_fingerprint is not None:
+                validate_fingerprint_options(config)
             else:
                 if config.ca_certs:
                     if not config.verify_certs:
@@ -160,15 +191,17 @@ class RequestsHttpNode(BaseNode):
             else:
                 self.session.cert = config.client_cert
 
-        # Create and mount custom adapter for constraining number of connections
-        adapter = _ElasticHTTPAdapter(
-            node_config=config,
-            pool_connections=config.connections_per_node,
-            pool_maxsize=config.connections_per_node,
-            pool_block=True,
-        )
+        self._pin_lock = threading.Lock()
+        self._adapter: Optional[_ElasticHTTPAdapter] = None
+        # The fingerprint pin needs a handshake, so its adapter is
+        # mounted on the first request.
+        if config.ssl_assert_fingerprint is not None:
+            self.session.mount(f"{self.scheme}://", _UnpinnedAdapter())
+            return
+        adapter = self._mount_adapter()
+
         # Preload the HTTPConnectionPool so initialization issues
-        # are raised here instead of in perform_request()
+        # are raised here instead of in perform_request().
         if hasattr(adapter, "get_connection_with_tls_context"):
             request = requests.Request(method="GET", url=self.base_url)
             prepared_request = self.session.prepare_request(request)
@@ -180,8 +213,6 @@ class RequestsHttpNode(BaseNode):
             # requests.Session and an SSLContext without using the verify parameter.
             # We should remove this branch when requiring requests 2.32 or later.
             adapter.get_connection(self.base_url)
-
-        self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
 
     def perform_request(
         self,
@@ -226,6 +257,7 @@ class RequestsHttpNode(BaseNode):
             )
         )
         try:
+            self._ensure_pinned(send_kwargs["timeout"])
             response = self.session.send(prepared_request, **send_kwargs)  # type: ignore[arg-type]
             data = response.content
             duration = time.time() - start
@@ -235,7 +267,7 @@ class RequestsHttpNode(BaseNode):
             raise
         except Exception as e:
             err: Exception
-            if isinstance(e, requests.Timeout):
+            if isinstance(e, (requests.Timeout, TimeoutError)):
                 err = ConnectionTimeout(
                     "Connection timed out during request", errors=(e,)
                 )
@@ -273,6 +305,41 @@ class RequestsHttpNode(BaseNode):
             meta,
             data,
         )
+
+    def _ensure_pinned(self, timeout: Optional[float]) -> None:
+        if self.config.ssl_assert_fingerprint is None:
+            return
+        with self._pin_lock:
+            if self._adapter is not None:
+                return
+            self._mount_adapter(
+                fetch_pinned_ssl_context(
+                    self.config, timeout, proxy=self._https_proxy()
+                )
+            )
+
+    def _mount_adapter(
+        self, pinned_context: Optional[ssl.SSLContext] = None
+    ) -> "_ElasticHTTPAdapter":
+        # Custom adapter for constraining number of connections
+        adapter = _ElasticHTTPAdapter(
+            node_config=self.config,
+            pinned_context=pinned_context,
+            pool_connections=self.config.connections_per_node,
+            pool_maxsize=self.config.connections_per_node,
+            pool_block=True,
+        )
+        self.session.mount(prefix=f"{self.scheme}://", adapter=adapter)
+        self._adapter = adapter
+        return adapter
+
+    def _https_proxy(self) -> Optional[str]:
+        url = f"https://{self.config.host}:{self.config.port}/"
+        settings = self.session.merge_environment_settings(url, {}, False, True, None)
+        proxy = requests.utils.select_proxy(url, settings.get("proxies") or {})
+        if not proxy:
+            return None
+        return str(proxy)
 
     def close(self) -> None:
         """
