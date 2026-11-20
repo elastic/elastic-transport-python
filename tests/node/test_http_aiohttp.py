@@ -78,10 +78,10 @@ class TestAiohttpHttpNode:
                 "user-agent": DEFAULT_USER_AGENT,
             },
             "timeout": aiohttp.ClientTimeout(
-                total=10,
+                total=0,
                 connect=None,
                 sock_read=None,
-                sock_connect=None,
+                sock_connect=10,
             ),
         }
 
@@ -122,7 +122,8 @@ class TestAiohttpHttpNode:
                 total=aiohttp_timeout,
                 connect=None,
                 sock_read=None,
-                sock_connect=None,
+                # Without a request timeout, connecting is still limited.
+                sock_connect=10 if aiohttp_timeout == 0 else None,
             ),
         }
 

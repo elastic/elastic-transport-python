@@ -32,6 +32,9 @@ _logger.propagate = False  # This logger is very verbose so disable propogation.
 
 DEFAULT_CA_CERTS: Optional[str] = None
 DEFAULT_USER_AGENT = f"elastic-transport-python/{__version__}"
+# Applied when request_timeout is None, so that an unreachable
+# node still fails fast instead of waiting on the OS.
+DEFAULT_CONNECT_TIMEOUT = 10.0
 # TlsError is raised by the fingerprint pin and must not be wrapped again.
 RERAISE_EXCEPTIONS = (RecursionError, asyncio.CancelledError, TlsError)
 BUILTIN_EXCEPTIONS = (
@@ -197,6 +200,8 @@ class BaseNode:
         :param request_timeout: Amount of time to wait for the first
             response bytes to arrive before raising a
             :class:`elastic_transport.ConnectionTimeout` error.
+            ``None`` waits indefinitely for the response, while
+            connecting to the node is still limited to 10 seconds.
         :raises:
             :class:`elastic_transport.ConnectionError`,
             :class:`elastic_transport.ConnectionTimeout`,

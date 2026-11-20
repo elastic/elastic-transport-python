@@ -31,6 +31,7 @@ from ..client_utils import DEFAULT, DefaultType, client_meta_version
 from ._base import (
     BUILTIN_EXCEPTIONS,
     DEFAULT_CA_CERTS,
+    DEFAULT_CONNECT_TIMEOUT,
     RERAISE_EXCEPTIONS,
     NodeApiResponse,
     ssl_context_from_node_config,
@@ -160,15 +161,19 @@ class AiohttpHttpNode(BaseAsyncNode):
             method = "GET"
             is_head = True
 
-        # total=0 means no timeout for aiohttp
         resolved_timeout: Optional[float] = (
             self.config.request_timeout
             if request_timeout is DEFAULT
             else request_timeout
         )
-        aiohttp_timeout = aiohttp.ClientTimeout(
-            total=resolved_timeout if resolved_timeout is not None else 0
-        )
+        if resolved_timeout is None:
+            # total=0 means no timeout for aiohttp: wait indefinitely for the
+            # response, but still fail fast if the node is unreachable.
+            aiohttp_timeout = aiohttp.ClientTimeout(
+                total=0, sock_connect=DEFAULT_CONNECT_TIMEOUT
+            )
+        else:
+            aiohttp_timeout = aiohttp.ClientTimeout(total=resolved_timeout)
 
         request_headers = self._headers.copy()
         if headers:
