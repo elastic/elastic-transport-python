@@ -59,6 +59,22 @@ def test_serializes_nan():
     assert b'{"d":null}' == OrjsonSerializer().dumps({"d": float("NaN")})
 
 
+def test_subclass_default_is_used(json_serializer):
+    class CustomSerializer(type(json_serializer)):
+        def __init__(self):
+            # Does not call super().__init__()
+            pass
+
+        def default(self, data):
+            if isinstance(data, set):
+                return sorted(data)
+            return super().default(data)
+
+    serializer = CustomSerializer()
+    assert b'{"d":[1,2]}' == serializer.dumps({"d": {2, 1}})
+    assert b'{"d":"2010-10-01"}' == serializer.dumps({"d": date(2010, 10, 1)})
+
+
 def test_raises_serialization_error_on_dump_error(json_serializer):
     with pytest.raises(SerializationError):
         json_serializer.dumps(object())

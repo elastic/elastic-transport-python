@@ -75,6 +75,8 @@ class JsonSerializer(Serializer):
 
     mimetype: ClassVar[str] = "application/json"
 
+    _encoder: Optional[json.JSONEncoder] = None
+
     def default(self, data: Any) -> Any:
         if isinstance(data, date):
             return data.isoformat()
@@ -87,9 +89,12 @@ class JsonSerializer(Serializer):
         )
 
     def json_dumps(self, data: Any) -> bytes:
-        return json.dumps(
-            data, default=self.default, ensure_ascii=False, separators=(",", ":")
-        ).encode("utf-8", "surrogatepass")
+        # Build the encoder once: json.dumps() makes a new one on every call.
+        if self._encoder is None:
+            self._encoder = json.JSONEncoder(
+                default=self.default, ensure_ascii=False, separators=(",", ":")
+            )
+        return self._encoder.encode(data).encode("utf-8", "surrogatepass")
 
     def json_loads(self, data: bytes) -> Any:
         return json.loads(data)
