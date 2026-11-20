@@ -135,7 +135,9 @@ class HttpxHttpNode(BaseNode):
 
         if body:
             if self._http_compress:
-                resolved_body = gzip.compress(body)
+                resolved_body = gzip.compress(
+                    body, compresslevel=self._http_compress_level
+                )
                 resolved_headers["content-encoding"] = "gzip"
             else:
                 resolved_body = body
@@ -290,7 +292,9 @@ class HttpxAsyncHttpNode(BaseAsyncNode):
 
         if body:
             if self._http_compress:
-                resolved_body = gzip.compress(body)
+                resolved_body = gzip.compress(
+                    body, compresslevel=self._http_compress_level
+                )
                 resolved_headers["content-encoding"] = "gzip"
             else:
                 resolved_body = body
